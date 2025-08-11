@@ -142,14 +142,14 @@ class AnymalCAdversarialEnvCfg(DirectMARLEnvCfg):
         prim_path="/World/envs/env_.*/Robot_0/.*", history_length=3, update_period=0.005, track_air_time=True
     )
     robot_0.init_state.rot = (1.0, 0.0, 0.0, 0.0)
-    robot_0.init_state.pos = (0.0, 0.0, 0.5)
+    robot_0.init_state.pos = (0.0, 1.0, 0.5)
 
     robot_1: ArticulationCfg = ANYMAL_C_CFG.replace(prim_path="/World/envs/env_.*/Robot_1")
     contact_sensor_1: ContactSensorCfg = ContactSensorCfg(
         prim_path="/World/envs/env_.*/Robot_1/.*", history_length=3, update_period=0.005, track_air_time=True
     )
     robot_1.init_state.rot = (1.0, 0.0, 0.0, 0.0)
-    robot_1.init_state.pos = (0.0, 0.0, 0.5)
+    robot_1.init_state.pos = (0.0, -1.0, 0.5)
 
     # reward scales (override from flat config)
     flat_orientation_reward_scale = 0.0
@@ -256,7 +256,6 @@ class AnymalCAdversarialEnv(DirectMARLEnv):
 
     def _get_observations(self) -> dict:
         self.previous_actions = copy.deepcopy(self.actions)
-        obs = {}
 
         robot_0_obs = torch.cat(
                 [
@@ -430,7 +429,7 @@ class AnymalCAdversarialEnv(DirectMARLEnv):
         time_out = self.episode_length_buf >= self.max_episode_length - 1
         time_out = {robot_id:time_out for robot_id in self.robots.keys()}
         died = torch.any(torch.max(torch.norm(net_contact_forces[:, :, self.base_ids["robot_0"]], dim=-1), dim=1)[0] > 1.0, dim=1)
-        died = {robot_id:died}
+        died = {robot_id:died for robot_id in self.robots.keys()}
 
 
         return died, time_out

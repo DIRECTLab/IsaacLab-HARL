@@ -93,6 +93,24 @@ IsaacLab-HARL/source/isaaclab_tasks/isaaclab_tasks/direct
 
 ## Playing an Environment
 
+## Citation
+
+If you find this work useful in your research, please consider citing our paper:
+
+```bibtex
+@inproceedings{haight2025heterogeneous,
+  author    = {Haight, Jacob and Peterson, Isaac and Allred, Christopher and Harper, Mario},
+  title     = {Heterogeneous Multi-Agent Learning in Isaac Lab: Scalable Simulation for Robotic Collaboration},
+  booktitle = {Proceedings of the IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS)},
+  year      = {2025},
+  pages     = {xx--xx},
+  address   = {Hangzhou, China},
+  publisher = {IEEE},
+  doi       = {DOI_TBD_HERE},
+  url       = {https://directlab.github.io/IsaacLab-HARL/}
+}
+```
+
 
 
 # Isaac Lab

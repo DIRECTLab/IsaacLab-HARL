@@ -430,9 +430,9 @@ class AnymalCAdversarialEnv(DirectMARLEnv):
         anymal_died = torch.any(torch.stack(anymal_died), dim=1)
 
         time_out = self.episode_length_buf >= self.max_episode_length - 1
-        time_out = {robot_id:time_out for robot_id in self.robots.keys()}
+        time_out = {tean:time_out for tean in self.cfg.teams.keys()}
         died = torch.any(torch.max(torch.norm(net_contact_forces[:, :, self.base_ids["robot_0"]], dim=-1), dim=1)[0] > 1.0, dim=1)
-        died = {robot_id:died for robot_id in self.robots.keys()}
+        died = {team:died for team in self.cfg.teams.keys()}
 
 
         return died, time_out

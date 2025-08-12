@@ -172,8 +172,9 @@ class AnymalCAdversarialEnv(DirectMARLEnv):
     cfg: AnymalCAdversarialEnvCfg
 
     def __init__(
-        self, cfg: AnymalCAdversarialEnvCfg, render_mode: str | None = None, **kwargs
+        self, cfg: AnymalCAdversarialEnvCfg, render_mode: str | None = None, debug=False, **kwargs
     ):
+        self.debug = debug
         super().__init__(cfg, render_mode, **kwargs)
         # Joint position command (deviation from default joint positions)
 
@@ -223,7 +224,8 @@ class AnymalCAdversarialEnv(DirectMARLEnv):
         self.robots = {}
         self.contact_sensors = {}
         self.height_scanners = {}
-        self.my_visualizer = define_markers()
+        if self.debug:
+            self.my_visualizer = define_markers()
 
         for i in range(self.num_robots):
             self.robots[f"robot_{i}"] = Articulation(self.cfg.__dict__["robot_" + str(i)])
@@ -358,7 +360,8 @@ class AnymalCAdversarialEnv(DirectMARLEnv):
         )
 
     def _get_rewards(self) -> dict:
-        self._draw_markers(self._commands)
+        if self.debug:
+            self._draw_markers(self._commands)
         all_rewards = {}
 
         for robot_id in self.robots.keys():

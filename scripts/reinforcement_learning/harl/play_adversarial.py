@@ -120,7 +120,8 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     while simulation_app.is_running():
         with torch.inference_mode():
             for team, agents_obs in obs.items():
-                for agent_num, (agent_id, agent_obs) in enumerate(agents_obs.items()):
+                for agent_id, agent_obs in agents_obs.items():
+                    agent_num = runner.env.env._agent_map[agent_id]
                     action, _, rnn_state = runner.actors[team][agent_id].get_actions(
                         agent_obs, rnn_states[:, agent_num, :], masks[:, agent_num, :], None, None
                     )

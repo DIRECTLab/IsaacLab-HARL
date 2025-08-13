@@ -414,10 +414,6 @@ class AnymalCAdversarialEnv(DirectMARLEnv):
             for key, value in rewards.items():
                 self._episode_sums[key] += value
 
-        for key, value in rewards.items():
-            # divide by num robots to get the average between the two robots
-            self._episode_sums[key] /= self.num_robots
-
         return {"team_0" : all_rewards["robot_0"], "team_1" : all_rewards["robot_1"]}
 
     def _get_dones(self) -> tuple[dict, dict]:

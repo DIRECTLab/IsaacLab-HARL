@@ -85,23 +85,22 @@ def define_markers() -> VisualizationMarkers:
 
 
 @configclass
-class AnymalCAdversarialEnvCfg(DirectMARLEnvCfg):
+class AnymalCAdversarialSingleAgentEnvCfg(DirectMARLEnvCfg):
     # env
     episode_length_s = 20.0
     decimation = 4
     action_scale = 0.5
     action_space = 12
-    action_spaces = {f"robot_{i}": 12 for i in range(2)}
+    action_spaces = {f"robot_{i}": 12 for i in range(1)}
     # observation_space = 48
     observation_space = 48
-    observation_spaces = {f"robot_{i}": 48 for i in range(2)}
+    observation_spaces = {f"robot_{i}": 48 for i in range(1)}
     state_space = 0
-    state_spaces = {f"robot_{i}": 0 for i in range(2)}
-    possible_agents = ["robot_0", "robot_1"]
+    state_spaces = {f"robot_{i}": 0 for i in range(1)}
+    possible_agents = ["robot_0"]
 
     teams = {
         "team_0": ["robot_0"],
-        "team_1": ["robot_1"]
     }
 
     # simulation
@@ -144,13 +143,6 @@ class AnymalCAdversarialEnvCfg(DirectMARLEnvCfg):
     robot_0.init_state.rot = (1.0, 0.0, 0.0, 0.0)
     robot_0.init_state.pos = (0.0, 1.0, 0.5)
 
-    robot_1: ArticulationCfg = ANYMAL_C_CFG.replace(prim_path="/World/envs/env_.*/Robot_1")
-    contact_sensor_1: ContactSensorCfg = ContactSensorCfg(
-        prim_path="/World/envs/env_.*/Robot_1/.*", history_length=3, update_period=0.005, track_air_time=True
-    )
-    robot_1.init_state.rot = (1.0, 0.0, 0.0, 0.0)
-    robot_1.init_state.pos = (0.0, -1.0, 0.5)
-
     # reward scales (override from flat config)
     flat_orientation_reward_scale = 0.0
 
@@ -168,11 +160,11 @@ class AnymalCAdversarialEnvCfg(DirectMARLEnvCfg):
 
 
 
-class AnymalCAdversarialEnv(DirectMARLEnv):
-    cfg: AnymalCAdversarialEnvCfg
+class AnymalCAdversarialSingleAgentEnv(DirectMARLEnv):
+    cfg: AnymalCAdversarialSingleAgentEnvCfg
 
     def __init__(
-        self, cfg: AnymalCAdversarialEnvCfg, render_mode: str | None = None, debug=False, **kwargs
+        self, cfg: AnymalCAdversarialSingleAgentEnvCfg, render_mode: str | None = None, debug=False, **kwargs
     ):
         self.debug = debug
         super().__init__(cfg, render_mode, **kwargs)
@@ -276,25 +268,8 @@ class AnymalCAdversarialEnv(DirectMARLEnv):
                 dim=-1,
             )
             
-        robot_1_obs = torch.cat(
-            [
-                tensor
-                for tensor in (
-                    self.robots["robot_1"].data.root_lin_vel_b,
-                    self.robots["robot_1"].data.root_ang_vel_b,
-                    self.robots["robot_1"].data.projected_gravity_b,
-                    self._commands,
-                    self.robots["robot_1"].data.joint_pos - self.robots["robot_1"].data.default_joint_pos,
-                    self.robots["robot_1"].data.joint_vel,
-                    self.actions["robot_1"],
-                )
-                if tensor is not None
-            ],
-            dim=-1,
-        )
 
-
-        return {"team_0": {"robot_0": robot_0_obs}, "team_1": {"robot_1": robot_1_obs}}
+        return {"team_0": {"robot_0": robot_0_obs}}
 
     def _draw_markers(self, command):
         xy_commands = command.clone()
@@ -414,7 +389,7 @@ class AnymalCAdversarialEnv(DirectMARLEnv):
             for key, value in rewards.items():
                 self._episode_sums[key] += value
 
-        return {"team_0" : all_rewards["robot_0"], "team_1" : all_rewards["robot_1"]}
+        return {"team_0" : all_rewards["robot_0"]}
 
     def _get_dones(self) -> tuple[dict, dict]:
         # anymal_died = []

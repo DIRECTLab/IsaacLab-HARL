@@ -251,8 +251,8 @@ class AnymalCHappoEnv(DirectMARLEnv):
                 [
                     tensor
                     for tensor in (
-                        robot.data.root_com_lin_vel_b,
-                        robot.data.root_com_ang_vel_b,
+                        robot.data.root_lin_vel_b,
+                        robot.data.root_ang_vel_b,
                         robot.data.projected_gravity_b,
                         self._commands,
                         robot.data.joint_pos - robot.data.default_joint_pos,
@@ -282,7 +282,7 @@ class AnymalCHappoEnv(DirectMARLEnv):
         )
 
         robot_pos = self.robots["robot_0"].data.root_pos_w.clone()
-        robot_yaw = self.robots["robot_0"].data.root_com_ang_vel_b[:, 2].clone()
+        robot_yaw = self.robots["robot_0"].data.root_ang_vel_b[:, 2].clone()
 
         scale1 = torch.ones((self._commands.shape[0], 3), device=self.device)
         scale1[:, 0] = torch.abs(z_commands)
@@ -304,7 +304,7 @@ class AnymalCHappoEnv(DirectMARLEnv):
             [
                 robot_pos,
                 robot_pos + xy_commands,
-                robot_pos + self.robots["robot_0"].data.root_com_lin_vel_b,
+                robot_pos + self.robots["robot_0"].data.root_lin_vel_b,
                 robot_pos + offset1,
                 robot_pos + offset2,
             ],

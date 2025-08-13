@@ -45,7 +45,7 @@ EXTRAS_REQUIRE = {
     "skrl": ["skrl>=1.4.2"],
     "rl-games": ["rl-games==1.6.1", "gym"],  # rl-games still needs gym :(
     "rsl-rl-lib": ["rsl-rl-lib==2.3.1"],
-    "harl": ["harl@git+https://github.com/some45bucks/HARL.git"],
+    "harl": ["harl@git+https://github.com/DIRECTLab/HARL.git"],
 }
 # Add the names with hyphens as aliases for convenience
 EXTRAS_REQUIRE["rl_games"] = EXTRAS_REQUIRE["rl-games"]

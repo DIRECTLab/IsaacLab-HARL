@@ -80,13 +80,6 @@ class LocomotionVelocityEnv(DirectMARLEnv):
         # X/Y linear velocity and yaw angular velocity commands
         self._commands = torch.zeros(self.num_envs, 3, device=self.device)
         
-        #TODO need to add those two lines for the device and to make the model purely inference
-        walking_policy_path = str(
-            Path('results/isaaclab/Isaac-H1-Velocity-Direct-v0/happo/test/seed-00001-2025-08-05-11-19-02/best_model/actor_agent0_full.pt').resolve()
-        )
-        self.walking_model = torch.load(walking_policy_path, map_location=self.device)
-        self.walking_model.eval() #Sets the model to evaluation mode, solely for inference
-
         self.start_rotation = torch.tensor([1, 0, 0, 0], device=self.sim.device, dtype=torch.float32)
         self.up_vec = torch.tensor([0, 0, 1], dtype=torch.float32, device=self.sim.device).repeat((self.num_envs, 1))
 
@@ -97,6 +90,7 @@ class LocomotionVelocityEnv(DirectMARLEnv):
             "total_reward": torch.zeros(self.num_envs, dtype=torch.float32, device=self.device),
             "gait_reward": torch.zeros(self.num_envs, dtype=torch.float32, device=self.device),
             "slide_reward": torch.zeros(self.num_envs, dtype=torch.float32, device=self.device),
+            "clearance_reward": torch.zeros(self.num_envs, dtype=torch.float32, device=self.device),
             "other_rewards": torch.zeros(self.num_envs, dtype=torch.float32, device=self.device),
         }
 
@@ -247,6 +241,13 @@ class LocomotionVelocityEnv(DirectMARLEnv):
             self._commands
         )
 
+        clearance_reward = rewards.foot_clearance_reward(
+            self,
+            target_height=0.15,
+            std=0.05,
+            tanh_mult=2.0
+        )
+
         other_rewards = self.compute_rewards(
             self.robots["robot_0"],
             self._commands,
@@ -263,15 +264,18 @@ class LocomotionVelocityEnv(DirectMARLEnv):
             self.motor_effort_ratio,
         )
         # new rewards from rewards_funcs.py get added here
-        total_reward = other_rewards
+        total_reward = other_rewards.clone()
         slide_rewards = feet_slide * self.cfg.feet_slide_weight
         gait_rewards = gait_reward * self.cfg.gait_weight
+        clearance_rewards = clearance_reward * self.cfg.feet_clearance_weight
         total_reward += slide_rewards
         total_reward += gait_rewards
+        total_reward += clearance_rewards
 
         self._episode_sums["total_reward"] += total_reward
         self._episode_sums["gait_reward"] += gait_rewards
         self._episode_sums["slide_reward"] += slide_rewards
+        self._episode_sums["clearance_reward"] += clearance_rewards
         self._episode_sums["other_rewards"] += other_rewards
 
         return {"robot_0": total_reward}

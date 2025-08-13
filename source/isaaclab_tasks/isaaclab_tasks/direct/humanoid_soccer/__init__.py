@@ -16,7 +16,7 @@ from . import agents
 ##
 
 gym.register(
-    id="Isaac-Humanoid-Direct-v0",
+    id="Isaac-Humanoid-Soccer-Direct-v0",
     entry_point=f"{__name__}.humanoid_env:HumanoidEnv",
     disable_env_checker=True,
     kwargs={
@@ -29,7 +29,7 @@ gym.register(
 
 
 gym.register(
-    id="Isaac-H1-Velocity-Direct-v0",
+    id="Isaac-H1-Velocity-Soccer-Direct-v0",
     entry_point=f"{__name__}.h1_env_velocity:H1VelocityEnv",
     disable_env_checker=True,
     kwargs={

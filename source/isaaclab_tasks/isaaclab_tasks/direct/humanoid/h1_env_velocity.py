@@ -89,6 +89,7 @@ class H1VelocityEnvCfg(DirectMARLEnvCfg):
     # Reward Scales
     gait_weight = 0.5
     feet_slide_weight = -0.2
+    feet_clearance_weight = 20.0
     heading_weight: float = 0.5
     up_weight: float = 0.1
 

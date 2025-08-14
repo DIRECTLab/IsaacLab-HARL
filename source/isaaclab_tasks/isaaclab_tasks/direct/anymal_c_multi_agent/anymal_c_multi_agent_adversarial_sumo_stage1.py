@@ -108,7 +108,7 @@ def define_markers() -> VisualizationMarkers:
 
 
 @configclass
-class AnymalCAdversarialEnvCfg(DirectMARLEnvCfg):
+class AnymalCAdversarialSumoStage1EnvCfg(DirectMARLEnvCfg):
     # env
     episode_length_s = 20.0
     decimation = 4
@@ -116,8 +116,8 @@ class AnymalCAdversarialEnvCfg(DirectMARLEnvCfg):
     action_space = 12
     action_spaces = {f"robot_{i}": 12 for i in range(2)}
     # observation_space = 48
-    observation_space = 48
-    observation_spaces = {f"robot_{i}": 48 for i in range(2)}
+    observation_space = 51
+    observation_spaces = {f"robot_{i}": 51 for i in range(2)}
     state_space = 0
     state_spaces = {f"robot_{i}": 0 for i in range(2)}
     possible_agents = ["robot_0", "robot_1"]
@@ -191,11 +191,11 @@ class AnymalCAdversarialEnvCfg(DirectMARLEnvCfg):
 
 
 
-class AnymalCAdversarialEnv(DirectMARLEnv):
-    cfg: AnymalCAdversarialEnvCfg
+class AnymalCAdversarialSumoStage1Env(DirectMARLEnv):
+    cfg: AnymalCAdversarialSumoStage1EnvCfg
 
     def __init__(
-        self, cfg: AnymalCAdversarialEnvCfg, render_mode: str | None = None, debug=False, **kwargs
+        self, cfg: AnymalCAdversarialSumoStage1EnvCfg, render_mode: str | None = None, debug=False, **kwargs
     ):
         self.debug = debug
         super().__init__(cfg, render_mode, **kwargs)

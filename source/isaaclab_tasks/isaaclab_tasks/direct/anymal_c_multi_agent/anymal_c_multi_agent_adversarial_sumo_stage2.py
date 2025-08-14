@@ -107,7 +107,7 @@ def define_markers() -> VisualizationMarkers:
 
 
 @configclass
-class AnymalCAdversarialSumoEnvCfg(DirectMARLEnvCfg):
+class AnymalCAdversarialSumoStage2EnvCfg(DirectMARLEnvCfg):
     # env
     episode_length_s = 20.0
     decimation = 4
@@ -208,11 +208,11 @@ class AnymalCAdversarialSumoEnvCfg(DirectMARLEnvCfg):
 
 
 
-class AnymalCAdversarialSumoEnv(DirectMARLEnv):
-    cfg: AnymalCAdversarialSumoEnvCfg
+class AnymalCAdversarialSumoStage2Env(DirectMARLEnv):
+    cfg: AnymalCAdversarialSumoStage2EnvCfg
 
     def __init__(
-        self, cfg: AnymalCAdversarialSumoEnvCfg, render_mode: str | None = None, debug=False, **kwargs
+        self, cfg: AnymalCAdversarialSumoStage2EnvCfg, render_mode: str | None = None, debug=False, **kwargs
     ):
         self.debug = debug
         super().__init__(cfg, render_mode, **kwargs)

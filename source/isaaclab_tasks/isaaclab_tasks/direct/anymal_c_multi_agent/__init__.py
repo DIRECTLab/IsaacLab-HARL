@@ -13,7 +13,7 @@ from . import agents
 from .anymal_c_multi_agent import AnymalCMultiAgentBar, AnymalCMultiAgentFlatEnvCfg
 from .anymal_c_multi_agent_adversarial import AnymalCAdversarialEnv, AnymalCAdversarialEnvCfg
 from .anymal_c_multi_agent_adversarial_single_agent import AnymalCAdversarialSingleAgentEnv, AnymalCAdversarialSingleAgentEnvCfg
-from .anymal_c_multi_agent_adversarial_sumo import AnymalCAdversarialSumoEnv, AnymalCAdversarialSumoEnvCfg
+from .anymal_c_multi_agent_adversarial_sumo_stage2 import AnymalCAdversarialSumoEnv, AnymalCAdversarialSumoEnvCfg
 
 ##
 # Register Gym environments.

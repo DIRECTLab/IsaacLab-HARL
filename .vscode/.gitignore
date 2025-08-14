@@ -3,8 +3,9 @@
 !tools/settings.template.json
 !tools/setup_vscode.py
 !extensions.json
-!tasks.json
+# !tasks.json
 
 # Ignore all other files
 .python.env
 *.json
+

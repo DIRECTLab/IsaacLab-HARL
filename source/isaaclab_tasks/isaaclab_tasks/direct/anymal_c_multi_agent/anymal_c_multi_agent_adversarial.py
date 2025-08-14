@@ -134,7 +134,7 @@ class AnymalCAdversarialEnvCfg(DirectMARLEnvCfg):
     scene: InteractiveSceneCfg = InteractiveSceneCfg(num_envs=1, env_spacing=6.0, replicate_physics=True)
 
     # events
-    # events: EventCfg = EventCfg()
+    events: EventCfg = EventCfg()
 
     # robot
     robot_0: ArticulationCfg = ANYMAL_C_CFG.replace(prim_path="/World/envs/env_.*/Robot_0")

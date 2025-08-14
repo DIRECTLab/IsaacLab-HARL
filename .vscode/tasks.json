@@ -28,7 +28,7 @@
         {
             "label": "Run AnymalC Adversarial",
             "type": "shell",
-            "command": "path/to/your/python_env/python",
+            "command": "${command:python.interpreterPath}",
             "args": [
                 "${workspaceFolder}/scripts/reinforcement_learning/harl/train.py",
                 "--video",

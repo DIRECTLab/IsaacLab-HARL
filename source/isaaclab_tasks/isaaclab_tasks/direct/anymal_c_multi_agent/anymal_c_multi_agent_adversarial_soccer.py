@@ -114,53 +114,43 @@ def set_robot_spacing_and_rot(index, total, spacing_mode="linear", orientation_m
     rot_tuple = tuple(rot.tolist())  # Ensure it's a tuple of length 4
     return pos, rot_tuple
     
+
 @configclass
 class EventCfg:
     """Configuration for randomization."""
-
-    physics_material_0 = EventTerm(
-        func=mdp.randomize_rigid_body_material,
-        mode="startup",
-        params={
-            "asset_cfg": SceneEntityCfg("robot_0", body_names=".*"),
-            "static_friction_range": (0.8, 0.8),
-            "dynamic_friction_range": (0.6, 0.6),
-            "restitution_range": (0.0, 0.0),
-            "num_buckets": 64,
-        },
-    )
-
-    add_base_mass_0 = EventTerm(
-        func=mdp.randomize_rigid_body_mass,
-        mode="startup",
-        params={
-            "asset_cfg": SceneEntityCfg("robot_0", body_names="base"),
-            "mass_distribution_params": (-5.0, 5.0),
-            "operation": "add",
-        },
-    )
-
-    physics_material_1 = EventTerm(
-        func=mdp.randomize_rigid_body_material,
-        mode="startup",
-        params={
-            "asset_cfg": SceneEntityCfg("robot_1", body_names=".*"),
-            "static_friction_range": (0.8, 0.8),
-            "dynamic_friction_range": (0.6, 0.6),
-            "restitution_range": (0.0, 0.0),
-            "num_buckets": 64,
-        },
-    )
-
-    add_base_mass_1 = EventTerm(
-        func=mdp.randomize_rigid_body_mass,
-        mode="startup",
-        params={
-            "asset_cfg": SceneEntityCfg("robot_1", body_names="base"),
-            "mass_distribution_params": (-5.0, 5.0),
-            "operation": "add",
-        },
-    )
+    def __init__(self, num_teams=2, material_scales=None):
+        if material_scales is None:
+            material_scales = {}
+        for i in range(num_teams):
+            scales = material_scales.get(f"robot_{i}", {})
+            setattr(
+                self,
+                f"physics_material_{i}",
+                EventTerm(
+                    func=mdp.randomize_rigid_body_material,
+                    mode="startup",
+                    params={
+                        "asset_cfg": SceneEntityCfg(f"robot_{i}", body_names=".*"),
+                        "static_friction_range": scales.get("static_friction_range", (0.8, 0.8)),
+                        "dynamic_friction_range": scales.get("dynamic_friction_range", (0.6, 0.6)),
+                        "restitution_range": scales.get("restitution_range", (0.0, 0.0)),
+                        "num_buckets": 64,
+                    },
+                ),
+            )
+            setattr(
+                self,
+                f"add_base_mass_{i}",
+                EventTerm(
+                    func=mdp.randomize_rigid_body_mass,
+                    mode="startup",
+                    params={
+                        "asset_cfg": SceneEntityCfg(f"robot_{i}", body_names="base"),
+                        "mass_distribution_params": (-5.0, 5.0),
+                        "operation": "add",
+                    },
+                ),
+            )
 
 
 def define_markers() -> VisualizationMarkers:
@@ -237,8 +227,17 @@ class AnymalCAdversarialSoccerEnvCfg(DirectMARLEnvCfg):
         # scene
         self.scene = InteractiveSceneCfg(num_envs=1, env_spacing=16.0, replicate_physics=True)
 
+        # Example: scale friction for each robot (customize as needed)
+        self.physics_material_scales = {
+            f"robot_{i}": {
+                "static_friction_range": (0.7 + 0.02*i, 0.9 + 0.02*i),
+                "dynamic_friction_range": (0.5 + 0.01*i, 0.7 + 0.01*i),
+                "restitution_range": (0.0, 0.1*i),
+            }
+            for i in range(num_teams)
+        }
         # events
-        self.events = EventCfg()
+        self.events = EventCfg(num_teams=num_teams, material_scales=self.physics_material_scales)
 
         # robots and sensors
         # Choose spacing mode and params here or expose as config

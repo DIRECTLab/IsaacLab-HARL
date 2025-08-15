@@ -29,7 +29,45 @@ from isaaclab.utils.math import quat_from_angle_axis
 from isaaclab_assets.robots.anymal import ANYMAL_C_CFG  # isort: skip
 from isaaclab.terrains.config.rough import ROUGH_TERRAINS_CFG  # isort: skip
 
+import math
 
+def get_robot_position(index, total, spacing_mode="linear", linear_range=2.0, circle_radius=2.0, grid_shape=(2,2), grid_spacing=(2.0,2.0)):
+    """
+    Returns (x, y, z) position for a robot given its index and total number of robots.
+    spacing_mode: 'linear', 'circular', or 'grid'
+    linear_range: total range along y axis for linear spacing
+    circle_radius: radius for circular arrangement
+    grid_shape: (rows, cols) for grid
+    grid_spacing: (dx, dy) for grid
+    """
+    if spacing_mode == "linear":
+        # Spread robots evenly along y axis from -linear_range/2 to +linear_range/2
+        if total == 1:
+            y = 0.0
+        else:
+            y = -linear_range/2 + index * (linear_range/(total-1))
+        return (0.0, y, 0.5)
+    elif spacing_mode == "circular":
+        angle = 2 * math.pi * index / total
+        x = circle_radius * math.cos(angle)
+        y = circle_radius * math.sin(angle)
+        return (x, y, 0.5)
+    elif spacing_mode == "grid":
+        rows, cols = grid_shape
+        dx, dy = grid_spacing
+        row = index // cols
+        col = index % cols
+        x = (col - (cols-1)/2) * dx
+        y = (row - (rows-1)/2) * dy
+        return (x, y, 0.5)
+    
+    elif spacing_mode == "random":
+        # space the robots with in some distribution, but with spacing (w) from each other 
+        pass
+
+    else:
+        raise ValueError(f"Unknown spacing_mode: {spacing_mode}")
+    
 @configclass
 class EventCfg:
     """Configuration for randomization."""
@@ -109,7 +147,7 @@ def define_markers() -> VisualizationMarkers:
 
 @configclass
 class AnymalCAdversarialSoccerEnvCfg(DirectMARLEnvCfg):
-    def __init__(self, num_teams=3, *args, **kwargs):
+    def __init__(self, num_teams=5, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.num_teams = num_teams
         self.episode_length_s = 20.0
@@ -151,12 +189,17 @@ class AnymalCAdversarialSoccerEnvCfg(DirectMARLEnvCfg):
         )
 
         # scene
-        self.scene = InteractiveSceneCfg(num_envs=1, env_spacing=6.0, replicate_physics=True)
+        self.scene = InteractiveSceneCfg(num_envs=1, env_spacing=16.0, replicate_physics=True)
 
         # events
         self.events = EventCfg()
 
         # robots and sensors
+        # Choose spacing mode and params here or expose as config
+        # spacing_mode = getattr(self, "robot_spacing_mode", "linear")
+        spacing_mode = getattr(self, "robot_spacing_mode", "circular")
+        # spacing_mode = getattr(self, "robot_spacing_mode", "grid")
+        spacing_kwargs = getattr(self, "robot_spacing_kwargs", {})
         for i in range(num_teams):
             setattr(self, f"robot_{i}", ANYMAL_C_CFG.replace(prim_path=f"/World/envs/env_.*/Robot_{i}"))
             contact_sensor = ContactSensorCfg(
@@ -165,9 +208,8 @@ class AnymalCAdversarialSoccerEnvCfg(DirectMARLEnvCfg):
             setattr(self, f"contact_sensor_{i}", contact_sensor)
             # Set initial state
             getattr(self, f"robot_{i}").init_state.rot = (1.0, 0.0, 0.0, 0.0)
-            # Spread robots along y axis
-            y_pos = 1.0 if i % 2 == 0 else -1.0
-            getattr(self, f"robot_{i}").init_state.pos = (0.0, y_pos, 0.5)
+            pos = get_robot_position(i, num_teams, spacing_mode=spacing_mode, **spacing_kwargs)
+            getattr(self, f"robot_{i}").init_state.pos = pos
 
         # reward scales (override from flat config)
         self.flat_orientation_reward_scale = 0.0

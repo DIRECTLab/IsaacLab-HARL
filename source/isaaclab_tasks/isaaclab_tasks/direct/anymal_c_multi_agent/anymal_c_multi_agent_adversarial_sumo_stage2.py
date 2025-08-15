@@ -21,7 +21,9 @@ from isaaclab.sim import SimulationCfg
 from isaaclab.terrains import TerrainImporterCfg
 from isaaclab.utils import configclass
 from isaaclab.utils.assets import ISAAC_NUCLEUS_DIR
-from isaaclab.utils.math import quat_from_angle_axis
+from isaaclab.utils.math import quat_from_angle_axis, quat_from_euler_xyz
+from isaaclab.utils.math import subtract_frame_transforms
+
 
 ##
 # Pre-defined configs
@@ -105,6 +107,9 @@ def define_markers() -> VisualizationMarkers:
     )
     return VisualizationMarkers(marker_cfg)
 
+def get_quaternion_tuple_from_xyz(x, y, z):
+    quat_tensor = quat_from_euler_xyz(torch.tensor([0]), torch.tensor([0]), torch.tensor([torch.pi/2])).flatten()
+    return (quat_tensor[0].item(), quat_tensor[1].item(), quat_tensor[2].item(), quat_tensor[3].item())
 
 @configclass
 class AnymalCAdversarialSumoStage2EnvCfg(DirectMARLEnvCfg):
@@ -115,11 +120,13 @@ class AnymalCAdversarialSumoStage2EnvCfg(DirectMARLEnvCfg):
     action_space = 12
     action_spaces = {f"robot_{i}": 12 for i in range(2)}
     # observation_space = 48
-    observation_space = 48
-    observation_spaces = {f"robot_{i}": 48 for i in range(2)}
+    observation_space = 51
+    observation_spaces = {f"robot_{i}": 51 for i in range(2)}
     state_space = 0
     state_spaces = {f"robot_{i}": 0 for i in range(2)}
     possible_agents = ["robot_0", "robot_1"]
+
+    
 
     teams = {
         "team_0": ["robot_0"],
@@ -163,21 +170,22 @@ class AnymalCAdversarialSumoStage2EnvCfg(DirectMARLEnvCfg):
     contact_sensor_0: ContactSensorCfg = ContactSensorCfg(
         prim_path="/World/envs/env_.*/Robot_0/.*", history_length=3, update_period=0.005, track_air_time=True
     )
-    robot_0.init_state.rot = (1.0, 0.0, 0.0, 0.0)
-    robot_0.init_state.pos = (0.0, 1.0, 50.5)
+    
+    robot_0.init_state.rot = get_quaternion_tuple_from_xyz(0,0,-torch.pi/2)
+    robot_0.init_state.pos = (0.0, 1.0, 5.5)
 
     robot_1: ArticulationCfg = ANYMAL_C_CFG.replace(prim_path="/World/envs/env_.*/Robot_1")
     contact_sensor_1: ContactSensorCfg = ContactSensorCfg(
         prim_path="/World/envs/env_.*/Robot_1/.*", history_length=3, update_period=0.005, track_air_time=True
     )
-    robot_1.init_state.rot = (1.0, 0.0, 0.0, 0.0)
-    robot_1.init_state.pos = (0.0, -1.0, 50.5)
+    robot_1.init_state.rot = get_quaternion_tuple_from_xyz(0,0,torch.pi/2)
+    robot_1.init_state.pos = (0.0, -1.0, 5.5)
 
     cfg_cylinder = RigidObjectCfg(
         prim_path="/World/envs/env_.*/Object",
         spawn=sim_utils.CylinderCfg(
             radius=3,
-            height=50,
+            height=5,
             rigid_props=sim_utils.RigidBodyPropertiesCfg(
                 kinematic_enabled=True,
                 disable_gravity=True
@@ -187,7 +195,7 @@ class AnymalCAdversarialSumoStage2EnvCfg(DirectMARLEnvCfg):
             visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(1.0, 1.0, 1.0)),
         ),
         init_state=RigidObjectCfg.InitialStateCfg(
-            pos=(0.0, 0.0, 25), rot=(1.0, 0.0, 0.0, 0.0)
+            pos=(0.0, 0.0, 2.5), rot=(1.0, 0.0, 0.0, 0.0)
         ),  # started the bar lower
     )
 
@@ -300,6 +308,16 @@ class AnymalCAdversarialSumoStage2Env(DirectMARLEnv):
     def _get_observations(self) -> dict:
         self.previous_actions = copy.deepcopy(self.actions)
 
+        robot_0_desired_pos, _ = subtract_frame_transforms(
+            self.robots["robot_0"].data.root_state_w[:, :3], self.robots["robot_0"].data.root_state_w[:, 3:7], \
+                self.robots["robot_1"].data.root_pos_w
+        )
+
+        robot_1_desired_pos, _ = subtract_frame_transforms(
+            self.robots["robot_1"].data.root_state_w[:, :3], self.robots["robot_1"].data.root_state_w[:, 3:7], \
+                self.robots["robot_0"].data.root_pos_w
+        )
+
         robot_0_obs = torch.cat(
                 [
                     tensor
@@ -311,6 +329,8 @@ class AnymalCAdversarialSumoStage2Env(DirectMARLEnv):
                         self.robots["robot_0"].data.joint_pos - self.robots["robot_0"].data.default_joint_pos,
                         self.robots["robot_0"].data.joint_vel,
                         self.actions["robot_0"],
+                        #Give the position of the other robot
+                        robot_0_desired_pos
                     )
                     if tensor is not None
                 ],
@@ -328,6 +348,8 @@ class AnymalCAdversarialSumoStage2Env(DirectMARLEnv):
                     self.robots["robot_1"].data.joint_pos - self.robots["robot_1"].data.default_joint_pos,
                     self.robots["robot_1"].data.joint_vel,
                     self.actions["robot_1"],
+                    #Give the position of the other robot
+                    robot_1_desired_pos
                 )
                 if tensor is not None
             ],
@@ -458,21 +480,25 @@ class AnymalCAdversarialSumoStage2Env(DirectMARLEnv):
         return {"team_0" : all_rewards["robot_0"], "team_1" : all_rewards["robot_1"]}
 
     def _get_dones(self) -> tuple[dict, dict]:
-        # anymal_died = []
-        # for robot_id, contact_sensor in self.contact_sensors.items():
-        #     net_contact_forces = contact_sensor.data.net_forces_w_history
-        #     died = torch.any(torch.max(torch.norm(net_contact_forces[:, :, self.base_ids[robot_id]], dim=-1), dim=1)[0] > 1.0, dim=1)
-        #     anymal_died.append(died)
+        anymal_died = []
+        anymal_fell = []
+        for robot_id, contact_sensor in self.contact_sensors.items():
+            net_contact_forces = contact_sensor.data.net_forces_w_history
+            died = torch.any(torch.max(torch.norm(net_contact_forces[:, :, self.base_ids[robot_id]], dim=-1), dim=1)[0] > 1.0, dim=1)
+            fell = self.robots[robot_id].data.root_pos_w[:, 2] < 2.5
+            anymal_died.append(died)
+            anymal_fell.append(fell)
 
-        # anymal_died = torch.any(torch.stack(anymal_died), dim=1)
+        anymal_died = torch.any(torch.stack(anymal_died), dim=0)
+        anymal_fell = torch.any(torch.stack(anymal_fell), dim=0)
+
+        died = torch.logical_or(anymal_died, anymal_fell)
+        died = {team:died for team in self.cfg.teams.keys()}
 
         time_out = self.episode_length_buf >= self.max_episode_length - 1
         time_out = {team:time_out for team in self.cfg.teams.keys()}
-        # died = torch.any(torch.max(torch.norm(net_contact_forces[:, :, self.base_ids["robot_0"]], dim=-1), dim=1)[0] > 1.0, dim=1)
-        # died = {team:died for team in self.cfg.teams.keys()}
 
-
-        return time_out, time_out
+        return died, time_out
 
     def _reset_idx(self, env_ids: torch.Tensor | None):
         if env_ids is None or len(env_ids) == self.num_envs:

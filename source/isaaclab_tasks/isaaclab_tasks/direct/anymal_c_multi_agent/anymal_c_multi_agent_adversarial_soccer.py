@@ -31,7 +31,7 @@ from isaaclab.terrains.config.rough import ROUGH_TERRAINS_CFG  # isort: skip
 
 import math
 
-def get_robot_position(index, total, spacing_mode="linear", linear_range=2.0, circle_radius=2.0, grid_shape=(2,2), grid_spacing=(2.0,2.0)):
+def set_robot_spacing_and_rot(index, total, spacing_mode="linear", orientation_mode="face_center",linear_range=2.0, circle_radius=2.0, grid_shape=(2,2), grid_spacing=(2.0,2.0)):
     """
     Returns (x, y, z) position for a robot given its index and total number of robots.
     spacing_mode: 'linear', 'circular', or 'grid'
@@ -39,34 +39,80 @@ def get_robot_position(index, total, spacing_mode="linear", linear_range=2.0, ci
     circle_radius: radius for circular arrangement
     grid_shape: (rows, cols) for grid
     grid_spacing: (dx, dy) for grid
+
+    Returns (pos, rot) for a robot given its index and total number of robots.
+    pos: (x, y, z)
+    rot: quaternion (w, x, y, z)
+    orientation_mode: 'random' or 'face_center'
     """
+    import random
+    from isaaclab.utils.math import quat_from_angle_axis
+
+    # --- Position ---
     if spacing_mode == "linear":
-        # Spread robots evenly along y axis from -linear_range/2 to +linear_range/2
         if total == 1:
             y = 0.0
         else:
-            y = -linear_range/2 + index * (linear_range/(total-1))
-        return (0.0, y, 0.5)
+            y = -linear_range / 2 + index * (linear_range / (total - 1))
+        pos = (0.0, y, 0.5)
     elif spacing_mode == "circular":
         angle = 2 * math.pi * index / total
         x = circle_radius * math.cos(angle)
         y = circle_radius * math.sin(angle)
-        return (x, y, 0.5)
+        pos = (x, y, 0.5)
     elif spacing_mode == "grid":
         rows, cols = grid_shape
         dx, dy = grid_spacing
         row = index // cols
         col = index % cols
-        x = (col - (cols-1)/2) * dx
-        y = (row - (rows-1)/2) * dy
-        return (x, y, 0.5)
-    
+        x = (col - (cols - 1) / 2) * dx
+        y = (row - (rows - 1) / 2) * dy
+        pos = (x, y, 0.5)
     elif spacing_mode == "random":
         # space the robots with in some distribution, but with spacing (w) from each other 
-        pass
+        # Divide the area into non-overlapping sectors for each robot
+        angle_sector = 2 * math.pi / total
+        angle_start = index * angle_sector
+        angle_end = angle_start + angle_sector
+        angle = random.uniform(angle_start, angle_end)
+        r_min = circle_radius * 0.7
+        r_max = circle_radius * 1.3
+        r = random.uniform(r_min, r_max)
+        x = r * math.cos(angle)
+        y = r * math.sin(angle)
+        pos = (x, y, 0.5)
 
     else:
         raise ValueError(f"Unknown spacing_mode: {spacing_mode}")
+    
+    # --- orientation ---
+    if orientation_mode == "random":
+        yaw = random.uniform(-math.pi, math.pi)
+    elif orientation_mode == "face_center":
+        # Compute the center of all robots (assuming all at same z)
+        if spacing_mode == "linear":
+            center_y = 0.0
+            center = (0.0, center_y, 0.5)
+        elif spacing_mode == "circular":
+            center = (0.0, 0.0, 0.5)
+        elif spacing_mode == "grid":
+            rows, cols = grid_shape
+            center = (0.0, 0.0, 0.5)
+        else:
+            center = (0.0, 0.0, 0.5)
+
+        dx = center[0] - pos[0]
+        dy = center[1] - pos[1]
+        yaw = math.atan2(dy, dx)
+    else:
+        raise ValueError(f"Unknown orientation_mode: {orientation_mode}")
+    
+    yaw_tensor = torch.tensor([yaw], dtype=torch.float32)
+    axis_tensor = torch.tensor([0.0, 0.0, 1.0], dtype=torch.float32)
+    rot = quat_from_angle_axis(yaw_tensor, axis_tensor)  # (w, x, y, z)
+    rot = rot.squeeze(0)  # Remove batch dimension if present
+    rot_tuple = tuple(rot.tolist())  # Ensure it's a tuple of length 4
+    return pos, rot_tuple
     
 @configclass
 class EventCfg:
@@ -147,7 +193,7 @@ def define_markers() -> VisualizationMarkers:
 
 @configclass
 class AnymalCAdversarialSoccerEnvCfg(DirectMARLEnvCfg):
-    def __init__(self, num_teams=5, *args, **kwargs):
+    def __init__(self, num_teams=15, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.num_teams = num_teams
         self.episode_length_s = 20.0
@@ -197,19 +243,20 @@ class AnymalCAdversarialSoccerEnvCfg(DirectMARLEnvCfg):
         # robots and sensors
         # Choose spacing mode and params here or expose as config
         # spacing_mode = getattr(self, "robot_spacing_mode", "linear")
-        spacing_mode = getattr(self, "robot_spacing_mode", "circular")
+        # spacing_mode = getattr(self, "robot_spacing_mode", "circular")
         # spacing_mode = getattr(self, "robot_spacing_mode", "grid")
+        spacing_mode = getattr(self, "robot_spacing_mode", "random")
         spacing_kwargs = getattr(self, "robot_spacing_kwargs", {})
         for i in range(num_teams):
             setattr(self, f"robot_{i}", ANYMAL_C_CFG.replace(prim_path=f"/World/envs/env_.*/Robot_{i}"))
             contact_sensor = ContactSensorCfg(
-                prim_path=f"/World/envs/env_.*/Robot_{i}/.*", history_length=3, update_period=0.005, track_air_time=True
+            prim_path=f"/World/envs/env_.*/Robot_{i}/.*", history_length=3, update_period=0.005, track_air_time=True
             )
             setattr(self, f"contact_sensor_{i}", contact_sensor)
             # Set initial state
-            getattr(self, f"robot_{i}").init_state.rot = (1.0, 0.0, 0.0, 0.0)
-            pos = get_robot_position(i, num_teams, spacing_mode=spacing_mode, **spacing_kwargs)
+            pos, rot = set_robot_spacing_and_rot(i, num_teams, spacing_mode=spacing_mode, **spacing_kwargs)
             getattr(self, f"robot_{i}").init_state.pos = pos
+            getattr(self, f"robot_{i}").init_state.rot = rot
 
         # reward scales (override from flat config)
         self.flat_orientation_reward_scale = 0.0

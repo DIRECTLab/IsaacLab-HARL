@@ -168,6 +168,8 @@ class AnymalCAdversarialSumoStage2EnvCfg(DirectMARLEnvCfg):
     arena_radius = 2.25
     
 
+    
+
     teams = {
         "team_0": ["robot_0"],
         "team_1": ["robot_1"]
@@ -439,6 +441,8 @@ class AnymalCAdversarialSumoStage2Env(DirectMARLEnv):
                         self.robots["robot_0"].data.joint_pos - self.robots["robot_0"].data.default_joint_pos,
                         self.robots["robot_0"].data.joint_vel,
                         self.actions["robot_0"],
+                        #Give the position of the other robot
+                        robot_0_desired_pos
                     )
                     if tensor is not None
                 ],
@@ -456,6 +460,8 @@ class AnymalCAdversarialSumoStage2Env(DirectMARLEnv):
                     self.robots["robot_1"].data.joint_pos - self.robots["robot_1"].data.default_joint_pos,
                     self.robots["robot_1"].data.joint_vel,
                     self.actions["robot_1"],
+                    #Give the position of the other robot
+                    robot_1_desired_pos
                 )
                 if tensor is not None
             ],

@@ -20,7 +20,7 @@ def get_quaternion_tuple_from_xyz(x, y, z):
 @configclass
 class LeatherbackSumoEnvCfg(DirectMARLEnvCfg):
     decimation = 4
-    episode_length_s = 1000.0
+    episode_length_s = 30.0
     action_spaces = {f"robot_{i}": 2 for i in range(2)}
     observation_spaces = {f"robot_{i}": 3 for i in range(2)}
     state_space = 0
@@ -191,6 +191,7 @@ class LeatherbackSumoEnv(DirectMARLEnv):
 
     def _apply_action(self) -> None:
         for robot_id in self.robots.keys():
+            # self._throttle_state[robot_id] = -5*torch.ones_like(self._throttle_state[robot_id], device=self.device)
             self.robots[robot_id].set_joint_velocity_target(self._throttle_state[robot_id], joint_ids=self._throttle_dof_idx)
             self.robots[robot_id].set_joint_position_target(self._steering_state[robot_id], joint_ids=self._steering_dof_idx)
 
@@ -263,6 +264,5 @@ class LeatherbackSumoEnv(DirectMARLEnv):
             self.robots[robot_id].write_joint_state_to_sim(joint_pos, joint_vel, None, env_ids)
 
         self._draw_ring_markers()
-
         self.extras["log"] = {}
 

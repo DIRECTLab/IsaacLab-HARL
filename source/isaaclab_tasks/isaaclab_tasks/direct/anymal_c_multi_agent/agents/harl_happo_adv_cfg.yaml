@@ -12,6 +12,7 @@ device:
   # arg to torch.set_num_threads
   torch_threads: 16
 train:
+  prepend_actor: True
   # number of parallel environments for training data collection
   n_rollout_threads: 20
   # number of total training steps

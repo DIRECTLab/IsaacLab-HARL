@@ -23,9 +23,6 @@ from isaaclab.utils import configclass
 from isaaclab.utils.assets import ISAAC_NUCLEUS_DIR
 from isaaclab.utils.math import quat_from_angle_axis, subtract_frame_transforms, quat_from_euler_xyz
 from isaaclab.envs.common import ViewerCfg
-import sys
-sys.path.append('/home/jacobmorrey/shared_repos/HARL/harl/models/policy_models/')
-from stochastic_policy import StochasticPolicy
 
 ##
 # Pre-defined configs
@@ -68,9 +65,13 @@ def get_commands(robot_0, robot_1):
 
     return robot_0_commands, robot_1_commands
 
-def get_quaternion_tuple_from_xyz(x, y, z):
-    quat_tensor = quat_from_euler_xyz(torch.tensor([x]), torch.tensor([y]), torch.tensor([z])).flatten()
-    return (quat_tensor[0].item(), quat_tensor[1].item(), quat_tensor[2].item(), quat_tensor[3].item())
+def get_distance_to_center(arena, robot: Articulation):
+    arena_pos_w = arena.data.root_state_w[:, :3]                # (num_envs, 3)
+    robot_pos_w = robot.data.root_state_w[:, :3]                # (num_envs, 3)
+    # XY deltas to arena center
+    robot_delta_xy = robot_pos_w[:, :2] - arena_pos_w[:, :2]    # (num_envs, 2)
+    # Distances (keepdim=True so we get (num_envs, 1) for concat)
+    return torch.norm(robot_delta_xy, dim=1, keepdim=True)
 
 @configclass
 class EventCfg:
@@ -147,6 +148,9 @@ def define_markers() -> VisualizationMarkers:
     )
     return VisualizationMarkers(marker_cfg)
 
+def get_quaternion_tuple_from_xyz(x, y, z):
+    quat_tensor = quat_from_euler_xyz(torch.tensor([x]), torch.tensor([y]), torch.tensor([z])).flatten()
+    return (quat_tensor[0].item(), quat_tensor[1].item(), quat_tensor[2].item(), quat_tensor[3].item())
 
 @configclass
 class AnymalCAdversarialSumoStage2EnvCfg(DirectMARLEnvCfg):
@@ -156,12 +160,13 @@ class AnymalCAdversarialSumoStage2EnvCfg(DirectMARLEnvCfg):
     action_scale = 0.5
     action_space = 12
     action_spaces = {f"robot_{i}": 12 for i in range(2)}
-    # observation_space = 48
     observation_space = 51
     observation_spaces = {f"robot_{i}": 51 for i in range(2)}
     state_space = 0
     state_spaces = {f"robot_{i}": 0 for i in range(2)}
     possible_agents = ["robot_0", "robot_1"]
+    arena_radius = 2.25
+    
 
     teams = {
         "team_0": ["robot_0"],
@@ -200,44 +205,44 @@ class AnymalCAdversarialSumoStage2EnvCfg(DirectMARLEnvCfg):
     # events
     events: EventCfg = EventCfg()
 
-    # robot
-    robot_0: ArticulationCfg = ANYMAL_C_CFG.replace(prim_path="/World/envs/env_.*/Robot_0")
-    contact_sensor_0: ContactSensorCfg = ContactSensorCfg(
-        prim_path="/World/envs/env_.*/Robot_0/.*", history_length=3, update_period=0.005, track_air_time=True,
-        filter_prim_paths_expr=["/World/envs/env_.*/Object"]
-    )
-    # robot_0.init_state.rot = (1.0, 0.0, 0.0, 0.0)
-    robot_0.init_state.rot = get_quaternion_tuple_from_xyz(0,0,-torch.pi/2)
-    robot_0.init_state.pos = (0.0, 1.0, 50.5)
-
-    robot_1: ArticulationCfg = ANYMAL_C_CFG.replace(prim_path="/World/envs/env_.*/Robot_1")
-    contact_sensor_1: ContactSensorCfg = ContactSensorCfg(
-        prim_path="/World/envs/env_.*/Robot_1/.*", history_length=3, update_period=0.005, track_air_time=True,
-        filter_prim_paths_expr=["/World/envs/env_.*/Object"]
-    )
-    # robot_1.init_state.rot = (1.0, 0.0, 0.0, 0.0)
-    robot_1.init_state.rot = get_quaternion_tuple_from_xyz(0,0,torch.pi/2)
-    robot_1.init_state.pos = (0.0, -1.0, 50.5)
-
     cfg_cylinder = RigidObjectCfg(
-        prim_path="/World/envs/env_.*/Object",
+        prim_path="/World/envs/env_.*/Arena",
         spawn=sim_utils.CylinderCfg(
-            radius=2.25,
-            height=50,
+            radius=arena_radius,
+            height=1,
             rigid_props=sim_utils.RigidBodyPropertiesCfg(
                 kinematic_enabled=True,
                 disable_gravity=True
             ),
-            mass_props=sim_utils.MassPropertiesCfg(mass=100),  # changed from 1.0 to 0.5
+            mass_props=sim_utils.MassPropertiesCfg(mass=100),
             collision_props=sim_utils.CollisionPropertiesCfg(),
             visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(1.0, 1.0, 1.0)),
         ),
         init_state=RigidObjectCfg.InitialStateCfg(
-            pos=(0.0, 0.0, 25), rot=(1.0, 0.0, 0.0, 0.0)
-        ),  # started the bar lower
+            pos=(0.0, 0.0, 0.5), rot=(1.0, 0.0, 0.0, 0.0)
+        ),
     )
 
-    viewer = ViewerCfg(eye=(10.0, 10.0, 10.0), origin_type="asset_root", asset_name="robot_0", env_index=4)
+    # robot
+    robot_0: ArticulationCfg = ANYMAL_C_CFG.replace(prim_path="/World/envs/env_.*/Robot_0")
+    contact_sensor_0: ContactSensorCfg = ContactSensorCfg(
+        prim_path="/World/envs/env_.*/Robot_0/base*", history_length=3, update_period=0.005, track_air_time=True,
+        filter_prim_paths_expr=["/World/envs/env_.*/Arena"]
+    )
+    
+    robot_0.init_state.rot = get_quaternion_tuple_from_xyz(0,0,-torch.pi/2)
+    robot_0.init_state.pos = (0.0, 1.0, 1.3)
+
+    robot_1: ArticulationCfg = ANYMAL_C_CFG.replace(prim_path="/World/envs/env_.*/Robot_1")
+    contact_sensor_1: ContactSensorCfg = ContactSensorCfg(
+        prim_path="/World/envs/env_.*/Robot_1/base*", history_length=3, update_period=0.005, track_air_time=True,
+        filter_prim_paths_expr=["/World/envs/env_.*/Arena"]
+    )
+    robot_1.init_state.rot = get_quaternion_tuple_from_xyz(0,0,torch.pi/2)
+    robot_1.init_state.pos = (0.0, -1.0, 1.3)
+
+
+    # viewer = ViewerCfg(eye=(10.0, 10.0, 10.0), origin_type="asset_root", asset_name="robot_0", env_index=0)
 
     # reward scales (override from flat config)
     flat_orientation_reward_scale = 0.0
@@ -245,6 +250,7 @@ class AnymalCAdversarialSumoStage2EnvCfg(DirectMARLEnvCfg):
     # reward scales
     loser_scale = -10.0
     winner_scale = 10.0
+    timeout_scale = -10.0
     lin_vel_reward_scale = 1.0
     yaw_rate_reward_scale = 0.5
     z_vel_reward_scale = -2.0
@@ -288,6 +294,7 @@ class AnymalCAdversarialSumoStage2Env(DirectMARLEnv):
                 "track_ang_vel_z_exp",
                 "loser",
                 "winner",
+                "timeout",
                 "lin_vel_z_l2",
                 "ang_vel_xy_l2",
                 "dof_torques_l2",
@@ -305,13 +312,13 @@ class AnymalCAdversarialSumoStage2Env(DirectMARLEnv):
 
         for robot_id, contact_sensor in self.contact_sensors.items():
             _base_id, _ = contact_sensor.find_bodies("base")
-            _feet_ids, _ = contact_sensor.find_bodies(".*FOOT")
-            _undesired_contact_body_ids, _ = contact_sensor.find_bodies(["base", ".*THIGH", ".*HIP", ".*SHANK"])
+            # _feet_ids, _ = contact_sensor.find_bodies(".*FOOT")
+            # _undesired_contact_body_ids, _ = contact_sensor.find_bodies(["base", ".*THIGH", ".*HIP", ".*SHANK"])
             self.base_ids[robot_id] = _base_id
-            self.feet_ids[robot_id] = _feet_ids
-            self.undesired_body_contact_ids[robot_id] = _undesired_contact_body_ids
+            # self.feet_ids[robot_id] = _feet_ids
+            self.undesired_body_contact_ids[robot_id] = _base_id
 
-        self.model = torch.load("/home/jacobmorrey/shared_repos/IsaacLab-HARL/source/isaaclab_tasks/isaaclab_tasks/direct/anymal_c_multi_agent/models/actor_agent_robot_0_full.pt", map_location=self.device, weights_only=False)
+        self.model = torch.load("/home/jacobmorrey/Downloads/actor_agent_robot_0_full.pt", map_location=self.device, weights_only=False)
         self.model.eval()
 
         self.curr_step = 0
@@ -324,7 +331,7 @@ class AnymalCAdversarialSumoStage2Env(DirectMARLEnv):
         self.robots = {}
         self.contact_sensors = {}
         self.height_scanners = {}
-        self.object = RigidObject(self.cfg.cfg_cylinder)
+        self.arena = RigidObject(self.cfg.cfg_cylinder)
         if self.debug:
             self.my_visualizer = define_markers()
 
@@ -347,15 +354,13 @@ class AnymalCAdversarialSumoStage2Env(DirectMARLEnv):
     def _pre_physics_step(self, actions: torch.Tensor):
         # We need to process the actions for each scene independently
 
-        
         self.processed_actions = {}
         for robot_id, robot in self.robots.items():
-
-            model_actions, _, _ = self.model(self.recent_obs[robot_id], torch.zeros_like(self.recent_obs[robot_id]), torch.ones_like(self.recent_obs[robot_id]))
-            self.actions[robot_id] = model_actions + (max(self.curr_step/self.max_steps, self.alpha) * self.actions[robot_id])
-            self.actions[robot_id] = actions[robot_id].clone()
+            with torch.no_grad():
+                model_actions, _, _ = self.model(self.recent_obs[robot_id], torch.zeros_like(self.recent_obs[robot_id]), torch.ones_like(self.recent_obs[robot_id]))
+            combined_actions = model_actions + (min(self.curr_step/self.max_steps, self.alpha) * self.actions[robot_id])
             self.processed_actions[robot_id] = (
-                self.cfg.action_scale * self.actions[robot_id] + robot.data.default_joint_pos
+                self.cfg.action_scale * combined_actions + robot.data.default_joint_pos
             )
 
     def _apply_action(self):
@@ -375,9 +380,13 @@ class AnymalCAdversarialSumoStage2Env(DirectMARLEnv):
             self.robots["robot_1"].data.root_state_w[:, :3], self.robots["robot_1"].data.root_state_w[:, 3:7], \
                 self.robots["robot_0"].data.root_pos_w
         )
+        time_remaining = (self.max_episode_length - self.episode_length_buf).unsqueeze(-1)
 
         robot_0_commands = chase_commands_holonomic(robot_0_desired_pos)
         robot_1_commands = chase_commands_holonomic(robot_1_desired_pos)
+
+        robot_0_dist_to_center = get_distance_to_center(self.arena, self.robots["robot_0"])
+        robot_1_dist_to_center = get_distance_to_center(self.arena, self.robots["robot_1"])
 
         robot_0_obs = torch.cat(
                 [
@@ -386,11 +395,13 @@ class AnymalCAdversarialSumoStage2Env(DirectMARLEnv):
                         self.robots["robot_0"].data.root_lin_vel_b,
                         self.robots["robot_0"].data.root_ang_vel_b,
                         self.robots["robot_0"].data.projected_gravity_b,
-                        robot_0_commands,
                         self.robots["robot_0"].data.joint_pos - self.robots["robot_0"].data.default_joint_pos,
                         self.robots["robot_0"].data.joint_vel,
                         self.actions["robot_0"],
-                        robot_0_desired_pos
+                        robot_0_desired_pos,
+                        time_remaining,
+                        robot_0_dist_to_center,
+                        robot_1_dist_to_center,
                     )
                     if tensor is not None
                 ],
@@ -404,11 +415,13 @@ class AnymalCAdversarialSumoStage2Env(DirectMARLEnv):
                     self.robots["robot_1"].data.root_lin_vel_b,
                     self.robots["robot_1"].data.root_ang_vel_b,
                     self.robots["robot_1"].data.projected_gravity_b,
-                    robot_1_commands,
                     self.robots["robot_1"].data.joint_pos - self.robots["robot_1"].data.default_joint_pos,
                     self.robots["robot_1"].data.joint_vel,
                     self.actions["robot_1"],
-                    robot_1_desired_pos
+                    robot_1_desired_pos,
+                    time_remaining,
+                    robot_1_dist_to_center,
+                    robot_0_dist_to_center,
                 )
                 if tensor is not None
             ],
@@ -520,79 +533,30 @@ class AnymalCAdversarialSumoStage2Env(DirectMARLEnv):
             self._draw_markers(self._commands)
         all_rewards = {}
 
-        robot_0_desired_pos, _ = subtract_frame_transforms(
-            self.robots["robot_0"].data.root_state_w[:, :3], self.robots["robot_0"].data.root_state_w[:, 3:7], \
-                self.robots["robot_1"].data.root_pos_w
-        )
-
-        robot_1_desired_pos, _ = subtract_frame_transforms(
-            self.robots["robot_1"].data.root_state_w[:, :3], self.robots["robot_1"].data.root_state_w[:, 3:7], \
-                self.robots["robot_0"].data.root_pos_w
-        )
-
-        robot_0_commands = chase_commands_holonomic(robot_0_desired_pos)
-        robot_1_commands = chase_commands_holonomic(robot_1_desired_pos)
+        time_out = self.episode_length_buf >= self.max_episode_length - 1
 
         dones = {}
         for team, robots in self.cfg.teams.items():
-            team_died = []
+            team_lost = []
             for robot_id in robots:
-                died = self.robots[robot_id].data.root_pos_w[:, 2] < 50
-                team_died.append(died.unsqueeze(-1))
-            team_died = torch.all(torch.cat(team_died, dim=-1), dim=-1)
-            dones[team] = team_died
+                fallen = self.robots[robot_id].data.root_pos_w[:, 2] < 0.1
+                dist_to_center = get_distance_to_center(self.arena, self.robots[robot_id])
+                left_arena = dist_to_center > self.cfg.arena_radius
+                robot_lost = torch.logical_or(fallen, left_arena.squeeze(-1))
+                team_lost.append(robot_lost.unsqueeze(-1))
+            team_lost = torch.all(torch.cat(team_lost, dim=-1), dim=-1)
+            dones[team] = team_lost
         for robot_id in self.robots.keys():
-            self._commands = robot_0_commands if robot_id == "robot_0" else robot_1_commands
-            # linear velocity tracking
-            lin_vel_error = torch.sum(torch.square(self._commands[:, :2] - self.robots[robot_id].data.root_lin_vel_b[:, :2]), dim=1)
-            lin_vel_error_mapped = torch.exp(-lin_vel_error / 0.25)
-            # yaw rate tracking
-            yaw_rate_error = torch.square(self._commands[:, 2] - self.robots[robot_id].data.root_ang_vel_b[:, 2])
-            yaw_rate_error_mapped = torch.exp(-yaw_rate_error / 0.25)
             for team, robots in self.cfg.teams.items():
                 if robot_id in robots:
                     loser = dones[team]
                 else:
                     winner = dones[team]
-                    
-            # z velocity tracking
-            z_vel_error = torch.square(self.robots[robot_id].data.root_lin_vel_b[:, 2])
-            # angular velocity x/y
-            ang_vel_error = torch.sum(torch.square(self.robots[robot_id].data.root_ang_vel_b[:, :2]), dim=1)
-            # joint torques
-            joint_torques = torch.sum(torch.square(self.robots[robot_id].data.applied_torque), dim=1)
-            # joint acceleration
-            joint_accel = torch.sum(torch.square(self.robots[robot_id].data.joint_acc), dim=1)
-            # action rate
-            action_rate = torch.sum(torch.square(self.actions[robot_id] - self.previous_actions[robot_id]), dim=1)
-            # feet air time
-            first_contact = self.contact_sensors[robot_id].compute_first_contact(self.step_dt)[:, self.feet_ids[robot_id]]
-            last_air_time = self.contact_sensors[robot_id].data.last_air_time[:, self.feet_ids[robot_id]]
-            air_time = torch.sum((last_air_time - 0.5) * first_contact, dim=1) * (
-                torch.norm(self._commands[:, :2], dim=1) > 0.1
-            )
-            # undesired contacts
-            net_contact_forces = self.contact_sensors[robot_id].data.net_forces_w_history
-            is_contact = (
-                torch.max(torch.norm(net_contact_forces[:, :, self.undesired_body_contact_ids[robot_id]], dim=-1), dim=1)[0] > 1.0
-            )
-            contacts = torch.sum(is_contact, dim=1)
-            # flat orientation
-            flat_orientation = torch.sum(torch.square(self.robots[robot_id].data.projected_gravity_b[:, :2]), dim=1)
 
             rewards = {
-                "track_lin_vel_xy_exp": lin_vel_error_mapped * self.cfg.lin_vel_reward_scale * self.step_dt,
-                "track_ang_vel_z_exp": yaw_rate_error_mapped * self.cfg.yaw_rate_reward_scale * self.step_dt,
+                "timeout": time_out * self.cfg.timeout_scale,
                 "loser": loser * self.cfg.loser_scale,
                 "winner": winner * self.cfg.winner_scale,
-                "lin_vel_z_l2": z_vel_error * self.cfg.z_vel_reward_scale * self.step_dt,
-                "ang_vel_xy_l2": ang_vel_error * self.cfg.ang_vel_reward_scale * self.step_dt,
-                "dof_torques_l2": joint_torques * self.cfg.joint_torque_reward_scale * self.step_dt,
-                "dof_acc_l2": joint_accel * self.cfg.joint_accel_reward_scale * self.step_dt,
-                "action_rate_l2": action_rate * self.cfg.action_rate_reward_scale * self.step_dt,
-                "feet_air_time": air_time * self.cfg.feet_air_time_reward_scale * self.step_dt,
-                "undesired_contacts": contacts * self.cfg.undesired_contact_reward_scale * self.step_dt,
-                "flat_orientation_l2": flat_orientation * self.cfg.flat_orientation_reward_scale * self.step_dt,
             }
             reward = torch.sum(torch.stack(list(rewards.values())), dim=0)
             all_rewards[robot_id] = reward
@@ -603,27 +567,26 @@ class AnymalCAdversarialSumoStage2Env(DirectMARLEnv):
         return {"team_0" : all_rewards["robot_0"], "team_1" : all_rewards["robot_1"]}
 
     def _get_dones(self) -> tuple[dict, dict]:
-        # for robot_id, contact_sensor in self.contact_sensors.items():
-        #     net_contact_forces = contact_sensor.data.net_forces_w_history
-        #     died = torch.any(torch.max(torch.norm(net_contact_forces[:, :, self.base_ids[robot_id]], dim=-1), dim=1)[0] > 1.0, dim=1)
-        #     anymal_died.append(died)
 
-        dones = {}
-        for team, robots in self.cfg.teams.items():
-            team_died = []
-            for robot_id in robots:
-                died = self.robots[robot_id].data.root_pos_w[:, 2] < 50
-                team_died.append(died.unsqueeze(-1))
-            team_died = torch.all(torch.cat(team_died, dim=-1), dim=-1)
-            dones[team] = team_died
+        anymal_left = []
+        anymal_fell = []
+        for robot_id, contact_sensor in self.contact_sensors.items():
+            dist_to_center = get_distance_to_center(self.arena, self.robots[robot_id])
+            left_arena = dist_to_center > self.cfg.arena_radius
+            fell = self.robots[robot_id].data.root_pos_w[:, 2] < 0.2
+            anymal_left.append(left_arena)
+            anymal_fell.append(fell)
+
+        anymal_left = torch.any(torch.stack(anymal_left), dim=0).squeeze(-1)
+        anymal_fell = torch.any(torch.stack(anymal_fell), dim=0)
+
+        lost = torch.logical_or(anymal_left, anymal_fell)
+        lost = {team:lost for team in self.cfg.teams.keys()}
 
         time_out = self.episode_length_buf >= self.max_episode_length - 1
         time_out = {team:time_out for team in self.cfg.teams.keys()}
-        # died = torch.any(torch.max(torch.norm(net_contact_forces[:, :, self.base_ids["robot_0"]], dim=-1), dim=1)[0] > 1.0, dim=1)
-        # died = {team:died for team in self.cfg.teams.keys()}
 
-
-        return time_out, dones
+        return lost, time_out
 
     def _reset_idx(self, env_ids: torch.Tensor | None):
         if env_ids is None or len(env_ids) == self.num_envs:

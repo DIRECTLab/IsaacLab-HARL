@@ -22,7 +22,7 @@ class LeatherbackSumoEnvCfg(DirectMARLEnvCfg):
     decimation = 4
     episode_length_s = 30.0
     action_spaces = {f"robot_{i}": 2 for i in range(2)}
-    observation_spaces = {f"robot_{i}": 3 for i in range(2)}
+    observation_spaces = {f"robot_{i}": 4 for i in range(2)}
     state_space = 0
     state_spaces = {f"robot_{i}": 0 for i in range(2)}
     possible_agents = ["robot_0", "robot_1"]
@@ -220,8 +220,8 @@ class LeatherbackSumoEnv(DirectMARLEnv):
         team_0_reward = (r1_lost - r0_lost - time_out_reward) * self.cfg.reward_scale
         team_1_reward = (r0_lost - r1_lost - time_out_reward) * self.cfg.reward_scale
 
-        return {"team_0": {"robot_0": team_0_reward},
-                "team_1": {"robot_1": team_1_reward}}
+        return {"team_0": team_0_reward,
+                "team_1": team_1_reward}
 
     def _robots_out_of_ring(self) -> dict[str, torch.Tensor]:
         env_xy = self.scene.env_origins[:, :2].to(self.device)  

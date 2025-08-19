@@ -18,11 +18,11 @@ def get_quaternion_tuple_from_xyz(x, y, z):
     return (quat_tensor[0].item(), quat_tensor[1].item(), quat_tensor[2].item(), quat_tensor[3].item())
 
 @configclass
-class LeatherbackSumoEnvCfg(DirectMARLEnvCfg):
+class LeatherbackSumoStage2EnvCfg(DirectMARLEnvCfg):
     decimation = 4
-    episode_length_s = 1000.0
+    episode_length_s = 30.0
     action_spaces = {f"robot_{i}": 2 for i in range(2)}
-    observation_spaces = {f"robot_{i}": 3 for i in range(2)}
+    observation_spaces = {f"robot_{i}": 4 for i in range(2)}
     state_space = 0
     state_spaces = {f"robot_{i}": 0 for i in range(2)}
     possible_agents = ["robot_0", "robot_1"]
@@ -63,10 +63,10 @@ class LeatherbackSumoEnvCfg(DirectMARLEnvCfg):
     ring_radius_max = 3
     reward_scale = 10
 
-class LeatherbackSumoEnv(DirectMARLEnv):
-    cfg: LeatherbackSumoEnvCfg
+class LeatherbackSumoStage2Env(DirectMARLEnv):
+    cfg: LeatherbackSumoStage2EnvCfg
 
-    def __init__(self, cfg: LeatherbackSumoEnvCfg, render_mode: str | None = None, headless: bool | None = None, **kwargs):
+    def __init__(self, cfg: LeatherbackSumoStage2EnvCfg, render_mode: str | None = None, headless: bool | None = None, **kwargs):
         super().__init__(cfg, render_mode, **kwargs)
         self.headless = headless
         
@@ -191,6 +191,7 @@ class LeatherbackSumoEnv(DirectMARLEnv):
 
     def _apply_action(self) -> None:
         for robot_id in self.robots.keys():
+            # self._throttle_state[robot_id] = -5*torch.ones_like(self._throttle_state[robot_id], device=self.device)
             self.robots[robot_id].set_joint_velocity_target(self._throttle_state[robot_id], joint_ids=self._throttle_dof_idx)
             self.robots[robot_id].set_joint_position_target(self._steering_state[robot_id], joint_ids=self._steering_dof_idx)
 
@@ -219,8 +220,8 @@ class LeatherbackSumoEnv(DirectMARLEnv):
         team_0_reward = (r1_lost - r0_lost - time_out_reward) * self.cfg.reward_scale
         team_1_reward = (r0_lost - r1_lost - time_out_reward) * self.cfg.reward_scale
 
-        return {"team_0": {"robot_0": team_0_reward},
-                "team_1": {"robot_1": team_1_reward}}
+        return {"team_0": team_0_reward,
+                "team_1": team_1_reward}
 
     def _robots_out_of_ring(self) -> dict[str, torch.Tensor]:
         env_xy = self.scene.env_origins[:, :2].to(self.device)  
@@ -263,6 +264,5 @@ class LeatherbackSumoEnv(DirectMARLEnv):
             self.robots[robot_id].write_joint_state_to_sim(joint_pos, joint_vel, None, env_ids)
 
         self._draw_ring_markers()
-
         self.extras["log"] = {}
 

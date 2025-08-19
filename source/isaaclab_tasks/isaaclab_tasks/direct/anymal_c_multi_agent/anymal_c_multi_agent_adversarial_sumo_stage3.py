@@ -312,7 +312,6 @@ class AnymalCAdversarialSumoStage2EnvCfg(DirectMARLEnvCfg):
     loser_scale = -10.0
     winner_scale = 10.0
     timeout_scale = -10.0
-    push_reward_scale = 0.5
     lin_vel_reward_scale = 1.0
     yaw_rate_reward_scale = 0.5
     z_vel_reward_scale = -2.0
@@ -335,7 +334,6 @@ class AnymalCAdversarialSumoStage2Env(DirectMARLEnv):
         self.debug = debug
         super().__init__(cfg, render_mode, **kwargs)
         # Joint position command (deviation from default joint positions)
-        self.robot_0_prev_distance = None
         self.alpha = 0.1
         self.actions = {
             agent: torch.zeros(self.num_envs, action_space, device=self.device)
@@ -354,7 +352,6 @@ class AnymalCAdversarialSumoStage2Env(DirectMARLEnv):
                 "loser",
                 "winner",
                 "timeout",
-                "push_reward",
             ]
         }
 
@@ -477,14 +474,9 @@ class AnymalCAdversarialSumoStage2Env(DirectMARLEnv):
             with torch.no_grad():
                 model_actions, _, _ = self.model(self.recent_obs[robot_id], torch.zeros_like(self.recent_obs[robot_id]), torch.ones_like(self.recent_obs[robot_id]))
             combined_actions = model_actions + (min(max(self.curr_step/(self.max_steps/4), self.alpha), 1.0) * self.actions[robot_id])
-            if robot_id == "robot_0":
-                self.processed_actions[robot_id] = (
-                    self.cfg.action_scale * model_actions + robot.data.default_joint_pos
-                )
-            else:
-                self.processed_actions[robot_id] = (
-                    self.cfg.action_scale * combined_actions + robot.data.default_joint_pos
-                )
+            self.processed_actions[robot_id] = (
+                self.cfg.action_scale * combined_actions + robot.data.default_joint_pos
+            )
 
     def _apply_action(self):
         for robot_id, robot in self.robots.items():
@@ -505,14 +497,11 @@ class AnymalCAdversarialSumoStage2Env(DirectMARLEnv):
         )
         time_remaining = (self.max_episode_length - self.episode_length_buf).unsqueeze(-1)
 
-        # robot_0_commands = chase_commands_holonomic(robot_0_desired_pos)
+        robot_0_commands = chase_commands_holonomic(robot_0_desired_pos)
         robot_1_commands = chase_commands_holonomic(robot_1_desired_pos)
-        robot_0_commands = torch.zeros_like(robot_1_commands)
 
         robot_0_dist_to_center = get_distance_to_center(self.scene.env_origins[:, :2].to(self.device), self.robots["robot_0"])
         robot_1_dist_to_center = get_distance_to_center(self.scene.env_origins[:, :2].to(self.device), self.robots["robot_1"])
-
-        self.robot_0_prev_distance = robot_0_dist_to_center.clone()
 
         arena_radius = self.ring_radius.view(-1, 1)
 
@@ -662,21 +651,17 @@ class AnymalCAdversarialSumoStage2Env(DirectMARLEnv):
         if self.debug:
             self._draw_markers(self._commands)
         all_rewards = {}
+
         time_out = self.episode_length_buf >= self.max_episode_length - 1
 
         dones = {}
-        push_reward = get_distance_to_center(self.scene.env_origins[:, :2].to(self.device), self.robots["robot_0"]) - self.robot_0_prev_distance
-        push_reward = push_reward.squeeze(-1)
         for team, robots in self.cfg.teams.items():
             team_lost = []
             for robot_id in robots:
                 fallen = self.robots[robot_id].data.root_pos_w[:, 2] < 0.17
                 dist_to_center = get_distance_to_center(self.scene.env_origins[:, :2].to(self.device), self.robots[robot_id])
                 left_arena = dist_to_center.squeeze(-1) > self.ring_radius
-                if robot_id == "robot_0":
-                    robot_lost = torch.logical_or(left_arena, left_arena)
-                else:
-                    robot_lost = torch.logical_or(left_arena, fallen)
+                robot_lost = torch.logical_or(fallen, left_arena)
                 team_lost.append(robot_lost.unsqueeze(-1))
             team_lost = torch.all(torch.cat(team_lost, dim=-1), dim=-1)
             dones[team] = team_lost
@@ -687,12 +672,10 @@ class AnymalCAdversarialSumoStage2Env(DirectMARLEnv):
                 else:
                     winner = dones[team]
 
-
             rewards = {
                 "timeout": time_out * self.cfg.timeout_scale,
                 "loser": loser * self.cfg.loser_scale,
                 "winner": winner * self.cfg.winner_scale,
-                "push_reward": push_reward * self.cfg.push_reward_scale,
             }
             reward = torch.sum(torch.stack(list(rewards.values())), dim=0)
             all_rewards[robot_id] = reward

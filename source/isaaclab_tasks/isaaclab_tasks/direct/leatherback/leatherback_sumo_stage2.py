@@ -18,7 +18,7 @@ def get_quaternion_tuple_from_xyz(x, y, z):
     return (quat_tensor[0].item(), quat_tensor[1].item(), quat_tensor[2].item(), quat_tensor[3].item())
 
 @configclass
-class LeatherbackSumoEnvCfg(DirectMARLEnvCfg):
+class LeatherbackSumoStage2EnvCfg(DirectMARLEnvCfg):
     decimation = 4
     episode_length_s = 30.0
     action_spaces = {f"robot_{i}": 2 for i in range(2)}
@@ -63,10 +63,10 @@ class LeatherbackSumoEnvCfg(DirectMARLEnvCfg):
     ring_radius_max = 3
     reward_scale = 10
 
-class LeatherbackSumoEnv(DirectMARLEnv):
-    cfg: LeatherbackSumoEnvCfg
+class LeatherbackSumoStage2Env(DirectMARLEnv):
+    cfg: LeatherbackSumoStage2EnvCfg
 
-    def __init__(self, cfg: LeatherbackSumoEnvCfg, render_mode: str | None = None, headless: bool | None = None, **kwargs):
+    def __init__(self, cfg: LeatherbackSumoStage2EnvCfg, render_mode: str | None = None, headless: bool | None = None, **kwargs):
         super().__init__(cfg, render_mode, **kwargs)
         self.headless = headless
         

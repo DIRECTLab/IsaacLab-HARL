@@ -22,7 +22,7 @@ class LeatherbackSumoStage1EnvCfg(DirectMARLEnvCfg):
     decimation = 4
     episode_length_s = 30.0
     action_spaces = {f"robot_{i}": 2 for i in range(2)}
-    observation_spaces = {f"robot_{i}": 4 for i in range(2)}
+    observation_spaces = {f"robot_{i}": 8 for i in range(2)}
     state_space = 0
     state_spaces = {f"robot_{i}": 0 for i in range(2)}
     possible_agents = ["robot_0", "robot_1"]
@@ -209,6 +209,7 @@ class LeatherbackSumoStage1Env(DirectMARLEnv):
             self.robots[robot_id].set_joint_position_target(self._steering_state[robot_id], joint_ids=self._steering_dof_idx)
 
     def _get_observations(self) -> dict:
+        # Relative positions in each robot's frame
         robot_0_desired_pos, _ = subtract_frame_transforms(
             self.robots["robot_0"].data.root_state_w[:, :3], self.robots["robot_0"].data.root_state_w[:, 3:7],
             self.robots["robot_1"].data.root_pos_w
@@ -218,9 +219,24 @@ class LeatherbackSumoStage1Env(DirectMARLEnv):
             self.robots["robot_0"].data.root_pos_w
         )
 
+        # Ring radius
         rcol = self.ring_radius.view(-1, 1)
-        obs0 = torch.cat([robot_0_desired_pos, rcol], dim=1)
-        obs1 = torch.cat([robot_1_desired_pos, rcol], dim=1)
+
+        # Own distance from center
+        robot_0_dist_center = torch.norm(
+            self.robots["robot_0"].data.root_pos_w - self.scene.env_origins, dim=-1, keepdim=True
+        )
+        robot_1_dist_center = torch.norm(
+            self.robots["robot_1"].data.root_pos_w - self.scene.env_origins, dim=-1, keepdim=True
+        )
+
+        # Own linear velocity (in body frame)
+        robot_0_vel = self.robots["robot_0"].data.root_lin_vel_b
+        robot_1_vel = self.robots["robot_1"].data.root_lin_vel_b
+
+        # Assemble obs
+        obs0 = torch.cat([robot_0_desired_pos, rcol, robot_0_dist_center, robot_0_vel], dim=1)
+        obs1 = torch.cat([robot_1_desired_pos, rcol, robot_1_dist_center, robot_1_vel], dim=1)
 
         return {"team_0": {"robot_0": obs0}, "team_1": {"robot_1": obs1}}
     

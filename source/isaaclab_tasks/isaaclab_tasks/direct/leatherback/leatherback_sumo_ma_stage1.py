@@ -293,7 +293,7 @@ class LeatherbackSumoMAStage1Env(DirectMARLEnv):
             torch.norm(self.blocks["block_1"].data.root_pos_w - circle_centers, dim=-1),
         ], dim=1)  # (E, 2)
         block_avg_dist = block_dists.mean(dim=1)  # (E,)
-        block_dist_from_center_mapped = torch.tanh(block_avg_dist / 0.8)
+        block_dist_from_center_mapped = torch.tanh(block_avg_dist / self.cfg.ring_radius_max)
 
         # --- Min distance between robots and blocks ---
         robot_positions = torch.stack([

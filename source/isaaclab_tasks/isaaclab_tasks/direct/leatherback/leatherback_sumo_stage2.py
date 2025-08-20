@@ -22,7 +22,7 @@ class LeatherbackSumoStage2EnvCfg(DirectMARLEnvCfg):
     decimation = 4
     episode_length_s = 30.0
     action_spaces = {f"robot_{i}": 2 for i in range(2)}
-    observation_spaces = {f"robot_{i}": 4 for i in range(2)}
+    observation_spaces = {f"robot_{i}": 8 for i in range(2)}
     state_space = 0
     state_spaces = {f"robot_{i}": 0 for i in range(2)}
     possible_agents = ["robot_0", "robot_1"]
@@ -59,9 +59,11 @@ class LeatherbackSumoStage2EnvCfg(DirectMARLEnvCfg):
     steering_scale = 0.1
     steering_max = 0.75
 
-    ring_radius_min = 0.5
-    ring_radius_max = 3
+    ring_radius_min = 1
+    ring_radius_max = 5
     reward_scale = 10
+    # time penalty
+    time_penalty = -0.01
 
 class LeatherbackSumoStage2Env(DirectMARLEnv):
     cfg: LeatherbackSumoStage2EnvCfg
@@ -92,6 +94,22 @@ class LeatherbackSumoStage2Env(DirectMARLEnv):
             markers=markers
         )
         self.ring_markers = VisualizationMarkers(ring_marker_cfg)
+
+        self._episode_sums = {
+            key: torch.zeros(self.num_envs, dtype=torch.float, device=self.device)
+            for key in [
+                "other_dist_from_center_reward",
+                "dist_to_other_robot_reward",
+                "other_dist_from_center",
+                "dist_to_other_robot",
+                "time_out_reward",
+                "push_out_reward",
+                "r0_dist_from_center",
+                "r1_dist_from_center"
+            ]
+        }
+
+
 
     @torch.no_grad()
     def _draw_ring_markers(self):
@@ -178,8 +196,6 @@ class LeatherbackSumoStage2Env(DirectMARLEnv):
         light_cfg.func("/World/Light", light_cfg)
 
     def _pre_physics_step(self, actions: dict) -> None:
-        self._steering_state = {}
-        self._throttle_state = {}
         for robot_id in self.robots.keys():
             self._throttle_action = actions[robot_id][:, 0].repeat_interleave(4).reshape((-1, 4)) * self.cfg.throttle_scale
             self.throttle_action = torch.clamp(self._throttle_action, -self.cfg.throttle_max, self.cfg.throttle_max)
@@ -196,6 +212,7 @@ class LeatherbackSumoStage2Env(DirectMARLEnv):
             self.robots[robot_id].set_joint_position_target(self._steering_state[robot_id], joint_ids=self._steering_dof_idx)
 
     def _get_observations(self) -> dict:
+        # Relative positions in each robot's frame
         robot_0_desired_pos, _ = subtract_frame_transforms(
             self.robots["robot_0"].data.root_state_w[:, :3], self.robots["robot_0"].data.root_state_w[:, 3:7],
             self.robots["robot_1"].data.root_pos_w
@@ -205,23 +222,77 @@ class LeatherbackSumoStage2Env(DirectMARLEnv):
             self.robots["robot_0"].data.root_pos_w
         )
 
+        # Ring radius
         rcol = self.ring_radius.view(-1, 1)
-        obs0 = torch.cat([robot_0_desired_pos, rcol], dim=1)
-        obs1 = torch.cat([robot_1_desired_pos, rcol], dim=1)
+
+        # Own distance from center
+        robot_0_dist_center = torch.norm(
+            self.robots["robot_0"].data.root_pos_w - self.scene.env_origins, dim=-1, keepdim=True
+        )
+        robot_1_dist_center = torch.norm(
+            self.robots["robot_1"].data.root_pos_w - self.scene.env_origins, dim=-1, keepdim=True
+        )
+
+        # Own linear velocity (in body frame)
+        robot_0_vel = self.robots["robot_0"].data.root_lin_vel_b
+        robot_1_vel = self.robots["robot_1"].data.root_lin_vel_b
+
+        # Assemble obs
+        obs0 = torch.cat([robot_0_desired_pos, rcol, robot_0_dist_center, robot_0_vel], dim=1)
+        obs1 = torch.cat([robot_1_desired_pos, rcol, robot_1_dist_center, robot_1_vel], dim=1)
 
         return {"team_0": {"robot_0": obs0}, "team_1": {"robot_1": obs1}}
     
     def _get_rewards(self) -> dict:
+        circle_centers = self.scene.env_origins
+
+        # distances
+        dist0 = torch.norm(self.robots["robot_0"].data.root_pos_w - circle_centers, dim=-1)
+        dist1 = torch.norm(self.robots["robot_1"].data.root_pos_w - circle_centers, dim=-1)
+
+        dist0_mapped = torch.tanh(dist0 / 0.8)
+        dist1_mapped = torch.tanh(dist1 / 0.8)
+
+        close_dist = torch.norm(
+            self.robots["robot_0"].data.root_pos_w - self.robots["robot_1"].data.root_pos_w,
+            dim=-1,
+        )
+        close_dist_mapped = 1 - torch.tanh(close_dist / 0.8)
+
+        # time penalty
+        time_penalty = self.cfg.time_penalty * torch.ones_like(dist0, device=self.device)
+
+        # push out detection
         out = self._robots_out_of_ring()
-        r0_lost = out["robot_0"].to(torch.int8)
-        r1_lost = out["robot_1"].to(torch.int8)
-        time_out_reward = (self.episode_length_buf >= self.max_episode_length - 1).to(torch.int8)
+        r0_lost = out["robot_0"].to(torch.float32)
+        r1_lost = out["robot_1"].to(torch.float32)
 
-        team_0_reward = (r1_lost - r0_lost - time_out_reward) * self.cfg.reward_scale
-        team_1_reward = (r0_lost - r1_lost - time_out_reward) * self.cfg.reward_scale
+        push_out_r0 = (r1_lost - r0_lost) * self.cfg.reward_scale
+        push_out_r1 = (r0_lost - r1_lost) * self.cfg.reward_scale
 
-        return {"team_0": team_0_reward,
-                "team_1": team_1_reward}
+        rewards_r0 = {
+            "dist_from_center_reward": dist0_mapped * self.step_dt,
+            "dist_to_other_robot_reward": close_dist_mapped * self.step_dt,
+            "time_out_reward": time_penalty,
+            "push_out_reward": push_out_r0,
+        }
+        rewards_r1 = {
+            "dist_from_center_reward": dist1_mapped * self.step_dt,
+            "dist_to_other_robot_reward": close_dist_mapped * self.step_dt,
+            "time_out_reward": time_penalty,
+            "push_out_reward": push_out_r1,
+        }
+
+        reward_r0 = torch.sum(torch.stack(list(rewards_r0.values())), dim=0)
+        reward_r1 = torch.sum(torch.stack(list(rewards_r1.values())), dim=0)
+
+        
+
+        return {
+            "team_0": reward_r0,
+            "team_1": reward_r1,
+        }
+
 
     def _robots_out_of_ring(self) -> dict[str, torch.Tensor]:
         env_xy = self.scene.env_origins[:, :2].to(self.device)  
@@ -243,26 +314,86 @@ class LeatherbackSumoStage2Env(DirectMARLEnv):
         return dones, timeouts
 
     def _reset_idx(self, env_ids: torch.Tensor | None):
-
         if env_ids is None:
             env_ids = self.leatherback._ALL_INDICES
         super()._reset_idx(env_ids)
 
+        # Sample a per-env maximum radius
         low, high = self.cfg.ring_radius_min, self.cfg.ring_radius_max
-    
-        self.ring_radius[env_ids] = torch.zeros(env_ids.shape[0]).uniform_(low, high).to(self.device)
+        self.ring_radius[env_ids] = (
+            torch.empty(env_ids.shape[0], device=self.device).uniform_(low, high)
+        )
 
-        for robot_id in self.robots.keys():
+        # Cache for convenience
+        origins = self.scene.env_origins[env_ids]  # (N, 3)
+        N = env_ids.shape[0]
+
+        # Minimum distance between robots at reset
+        min_separation = 0.5  # tune this based on robot size
+
+        # Storage for sampled positions per env
+        sampled_positions = {robot_id: None for robot_id in self.robots.keys()}
+
+        # We’ll assign robots sequentially
+        robot_ids = list(self.robots.keys())
+
+        for i, robot_id in enumerate(robot_ids):
+            # Reset robot internals
             self.robots[robot_id].reset(env_ids)
             self.actions[robot_id][env_ids] = 0.0
+
+            # Get default states for these envs
             joint_pos = self.robots[robot_id].data.default_joint_pos[env_ids]
             joint_vel = self.robots[robot_id].data.default_joint_vel[env_ids]
-            default_root_state = self.robots[robot_id].data.default_root_state[env_ids]
-            default_root_state[:, :3] += self.scene.env_origins[env_ids]
+            default_root_state = self.robots[robot_id].data.default_root_state[env_ids].clone()
+
+            # Sample until min separation is satisfied
+            max_tries = 10
+            final_offsets = torch.zeros((N, 3), device=self.device, dtype=default_root_state.dtype)
+            for attempt in range(max_tries):
+                # r ~ sqrt(U) * R_max, theta ~ U[0, 2pi)
+                u = torch.rand(N, device=self.device)
+                r = torch.sqrt(u) * self.ring_radius[env_ids]
+                theta = 2.0 * torch.pi * torch.rand(N, device=self.device)
+
+                offsets = torch.zeros((N, 3), device=self.device, dtype=default_root_state.dtype)
+                offsets[:, 0] = r * torch.cos(theta)
+                offsets[:, 1] = r * torch.sin(theta)
+
+                if i == 0:
+                    # First robot, accept immediately
+                    final_offsets = offsets
+                    break
+                else:
+                    # Distance from previously placed robot(s)
+                    prev_offsets = sampled_positions[robot_ids[0]]  # (N, 3)
+                    dist = torch.norm(offsets[:, :2] - prev_offsets[:, :2], dim=-1)
+
+                    mask_valid = dist > min_separation
+                    if torch.all(mask_valid):
+                        final_offsets = offsets
+                        break
+                    # otherwise retry
+
+            sampled_positions[robot_id] = final_offsets
+
+            # Place robot
+            default_root_state[:, :3] = origins
+            default_root_state[:, 0:2] += final_offsets[:, 0:2]
+            default_root_state[:, 2] += self.robots[robot_id].data.default_root_state[env_ids][:, 2]
+
+            # Write to sim
             self.robots[robot_id].write_root_pose_to_sim(default_root_state[:, :7], env_ids)
             self.robots[robot_id].write_root_velocity_to_sim(default_root_state[:, 7:], env_ids)
             self.robots[robot_id].write_joint_state_to_sim(joint_pos, joint_vel, None, env_ids)
 
+        # Draw markers & reset episode logs
         self._draw_ring_markers()
-        self.extras["log"] = {}
-
+        extras = dict()
+        for key in self._episode_sums.keys():
+            episodic_sum_avg = torch.mean(self._episode_sums[key][env_ids])
+            extras[key] = episodic_sum_avg / self.max_episode_length_s
+            self._episode_sums[key][env_ids] = 0.0
+        self.extras["log"] = dict()
+        self.extras["log"].update(extras)
+        extras = dict()

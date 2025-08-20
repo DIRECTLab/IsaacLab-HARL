@@ -244,24 +244,6 @@ class LeatherbackSumoStage2Env(DirectMARLEnv):
         return {"team_0": {"robot_0": obs0}, "team_1": {"robot_1": obs1}}
     
     def _get_rewards(self) -> dict:
-        circle_centers = self.scene.env_origins
-
-        # distances
-        dist0 = torch.norm(self.robots["robot_0"].data.root_pos_w - circle_centers, dim=-1)
-        dist1 = torch.norm(self.robots["robot_1"].data.root_pos_w - circle_centers, dim=-1)
-
-        dist0_mapped = torch.tanh(dist0 / 0.8)
-        dist1_mapped = torch.tanh(dist1 / 0.8)
-
-        close_dist = torch.norm(
-            self.robots["robot_0"].data.root_pos_w - self.robots["robot_1"].data.root_pos_w,
-            dim=-1,
-        )
-        close_dist_mapped = 1 - torch.tanh(close_dist / 0.8)
-
-        # time penalty
-        time_penalty = self.cfg.time_penalty * torch.ones_like(dist0, device=self.device)
-
         # push out detection
         out = self._robots_out_of_ring()
         r0_lost = out["robot_0"].to(torch.float32)
@@ -269,24 +251,21 @@ class LeatherbackSumoStage2Env(DirectMARLEnv):
 
         push_out_r0 = (r1_lost - r0_lost) * self.cfg.reward_scale
         push_out_r1 = (r0_lost - r1_lost) * self.cfg.reward_scale
+        # time penalty
+        time_penalty = self.cfg.time_penalty * torch.ones_like(r0_lost, device=self.device)
+
 
         rewards_r0 = {
-            "dist_from_center_reward": dist0_mapped * self.step_dt,
-            "dist_to_other_robot_reward": close_dist_mapped * self.step_dt,
             "time_out_reward": time_penalty,
             "push_out_reward": push_out_r0,
         }
         rewards_r1 = {
-            "dist_from_center_reward": dist1_mapped * self.step_dt,
-            "dist_to_other_robot_reward": close_dist_mapped * self.step_dt,
             "time_out_reward": time_penalty,
             "push_out_reward": push_out_r1,
         }
 
         reward_r0 = torch.sum(torch.stack(list(rewards_r0.values())), dim=0)
         reward_r1 = torch.sum(torch.stack(list(rewards_r1.values())), dim=0)
-
-        
 
         return {
             "team_0": reward_r0,

@@ -139,8 +139,8 @@ class LeatherbackSumoMAStage1Env(DirectMARLEnv):
         self._episode_sums = {
             key: torch.zeros(self.num_envs, dtype=torch.float, device=self.device)
             for key in [
-                "other_dist_from_center_reward",
-                "dist_to_other_robot_reward",
+                "blocks_dist_from_center_reward",
+                "dist_to_blocks_reward",
                 "time_out_reward",
                 "push_out_reward"
             ]
@@ -287,37 +287,40 @@ class LeatherbackSumoMAStage1Env(DirectMARLEnv):
     def _get_rewards(self) -> dict:
         circle_centers = self.scene.env_origins
 
+        # --- Distance of blocks from center ---
         block_dists = torch.stack([
             torch.norm(self.blocks["block_0"].data.root_pos_w - circle_centers, dim=-1),
             torch.norm(self.blocks["block_1"].data.root_pos_w - circle_centers, dim=-1),
         ], dim=1)  # (E, 2)
-
-        # Team averages
         block_avg_dist = block_dists.mean(dim=1)  # (E,)
-
-        # Map through tanh like before
         block_dist_from_center_mapped = torch.tanh(block_avg_dist / 0.8)
 
-        # --- Inter-team distances (average of pairwise) ---
-        team0_positions = torch.stack([
+        # --- Min distance between robots and blocks ---
+        robot_positions = torch.stack([
             self.robots["robot_0"].data.root_pos_w,
             self.robots["robot_1"].data.root_pos_w,
-        ], dim=1)
+        ], dim=1)  # (E, 2, 3)
+
         block_positions = torch.stack([
             self.blocks["block_0"].data.root_pos_w,
             self.blocks["block_1"].data.root_pos_w,
-        ], dim=1)
+        ], dim=1)  # (E, 2, 3)
 
-        # Compute all pairwise distances between robots of different teams
-        diff = team0_positions.unsqueeze(2) - block_positions.unsqueeze(1)
-        pairwise_dists = torch.norm(diff, dim=-1) 
-        avg_team_dist = pairwise_dists.mean(dim=(1, 2))
+        # Pairwise distances between robots and blocks
+        diff = robot_positions.unsqueeze(2) - block_positions.unsqueeze(1)  # (E, 2, 2, 3)
+        pairwise_dists = torch.norm(diff, dim=-1)  # (E, 2, 2)
 
-        # Map like before
-        avg_team_dist_mapped = 1 - torch.tanh(avg_team_dist / 0.8)
+        # For each robot, take min dist to any block → (E, 2)
+        min_dists_per_robot = pairwise_dists.min(dim=2).values
+
+        # Average over robots → (E,)
+        avg_min_dist = min_dists_per_robot.mean(dim=1)
+
+        # Map closer = higher reward
+        avg_min_dist_mapped = 1 - torch.tanh(avg_min_dist / 0.8)
 
         # --- Time penalty ---
-        time_penalty = self.cfg.time_penalty * torch.ones_like(avg_team_dist, device=self.device)
+        time_penalty = self.cfg.time_penalty * torch.ones_like(avg_min_dist, device=self.device)
 
         # --- Push out reward (adversarial) ---
         out = self._robots_out_of_ring()
@@ -329,10 +332,10 @@ class LeatherbackSumoMAStage1Env(DirectMARLEnv):
         push_out_reward_0 = (team1_lost - team0_lost) * self.cfg.reward_scale
 
         rewards = {
-            "other_dist_from_center_reward": block_dist_from_center_mapped * self.step_dt,
-            "dist_to_other_robot_reward": avg_team_dist_mapped * self.step_dt,
+            "blocks_dist_from_center_reward": block_dist_from_center_mapped * self.step_dt,
+            "dist_to_blocks_reward": avg_min_dist_mapped * self.step_dt,
             "time_out_reward": time_penalty,
-            "push_out_reward": push_out_reward_0
+            "push_out_reward": push_out_reward_0,
         }
 
         reward = torch.sum(torch.stack(list(rewards.values())), dim=0)

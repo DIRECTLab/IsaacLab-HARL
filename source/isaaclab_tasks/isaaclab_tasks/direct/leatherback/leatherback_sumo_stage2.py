@@ -95,6 +95,20 @@ class LeatherbackSumoStage2Env(DirectMARLEnv):
         )
         self.ring_markers = VisualizationMarkers(ring_marker_cfg)
 
+        team_dot_markers = {
+            "blue": sim_utils.SphereCfg(
+                radius=0.08,
+                visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(0.0, 0.0, 0.8)),
+            ),
+            "red": sim_utils.SphereCfg(
+                radius=0.08,
+                visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(0.8, 0.0, 0.0)),
+            ),
+        }
+        self.team_markers = VisualizationMarkers(
+            VisualizationMarkersCfg(prim_path="/World/TeamDots", markers=team_dot_markers)
+        )
+
         self._episode_sums = {
             key: torch.zeros(self.num_envs, dtype=torch.float, device=self.device)
             for key in [
@@ -109,7 +123,24 @@ class LeatherbackSumoStage2Env(DirectMARLEnv):
             ]
         }
 
+    
+    @torch.no_grad()
+    def _draw_team_dots(self):
+        positions, indices, orientations, scales = [], [], [], []
+        for robot_id, robot in self.robots.items():
+            pos = robot.data.root_pos_w.clone()
+            pos[:, 2] += 0.5  # hover above robot
+            positions.append(pos)
 
+            team = "blue" if "0" in robot_id else "red"
+            indices.append(torch.full((self.num_envs,), 0 if team=="blue" else 1, device=self.device))
+
+        marker_positions = torch.cat(positions, dim=0)
+        marker_indices = torch.cat(indices, dim=0)
+        marker_orientations = torch.zeros((marker_positions.shape[0], 4), device=self.device); marker_orientations[:,0]=1.0
+        marker_scales = torch.ones((marker_positions.shape[0], 3), device=self.device)
+
+        self.team_markers.visualize(marker_positions, marker_orientations, scales=marker_scales, marker_indices=marker_indices)
 
     @torch.no_grad()
     def _draw_ring_markers(self):
@@ -245,6 +276,7 @@ class LeatherbackSumoStage2Env(DirectMARLEnv):
     
     def _get_rewards(self) -> dict:
         # push out detection
+        self._draw_team_dots()
         out = self._robots_out_of_ring()
         r0_lost = out["robot_0"].to(torch.float32)
         r1_lost = out["robot_1"].to(torch.float32)

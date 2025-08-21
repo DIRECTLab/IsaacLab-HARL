@@ -43,12 +43,10 @@ class LeatherbackSumoMAStage1EnvCfg(DirectMARLEnvCfg):
 
     # Robot configs (prim paths unique per robot)
     robot_0: ArticulationCfg = LEATHERBACK_CFG.replace(prim_path="/World/envs/env_.*/Robot_0")
-    robot_0.init_state.rot = get_quaternion_tuple_from_xyz(0, 0, -torch.pi/2)
-    robot_0.init_state.pos = (0.0, 0.25, 0.1)
+    robot_0.init_state.pos = (0.0, 0.5, 0.1)
 
     robot_1: ArticulationCfg = LEATHERBACK_CFG.replace(prim_path="/World/envs/env_.*/Robot_1")
-    robot_1.init_state.rot = get_quaternion_tuple_from_xyz(0, 0, -torch.pi/2)
-    robot_1.init_state.pos = (0.0, 0.75, 0.1)
+    robot_1.init_state.pos = (0.0, -0.5, 0.1)
 
     # DOF mappings (same for all robots)
     throttle_dof_name = [
@@ -75,6 +73,7 @@ class LeatherbackSumoMAStage1EnvCfg(DirectMARLEnvCfg):
     reward_scale = 10
     # time penalty
     time_penalty = -0.01
+    box_velocity_scale = 0.01
 
     block_0 = RigidObjectCfg(
         prim_path="/World/envs/env_.*/block_0",
@@ -86,7 +85,7 @@ class LeatherbackSumoMAStage1EnvCfg(DirectMARLEnvCfg):
             visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(0.0, 1.0, 0.0)),
         ),
         init_state=RigidObjectCfg.InitialStateCfg(
-            pos=(0.0, .5, 0.1), rot=(1.0, 0.0, 0.0, 0.0)
+            pos=(1.0, .5, 0.1), rot=(1.0, 0.0, 0.0, 0.0)
         ),  # started the bar lower
     )
 
@@ -101,7 +100,7 @@ class LeatherbackSumoMAStage1EnvCfg(DirectMARLEnvCfg):
             visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(0.0, 1.0, 0.0)),
         ),
         init_state=RigidObjectCfg.InitialStateCfg(
-            pos=(0.0, -.5, 0.1), rot=(1.0, 0.0, 0.0, 0.0)
+            pos=(1.0, -.5, 0.1), rot=(1.0, 0.0, 0.0, 0.0)
         ),
     )
 
@@ -142,7 +141,8 @@ class LeatherbackSumoMAStage1Env(DirectMARLEnv):
                 "blocks_dist_from_center_reward",
                 "dist_to_blocks_reward",
                 "time_out_reward",
-                "push_out_reward"
+                "push_out_reward",
+                "box_velocity_reward"
             ]
         }
 
@@ -237,13 +237,16 @@ class LeatherbackSumoMAStage1Env(DirectMARLEnv):
 
     def _pre_physics_step(self, actions: dict) -> None:
         for robot_id in self.robots.keys():
-            self._throttle_action = actions[robot_id][:, 0].repeat_interleave(4).reshape((-1, 4)) * self.cfg.throttle_scale
-            self.throttle_action = torch.clamp(self._throttle_action, -self.cfg.throttle_max, self.cfg.throttle_max)
-            self._throttle_state[robot_id] = self._throttle_action
+            _throttle_action = actions[robot_id][:, 0].repeat_interleave(4).reshape((-1, 4)) * self.cfg.throttle_scale
+            _throttle_action = torch.clamp(_throttle_action, -self.cfg.throttle_max, self.cfg.throttle_max)
+            self._throttle_state[robot_id] = _throttle_action
             
             self._steering_action = actions[robot_id][:, 1].repeat_interleave(2).reshape((-1, 2)) * self.cfg.steering_scale
             self._steering_action = torch.clamp(self._steering_action, -self.cfg.steering_max, self.cfg.steering_max)
             self._steering_state[robot_id] = self._steering_action
+
+        for block in self.blocks.values():
+            block.update(self.step_dt)
 
     def _apply_action(self) -> None:
         for robot_id in self.robots.keys():
@@ -317,7 +320,7 @@ class LeatherbackSumoMAStage1Env(DirectMARLEnv):
         avg_min_dist = min_dists_per_robot.mean(dim=1)
 
         # Map closer = higher reward
-        avg_min_dist_mapped = 1 - torch.tanh(avg_min_dist / 0.8)
+        avg_min_dist_mapped = 1 - torch.tanh(avg_min_dist / self.cfg.ring_radius_max)
 
         # --- Time penalty ---
         time_penalty = self.cfg.time_penalty * torch.ones_like(avg_min_dist, device=self.device)
@@ -330,10 +333,15 @@ class LeatherbackSumoMAStage1Env(DirectMARLEnv):
         team0_lost = team0_out.to(torch.float32)
         team1_lost = team1_out.to(torch.float32)
         push_out_reward_0 = (team1_lost - team0_lost) * self.cfg.reward_scale
+        box_velocity_reward = (
+            torch.norm(self.blocks["block_0"].data.root_com_lin_vel_w, dim=-1) +
+            torch.norm(self.blocks["block_1"].data.root_com_lin_vel_w, dim=-1)
+        )
 
         rewards = {
             "blocks_dist_from_center_reward": block_dist_from_center_mapped * self.step_dt,
             "dist_to_blocks_reward": avg_min_dist_mapped * self.step_dt,
+            "box_velocity_reward": box_velocity_reward * self.cfg.box_velocity_scale * self.step_dt,
             "time_out_reward": time_penalty,
             "push_out_reward": push_out_reward_0,
         }
@@ -355,7 +363,7 @@ class LeatherbackSumoMAStage1Env(DirectMARLEnv):
             dist = torch.linalg.norm(pos_xy - env_xy, dim=1)
             out[robot_id] = dist > self.ring_radius
         for block_id in self.blocks.keys():
-            pos_xy = self.blocks[block_id].data.root_pos_w[:, :2]  
+            pos_xy = self.blocks[block_id].data.root_com_pos_w[:, :2]  
             dist = torch.linalg.norm(pos_xy - env_xy, dim=1)
             out[block_id] = dist > self.ring_radius
 

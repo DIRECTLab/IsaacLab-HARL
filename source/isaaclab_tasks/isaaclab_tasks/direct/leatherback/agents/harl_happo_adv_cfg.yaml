@@ -49,7 +49,7 @@ model:
   # activation function, choose from sigmoid, tanh, relu, leaky_relu, selu
   activation_func: relu
   # whether to use feature normalization
-  use_feature_normalization: True
+  use_feature_normalization: False
   # initialization method for network parameters, choose from xavier_uniform_, orthogonal_, ...
   initialization_method: orthogonal_
   # gain of the output layer of the network.

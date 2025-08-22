@@ -30,6 +30,7 @@ from isaaclab_assets.robots.anymal import ANYMAL_C_CFG  # isort: skip
 from isaaclab.terrains.config.rough import ROUGH_TERRAINS_CFG  # isort: skip
 
 import math
+import colorsys
 
 def set_robot_spacing_and_rot(index, total, spacing_mode="linear", orientation_mode="face_center",linear_range=2.0, circle_radius=2.0, grid_shape=(2,2), grid_spacing=(2.0,2.0)):
     """
@@ -179,11 +180,36 @@ def define_markers() -> VisualizationMarkers:
     )
     return VisualizationMarkers(marker_cfg)
 
+# --- Team arrow marker utilities ---
+def get_n_colors(n):
+    """Returns n visually distinct RGB colors as (r,g,b) tuples in [0,1]."""
+    return [colorsys.hsv_to_rgb(i / n, 0.8, 1.0) for i in range(n)]
+
+def define_team_arrow_markers(num_teams):
+    """Define a colored arrow marker for each team."""
+    colors = get_n_colors(num_teams)
+    scale_val = 0.007
+    markers = {
+        f"team_arrow_{i}": sim_utils.UsdFileCfg(
+            usd_path=f"{ISAAC_NUCLEUS_DIR}/Props/UIElements/arrow_x.usd",
+            # usd_path=f"assets/Flag.usdz",
+            # usd_path=f"{ISAAC_NUCLEUS_DIR}/Props/UIElements/frame_prim.usd",
+            scale=(scale_val, scale_val, scale_val),
+            visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=color),
+        )
+        for i, color in enumerate(colors)
+    }
+    marker_cfg = VisualizationMarkersCfg(
+        prim_path="/Visuals/teamFlag",
+        markers=markers,
+    )
+    return VisualizationMarkers(marker_cfg)
+
 
 
 @configclass
 class AnymalCAdversarialSoccerEnvCfg(DirectMARLEnvCfg):
-    def __init__(self, num_teams=15, *args, **kwargs):
+    def __init__(self, num_teams=3, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.num_teams = num_teams
         self.episode_length_s = 20.0
@@ -280,7 +306,8 @@ class AnymalCAdversarialSoccerEnv(DirectMARLEnv):
     def __init__(
         self, cfg: AnymalCAdversarialSoccerEnvCfg, render_mode: str | None = None, debug=False, **kwargs
     ):
-        self.debug = debug
+        # self.debug = debug
+        self.debug = True
         super().__init__(cfg, render_mode, **kwargs)
         # Joint position command (deviation from default joint positions)
 
@@ -317,6 +344,10 @@ class AnymalCAdversarialSoccerEnv(DirectMARLEnv):
         self.feet_ids = {}
         self.undesired_body_contact_ids = {}
 
+        if self.debug:
+            self.my_visualizer = define_markers()
+            self.team_arrow_visualizer = define_team_arrow_markers(self.cfg.num_teams)
+
         for robot_id, contact_sensor in self.contact_sensors.items():
             _base_id, _ = contact_sensor.find_bodies("base")
             _feet_ids, _ = contact_sensor.find_bodies(".*FOOT")
@@ -324,6 +355,29 @@ class AnymalCAdversarialSoccerEnv(DirectMARLEnv):
             self.base_ids[robot_id] = _base_id
             self.feet_ids[robot_id] = _feet_ids
             self.undesired_body_contact_ids[robot_id] = _undesired_contact_body_ids
+
+    def _draw_team_arrows(self):
+        # Draws a colored arrow marker above each robot, pointing down
+        marker_locations = []
+        marker_orientations = []
+        marker_indices = []
+        for i in range(self.cfg.num_teams):
+            robot_id = f"robot_{i}"
+            pos = self.robots[robot_id].data.root_pos_w  # (num_envs, 3)
+            # Place arrow slightly above robot
+            arrow_pos = pos.clone()
+            arrow_pos[:, 2] += 1.7
+            marker_locations.append(arrow_pos)
+
+            q = torch.tensor([ 0.0, 0.0, 0.707, 0.707], device=pos.device).expand(pos.shape[0], 4)
+            marker_orientations.append(q)
+            marker_indices.append(i * torch.ones(pos.shape[0], device=pos.device, dtype=torch.long))
+        marker_locations = torch.cat(marker_locations, dim=0)
+        marker_orientations = torch.cat(marker_orientations, dim=0)
+        marker_indices = torch.cat(marker_indices, dim=0)
+        self.team_arrow_visualizer.visualize(
+            marker_locations, marker_orientations, marker_indices=marker_indices
+        )
 
     def _setup_scene(self):
         self.num_robots = sum(1 for key in self.cfg.__dict__.keys() if "robot_" in key)
@@ -454,6 +508,7 @@ class AnymalCAdversarialSoccerEnv(DirectMARLEnv):
     def _get_rewards(self) -> dict:
         if self.debug:
             self._draw_markers(self._commands)
+            self._draw_team_arrows()
         all_rewards = {}
         for robot_id in self.robots.keys():
             # linear velocity tracking

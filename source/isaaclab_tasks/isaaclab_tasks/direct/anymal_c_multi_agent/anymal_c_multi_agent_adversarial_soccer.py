@@ -190,11 +190,9 @@ def define_team_arrow_markers(num_teams):
     colors = get_n_colors(num_teams)
     scale_val = 0.007
     markers = {
-        f"team_arrow_{i}": sim_utils.UsdFileCfg(
-            usd_path=f"{ISAAC_NUCLEUS_DIR}/Props/UIElements/arrow_x.usd",
-            # usd_path=f"assets/Flag.usdz",
-            # usd_path=f"{ISAAC_NUCLEUS_DIR}/Props/UIElements/frame_prim.usd",
-            scale=(scale_val, scale_val, scale_val),
+        f"team_arrow_{i}": sim_utils.ConeCfg(
+            radius=0.25,
+            height=-1.0,
             visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=color),
         )
         for i, color in enumerate(colors)
@@ -366,10 +364,11 @@ class AnymalCAdversarialSoccerEnv(DirectMARLEnv):
             pos = self.robots[robot_id].data.root_pos_w  # (num_envs, 3)
             # Place arrow slightly above robot
             arrow_pos = pos.clone()
-            arrow_pos[:, 2] += 1.7
+            arrow_pos[:, 2] += .7
             marker_locations.append(arrow_pos)
 
-            q = torch.tensor([ 0.0, 0.0, 0.707, 0.707], device=pos.device).expand(pos.shape[0], 4)
+            # q = torch.tensor([ 0.0, 0.0, 0.707, 0.707], device=pos.device).expand(pos.shape[0], 4)
+            q = torch.tensor([ 0.0, 0.0, 0.0, 0.0], device=pos.device).expand(pos.shape[0], 4)
             marker_orientations.append(q)
             marker_indices.append(i * torch.ones(pos.shape[0], device=pos.device, dtype=torch.long))
         marker_locations = torch.cat(marker_locations, dim=0)

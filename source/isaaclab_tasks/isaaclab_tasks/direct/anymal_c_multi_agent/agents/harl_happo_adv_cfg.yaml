@@ -31,6 +31,8 @@ train:
   use_proper_time_limits: True
   # if set, load models from this directory; otherwise, randomly initialise the models
   model_dir: #
+  # whether or not to save the entire model, or just the state dict
+  save_entire_model: True
 eval:
   # whether to use evaluation
   use_eval: True
@@ -116,7 +118,7 @@ algo:
   # whether to share parameter among actors
   share_param: False
   # whether to use a fixed optimisation order
-  fixed_order: False
+  fixed_order: True
 logger:
   # logging directory
   log_dir: "./results"

@@ -95,6 +95,20 @@ class LeatherbackSumoStage2Env(DirectMARLEnv):
         )
         self.ring_markers = VisualizationMarkers(ring_marker_cfg)
 
+        team_dot_markers = {
+            "blue": sim_utils.SphereCfg(
+                radius=0.08,
+                visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(0.0, 0.0, 0.8)),
+            ),
+            "red": sim_utils.SphereCfg(
+                radius=0.08,
+                visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(0.8, 0.0, 0.0)),
+            ),
+        }
+        self.team_markers = VisualizationMarkers(
+            VisualizationMarkersCfg(prim_path="/World/TeamDots", markers=team_dot_markers)
+        )
+
         self._episode_sums = {
             key: torch.zeros(self.num_envs, dtype=torch.float, device=self.device)
             for key in [
@@ -109,7 +123,24 @@ class LeatherbackSumoStage2Env(DirectMARLEnv):
             ]
         }
 
+    
+    @torch.no_grad()
+    def _draw_team_dots(self):
+        positions, indices, orientations, scales = [], [], [], []
+        for robot_id, robot in self.robots.items():
+            pos = robot.data.root_pos_w.clone()
+            pos[:, 2] += 0.5  # hover above robot
+            positions.append(pos)
 
+            team = "blue" if "0" in robot_id else "red"
+            indices.append(torch.full((self.num_envs,), 0 if team=="blue" else 1, device=self.device))
+
+        marker_positions = torch.cat(positions, dim=0)
+        marker_indices = torch.cat(indices, dim=0)
+        marker_orientations = torch.zeros((marker_positions.shape[0], 4), device=self.device); marker_orientations[:,0]=1.0
+        marker_scales = torch.ones((marker_positions.shape[0], 3), device=self.device)
+
+        self.team_markers.visualize(marker_positions, marker_orientations, scales=marker_scales, marker_indices=marker_indices)
 
     @torch.no_grad()
     def _draw_ring_markers(self):
@@ -244,49 +275,29 @@ class LeatherbackSumoStage2Env(DirectMARLEnv):
         return {"team_0": {"robot_0": obs0}, "team_1": {"robot_1": obs1}}
     
     def _get_rewards(self) -> dict:
-        circle_centers = self.scene.env_origins
-
-        # distances
-        dist0 = torch.norm(self.robots["robot_0"].data.root_pos_w - circle_centers, dim=-1)
-        dist1 = torch.norm(self.robots["robot_1"].data.root_pos_w - circle_centers, dim=-1)
-
-        dist0_mapped = torch.tanh(dist0 / 0.8)
-        dist1_mapped = torch.tanh(dist1 / 0.8)
-
-        close_dist = torch.norm(
-            self.robots["robot_0"].data.root_pos_w - self.robots["robot_1"].data.root_pos_w,
-            dim=-1,
-        )
-        close_dist_mapped = 1 - torch.tanh(close_dist / 0.8)
-
-        # time penalty
-        time_penalty = self.cfg.time_penalty * torch.ones_like(dist0, device=self.device)
-
         # push out detection
+        self._draw_team_dots()
         out = self._robots_out_of_ring()
         r0_lost = out["robot_0"].to(torch.float32)
         r1_lost = out["robot_1"].to(torch.float32)
 
         push_out_r0 = (r1_lost - r0_lost) * self.cfg.reward_scale
         push_out_r1 = (r0_lost - r1_lost) * self.cfg.reward_scale
+        # time penalty
+        time_penalty = self.cfg.time_penalty * torch.ones_like(r0_lost, device=self.device)
+
 
         rewards_r0 = {
-            "dist_from_center_reward": dist0_mapped * self.step_dt,
-            "dist_to_other_robot_reward": close_dist_mapped * self.step_dt,
             "time_out_reward": time_penalty,
             "push_out_reward": push_out_r0,
         }
         rewards_r1 = {
-            "dist_from_center_reward": dist1_mapped * self.step_dt,
-            "dist_to_other_robot_reward": close_dist_mapped * self.step_dt,
             "time_out_reward": time_penalty,
             "push_out_reward": push_out_r1,
         }
 
         reward_r0 = torch.sum(torch.stack(list(rewards_r0.values())), dim=0)
         reward_r1 = torch.sum(torch.stack(list(rewards_r1.values())), dim=0)
-
-        
 
         return {
             "team_0": reward_r0,

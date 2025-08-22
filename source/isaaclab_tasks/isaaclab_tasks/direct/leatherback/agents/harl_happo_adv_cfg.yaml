@@ -115,7 +115,7 @@ algo:
   # whether to share parameter among actors
   share_param: False
   # whether to use a fixed optimisation order
-  fixed_order: False
+  fixed_order: True
 logger:
   # logging directory
   log_dir: "./results"

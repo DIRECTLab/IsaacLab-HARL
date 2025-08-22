@@ -18,7 +18,7 @@ def get_quaternion_tuple_from_xyz(x, y, z):
     return (quat_tensor[0].item(), quat_tensor[1].item(), quat_tensor[2].item(), quat_tensor[3].item())
 
 @configclass
-class LeatherbackSumoMAStage1EnvCfg(DirectMARLEnvCfg):
+class LeatherbackSumoMAStage1EnvTestCfg(DirectMARLEnvCfg):
     decimation = 4
     episode_length_s = 30.0
 
@@ -27,7 +27,7 @@ class LeatherbackSumoMAStage1EnvCfg(DirectMARLEnvCfg):
 
     # Observation: teammate (3) + opp1 (3) + opp2 (3) + rcol(1) + dist_center(1) + velocity(3)
     # = 14 per robot
-    observation_spaces = {f"robot_{i}": 14 for i in range(2)}
+    observation_spaces = {f"robot_{i}": 11 for i in range(2)}
 
     state_space = 0
     state_spaces = {f"robot_{i}": 0 for i in range(2)}
@@ -89,26 +89,10 @@ class LeatherbackSumoMAStage1EnvCfg(DirectMARLEnvCfg):
         ),  # started the bar lower
     )
 
+class LeatherbackSumoMAStage1EnvTest(DirectMARLEnv):
+    cfg: LeatherbackSumoMAStage1EnvTestCfg
 
-    block_1 = RigidObjectCfg(
-        prim_path="/World/envs/env_.*/block_1",
-        spawn=sim_utils.CuboidCfg(
-            size=(.4,.4,.4),
-            rigid_props=sim_utils.RigidBodyPropertiesCfg(),
-            mass_props=sim_utils.MassPropertiesCfg(mass=0.01),  # changed from 1.0 to 0.5
-            collision_props=sim_utils.CollisionPropertiesCfg(),
-            visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(0.0, 1.0, 0.0)),
-        ),
-        init_state=RigidObjectCfg.InitialStateCfg(
-            pos=(1.0, -.5, 0.1), rot=(1.0, 0.0, 0.0, 0.0)
-        ),
-    )
-
-
-class LeatherbackSumoMAStage1Env(DirectMARLEnv):
-    cfg: LeatherbackSumoMAStage1EnvCfg
-
-    def __init__(self, cfg: LeatherbackSumoMAStage1EnvCfg, render_mode: str | None = None, headless: bool | None = None, **kwargs):
+    def __init__(self, cfg: LeatherbackSumoMAStage1EnvTestCfg, render_mode: str | None = None, headless: bool | None = None, **kwargs):
         super().__init__(cfg, render_mode, **kwargs)
         self.headless = headless
         
@@ -142,7 +126,6 @@ class LeatherbackSumoMAStage1Env(DirectMARLEnv):
                 "dist_to_blocks_reward",
                 "time_out_reward",
                 "push_out_reward",
-                "box_velocity_reward"
             ]
         }
 
@@ -158,41 +141,34 @@ class LeatherbackSumoMAStage1Env(DirectMARLEnv):
         N = self._ring_segments
         z0 = float(getattr(self.cfg, "ring_z", 0.0))
 
-        # Angles for the circle (excluded endpoint to avoid duplicate point)
-        theta = torch.linspace(0, 2 * torch.pi, steps=N + 1, device=device)[:-1]  # (N,)
-        cs = torch.cos(theta)  # (N,)
-        sn = torch.sin(theta)  # (N,)
+        theta = torch.linspace(0, 2 * torch.pi, steps=N + 1, device=device)[:-1]
+        cs = torch.cos(theta)  
+        sn = torch.sin(theta)
 
-        # Env centers and radii
-        origins_xy = self.scene.env_origins[:, :2].to(device)          # (E, 2)
-        radii = self.ring_radius.view(E, 1)                             # (E, 1)
 
-        # Build batched positions: stack per marker index (ring_k) across all envs.
-        # For marker k, we place E positions at angle theta[k].
-        # Result: positions shape = (N*E, 3), marker_indices length = N*E
+        origins_xy = self.scene.env_origins[:, :2].to(device)         
+        radii = self.ring_radius.view(E, 1)                             
+
         pos_chunks = []
         idx_chunks = []
 
-        # Precompute z column for all envs
         z_col = torch.full((E, 1), z0, device=device)
 
         for k in range(N):
-            dir_k = torch.tensor([cs[k].item(), sn[k].item()], device=device)  # (2,)
-            xy_k = origins_xy + radii * dir_k                                  # (E, 2)
-            pos_k = torch.cat([xy_k, z_col], dim=1)                            # (E, 3)
+            dir_k = torch.tensor([cs[k].item(), sn[k].item()], device=device)
+            xy_k = origins_xy + radii * dir_k                                  
+            pos_k = torch.cat([xy_k, z_col], dim=1)                            
             pos_chunks.append(pos_k)
             idx_chunks.append(k * torch.ones(E, dtype=torch.long, device=device))
 
-        marker_positions = torch.cat(pos_chunks, dim=0)   # (N*E, 3)
-        marker_indices  = torch.cat(idx_chunks, dim=0)    # (N*E,)
+        marker_positions = torch.cat(pos_chunks, dim=0)
+        marker_indices  = torch.cat(idx_chunks, dim=0)
 
         marker_scales = torch.ones((marker_positions.shape[0], 3), device=device)
 
-        # Orientations: identity quaternions since these are spheres.
         marker_orientations = torch.zeros((marker_positions.shape[0], 4), device=device)
-        marker_orientations[:, 0] = 1.0  # w=1, x=y=z=0
+        marker_orientations[:, 0] = 1.0
 
-        # Visualize. Your API already accepts marker_indices like your velocity viz.
         self.ring_markers.visualize(
             marker_positions,
             marker_orientations,
@@ -217,14 +193,15 @@ class LeatherbackSumoMAStage1Env(DirectMARLEnv):
                 ),
             ),
         )
+        self.num_robots = sum(1 for key in self.cfg.__dict__.keys() if "robot_" in key)
+        self.num_blocks = sum(1 for key in self.cfg.__dict__.keys() if "block_" in key)
         # Setup rest of the scene
         self.blocks = {}
 
-        for i in range(2):
+        for i in range(self.num_blocks):
             self.blocks[f"block_{i}"] = RigidObject(self.cfg.__dict__[f"block_{i}"])
 
         self.robots = {}
-        self.num_robots = sum(1 for key in self.cfg.__dict__.keys() if "robot_" in key)
         for i in range(self.num_robots):
             self.robots[f"robot_{i}"] = Articulation(self.cfg.__dict__["robot_" + str(i)])
             self.scene.articulations[f"robot_{i}"] = self.robots[f"robot_{i}"]
@@ -291,59 +268,35 @@ class LeatherbackSumoMAStage1Env(DirectMARLEnv):
         circle_centers = self.scene.env_origins
 
         # --- Distance of blocks from center ---
-        block_dists = torch.stack([
-            torch.norm(self.blocks["block_0"].data.root_pos_w - circle_centers, dim=-1),
-            torch.norm(self.blocks["block_1"].data.root_pos_w - circle_centers, dim=-1),
-        ], dim=1)  # (E, 2)
-        block_avg_dist = block_dists.mean(dim=1)  # (E,)
-        block_dist_from_center_mapped = torch.tanh(block_avg_dist / self.cfg.ring_radius_max)
+        block_dist = torch.norm(self.blocks["block_0"].data.root_pos_w - circle_centers, dim=-1)
+        block_dist_from_center_mapped = torch.tanh(block_dist / self.cfg.ring_radius_max)
 
-        # --- Min distance between robots and blocks ---
-        robot_positions = torch.stack([
-            self.robots["robot_0"].data.root_pos_w,
-            self.robots["robot_1"].data.root_pos_w,
-        ], dim=1)  # (E, 2, 3)
+        robot_0_pos = self.robots["robot_0"].data.root_pos_w
+        robot_1_pos = self.robots["robot_1"].data.root_pos_w
+        block_pos = self.blocks["block_0"].data.root_pos_w
 
-        block_positions = torch.stack([
-            self.blocks["block_0"].data.root_pos_w,
-            self.blocks["block_1"].data.root_pos_w,
-        ], dim=1)  # (E, 2, 3)
-
-        # Pairwise distances between robots and blocks
-        diff = robot_positions.unsqueeze(2) - block_positions.unsqueeze(1)  # (E, 2, 2, 3)
-        pairwise_dists = torch.norm(diff, dim=-1)  # (E, 2, 2)
-
-        # For each robot, take min dist to any block → (E, 2)
-        min_dists_per_robot = pairwise_dists.min(dim=2).values
-
-        # Average over robots → (E,)
-        avg_min_dist = min_dists_per_robot.mean(dim=1)
-
-        # Map closer = higher reward
-        avg_min_dist_mapped = 1 - torch.tanh(avg_min_dist / self.cfg.ring_radius_max)
+        robot_0_dist = torch.norm(robot_0_pos - block_pos, dim=-1)
+        robot_1_dist = torch.norm(robot_1_pos - block_pos, dim=-1)
+        avg_dist = (robot_0_dist + robot_1_dist) / 2
+        avg_dist_mapped = 1 - torch.tanh(avg_dist / self.cfg.ring_radius_max)
 
         # --- Time penalty ---
-        time_penalty = self.cfg.time_penalty * torch.ones_like(avg_min_dist, device=self.device)
+        time_penalty = self.cfg.time_penalty * torch.ones_like(block_dist_from_center_mapped, device=self.device)
 
         # --- Push out reward (adversarial) ---
         out = self._robots_out_of_ring()
         team0_out = torch.any(torch.stack([out["robot_0"], out["robot_1"]]), dim=0)
-        team1_out = torch.any(torch.stack([out["block_0"], out["block_1"]]), dim=0)
+        team1_out = out["block_0"]
 
         team0_lost = team0_out.to(torch.float32)
         team1_lost = team1_out.to(torch.float32)
         push_out_reward_0 = (team1_lost - team0_lost) * self.cfg.reward_scale
-        box_velocity_reward = (
-            torch.norm(self.blocks["block_0"].data.root_com_lin_vel_w, dim=-1) +
-            torch.norm(self.blocks["block_1"].data.root_com_lin_vel_w, dim=-1)
-        )
 
         rewards = {
-            "blocks_dist_from_center_reward": block_dist_from_center_mapped * self.step_dt,
-            "dist_to_blocks_reward": avg_min_dist_mapped * self.step_dt,
-            "box_velocity_reward": box_velocity_reward * self.cfg.box_velocity_scale * self.step_dt,
+            # "blocks_dist_from_center_reward": block_dist_from_center_mapped * self.step_dt,
+            "dist_to_blocks_reward": avg_dist_mapped * self.step_dt,
             "time_out_reward": time_penalty,
-            "push_out_reward": push_out_reward_0,
+            # "push_out_reward": push_out_reward_0,
         }
 
         reward = torch.sum(torch.stack(list(rewards.values())), dim=0)
@@ -372,7 +325,7 @@ class LeatherbackSumoMAStage1Env(DirectMARLEnv):
     def _get_dones(self) -> tuple[dict, dict]:
         out_map = self._robots_out_of_ring()
         team0_out = torch.any(torch.stack([out_map["robot_0"], out_map["robot_1"]]), dim=0)
-        team1_out = torch.any(torch.stack([out_map["block_0"], out_map["block_1"]]), dim=0)
+        team1_out = out_map["block_0"]
 
         done = team0_out | team1_out
         dones = {team: done for team in self.cfg.teams.keys()}
@@ -401,64 +354,27 @@ class LeatherbackSumoMAStage1Env(DirectMARLEnv):
         origins = self.scene.env_origins[env_ids]  # (N, 3)
         N = env_ids.shape[0]
 
-        # Place robots
-        teammate_spacing = 1.0  # meters apart
-        for team in self.cfg.teams.values():
-            theta = 2.0 * torch.pi * torch.rand(N, device=self.device)
-            r = 0.5 * self.ring_radius[env_ids]
+        # Example: need 3 positions per env (2 robots + 1 block)
+        num_samples = len(self.robots) + len(self.blocks)
+        grid_offsets = self._sample_positions_grid(N, self.ring_radius[env_ids], num_samples)
 
-            base_offsets = torch.zeros((N, 3), device=self.device)
-            base_offsets[:, 0] = r * torch.cos(theta)
-            base_offsets[:, 1] = r * torch.sin(theta)
+        # Assign slots
+        robot_slots = grid_offsets[:, :len(self.robots), :]
+        block_slots = grid_offsets[:, len(self.robots):, :]
 
-            tangent = torch.zeros((N, 2), device=self.device)
-            tangent[:, 0] = -torch.sin(theta)
-            tangent[:, 1] = torch.cos(theta)
+        # Apply robot positions
+        for i, robot_id in enumerate(self.robots):
+            default_root_state = self.robots[robot_id].data.default_root_state[env_ids].clone()
+            default_root_state[:, :3] = origins
+            default_root_state[:, 0:2] += robot_slots[:, i, 0:2]
+            self.robots[robot_id].write_root_pose_to_sim(default_root_state[:, :7], env_ids)
+            self.robots[robot_id].write_root_velocity_to_sim(default_root_state[:, 7:], env_ids)
 
-            teammate_offsets = [
-                base_offsets.clone(),
-                base_offsets.clone()
-            ]
-            teammate_offsets[0][:, 0:2] += 0.5 * teammate_spacing * tangent
-            teammate_offsets[1][:, 0:2] -= 0.5 * teammate_spacing * tangent
-
-            for robot_id, offsets in zip(team, teammate_offsets):
-                self.actions[robot_id][env_ids] = 0.0
-                joint_pos = self.robots[robot_id].data.default_joint_pos[env_ids]
-                joint_vel = self.robots[robot_id].data.default_joint_vel[env_ids]
-                default_root_state = self.robots[robot_id].data.default_root_state[env_ids].clone()
-
-                default_root_state[:, :3] = origins
-                default_root_state[:, 0:2] += offsets[:, 0:2]
-                default_root_state[:, 2] += self.robots[robot_id].data.default_root_state[env_ids][:, 2]
-
-                self.robots[robot_id].write_root_pose_to_sim(default_root_state[:, :7], env_ids)
-                self.robots[robot_id].write_root_velocity_to_sim(default_root_state[:, 7:], env_ids)
-                self.robots[robot_id].write_joint_state_to_sim(joint_pos, joint_vel, None, env_ids)
-
-        # Place blocks with spacing checks
-        for block_id, block in self.blocks.items():
-            # collect robot root positions (N, 2)
-            robot_positions = []
-            for robot_id in self.robots:
-                robot_pos = self.robots[robot_id].data.root_state_w[env_ids, :2]
-                robot_positions.append(robot_pos)
-
-            # also include already placed blocks to avoid overlaps
-            placed_blocks = []
-            for other_id, other_block in self.blocks.items():
-                if other_id == block_id:
-                    continue
-                placed_blocks.append(other_block.data.root_state_w[env_ids, :2])
-
-            existing = robot_positions + placed_blocks
-            offsets = self._sample_positions(N, self.ring_radius[env_ids], existing_positions=existing)
-
+        # Apply block positions
+        for j, (block_id, block) in enumerate(self.blocks.items()):
             default_root_state = block.data.default_root_state[env_ids].clone()
             default_root_state[:, :3] = origins
-            default_root_state[:, 0:2] += offsets[:, 0:2]
-            default_root_state[:, 2] += block.data.default_root_state[env_ids][:, 2]
-
+            default_root_state[:, 0:2] += block_slots[:, j, 0:2]
             block.write_root_pose_to_sim(default_root_state[:, :7], env_ids)
             block.write_root_velocity_to_sim(default_root_state[:, 7:], env_ids)
 
@@ -471,43 +387,54 @@ class LeatherbackSumoMAStage1Env(DirectMARLEnv):
             self._episode_sums[key][env_ids] = 0.0
 
         team_pos = (self.robots["robot_0"].data.root_pos_w[env_ids, :2] + self.robots["robot_1"].data.root_pos_w[env_ids, :2]) / 2
-        block_pos = (self.blocks["block_0"].data.root_pos_w[env_ids, :2] + self.blocks["block_1"].data.root_pos_w[env_ids, :2]) / 2
+        block_pos = self.blocks["block_0"].data.root_pos_w[env_ids, :2]
         extras["avg_difference_between_teams"] = torch.norm(team_pos - block_pos, dim=-1).mean()
         self.extras["log"] = dict()
         self.extras["log"].update(extras)
     
-    def _sample_positions(self, N, radii, existing_positions=None, min_dist=0.6):
+    def _sample_positions_grid(self, N, radii, num_samples, min_dist=0.6, grid_spacing=0.5):
         """
-        Sample random (x, y) offsets inside the ring, avoiding overlaps.
-        
+        Sample positions from a grid inside the circle.
+
         Args:
             N: number of environments
             radii: tensor of ring radii (N,)
-            existing_positions: list of tensors (N, 2) for already placed objects
-            min_dist: minimum allowed distance (meters)
+            num_samples: number of positions needed per environment
+            min_dist: minimum allowed spacing (still enforced between chosen grid spots)
+            grid_spacing: spacing between candidate grid points
         Returns:
-            offsets: (N, 3) tensor of sampled positions
+            (N, num_samples, 3) tensor of sampled positions
         """
         device = radii.device
-        offsets = torch.zeros((N, 3), device=device)
+        offsets = torch.zeros((N, num_samples, 3), device=device)
 
         for i in range(N):
-            tries = 0
-            while True:
-                theta = 2.0 * torch.pi * torch.rand(1, device=device)
-                r = 0.5 * radii[i] * torch.rand(1, device=device)  # anywhere within half radius
-                candidate = torch.tensor([r * torch.cos(theta), r * torch.sin(theta)], device=device)
+            r = radii[i].item()
 
-                # check against existing positions for this env
-                ok = True
-                if existing_positions is not None:
-                    for pos in existing_positions:
-                        if torch.norm(candidate - pos[i]) < min_dist:
-                            ok = False
-                            break
+            # Build grid within bounding square [-r, r]
+            xs = torch.arange(-r, r + grid_spacing, grid_spacing, device=device)
+            ys = torch.arange(-r, r + grid_spacing, grid_spacing, device=device)
+            grid_x, grid_y = torch.meshgrid(xs, ys, indexing="xy")
+            grid = torch.stack([grid_x.flatten(), grid_y.flatten()], dim=1)
 
-                if ok or tries > 20:  # fallback after 20 tries
-                    offsets[i, 0:2] = candidate
+            # Keep only points inside circle
+            mask = torch.linalg.norm(grid, dim=1) < r
+            candidates = grid[mask]
+
+            # Shuffle candidates
+            perm = torch.randperm(candidates.shape[0], device=device)
+            candidates = candidates[perm]
+
+            chosen = []
+            for pt in candidates:
+                if len(chosen) == num_samples:
                     break
-                tries += 1
+                if all(torch.norm(pt - c) >= min_dist for c in chosen):
+                    chosen.append(pt)
+
+            if len(chosen) < num_samples:
+                raise RuntimeError(f"Not enough valid grid positions for env {i}.")
+
+            offsets[i, :, 0:2] = torch.stack(chosen, dim=0)
+
         return offsets

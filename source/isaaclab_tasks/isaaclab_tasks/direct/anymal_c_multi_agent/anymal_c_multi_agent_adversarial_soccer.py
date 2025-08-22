@@ -119,11 +119,13 @@ def set_robot_spacing_and_rot(index, total, spacing_mode="linear", orientation_m
 @configclass
 class EventCfg:
     """Configuration for randomization."""
-    def __init__(self, num_teams=2, material_scales=None):
+    def __init__(self, possible_agents=None, material_scales=None):
         if material_scales is None:
             material_scales = {}
-        for i in range(num_teams):
-            scales = material_scales.get(f"robot_{i}", {})
+        if possible_agents is None:
+            possible_agents = []
+        for i, robot_id in enumerate(possible_agents):
+            scales = material_scales.get(robot_id, {})
             setattr(
                 self,
                 f"physics_material_{i}",
@@ -131,7 +133,7 @@ class EventCfg:
                     func=mdp.randomize_rigid_body_material,
                     mode="startup",
                     params={
-                        "asset_cfg": SceneEntityCfg(f"robot_{i}", body_names=".*"),
+                        "asset_cfg": SceneEntityCfg(robot_id, body_names=".*"),
                         "static_friction_range": scales.get("static_friction_range", (0.8, 0.8)),
                         "dynamic_friction_range": scales.get("dynamic_friction_range", (0.6, 0.6)),
                         "restitution_range": scales.get("restitution_range", (0.0, 0.0)),
@@ -146,7 +148,7 @@ class EventCfg:
                     func=mdp.randomize_rigid_body_mass,
                     mode="startup",
                     params={
-                        "asset_cfg": SceneEntityCfg(f"robot_{i}", body_names="base"),
+                        "asset_cfg": SceneEntityCfg(robot_id, body_names="base"),
                         "mass_distribution_params": (-5.0, 5.0),
                         "operation": "add",
                     },
@@ -207,22 +209,56 @@ def define_team_arrow_markers(num_teams):
 
 @configclass
 class AnymalCAdversarialSoccerEnvCfg(DirectMARLEnvCfg):
-    def __init__(self, num_teams=3, *args, **kwargs):
+    def __init__(self, team_robot_counts=None, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.num_teams = num_teams
+        # Default: 2 robots per team for 2 teams
+        if team_robot_counts is None:
+            team_robot_counts = {"team_0": 2, "team_1": 3, "team_2": 1}
+        self.team_robot_counts = team_robot_counts
+        self.num_teams = len(team_robot_counts)
+        self.possible_agents = []
+        self.teams = {}
+        self.action_spaces = {}
+        self.observation_spaces = {}
+        self.state_spaces = {}
+        self.physics_material_scales = {}
+        spacing_mode = getattr(self, "robot_spacing_mode", "random")
+        spacing_kwargs = getattr(self, "robot_spacing_kwargs", {})
+        robot_idx = 0
+        for team, num_robots in team_robot_counts.items():
+            self.teams[team] = []
+            for i in range(num_robots):
+                robot_id = f"{team}_robot_{i}"
+                self.possible_agents.append(robot_id)
+                self.teams[team].append(robot_id)
+                self.action_spaces[robot_id] = 12
+                self.observation_spaces[robot_id] = 48
+                self.state_spaces[robot_id] = 0
+                self.physics_material_scales[robot_id] = {
+                    "static_friction_range": (0.7 + 0.02*robot_idx, 0.9 + 0.02*robot_idx),
+                    "dynamic_friction_range": (0.5 + 0.01*robot_idx, 0.7 + 0.01*robot_idx),
+                    "restitution_range": (0.0, 0.1*robot_idx),
+                }
+                setattr(self, robot_id, ANYMAL_C_CFG.replace(prim_path=f"/World/envs/env_.*/{robot_id}"))
+                contact_sensor = ContactSensorCfg(
+                    prim_path=f"/World/envs/env_.*/{robot_id}/.*", history_length=3, update_period=0.005, track_air_time=True
+                )
+                setattr(self, f"contact_sensor_{robot_id}", contact_sensor)
+                # Set initial state
+                pos, rot = set_robot_spacing_and_rot(robot_idx, sum(team_robot_counts.values()), spacing_mode=spacing_mode, **spacing_kwargs)
+                getattr(self, robot_id).init_state.pos = pos
+                getattr(self, robot_id).init_state.rot = rot
+                robot_idx += 1
+
+        self.events = EventCfg(possible_agents=self.possible_agents, material_scales=self.physics_material_scales)
+
+        # simulation
         self.episode_length_s = 20.0
         self.decimation = 4
         self.action_scale = 0.5
         self.action_space = 12
         self.observation_space = 48
         self.state_space = 0
-        self.action_spaces = {f"robot_{i}": 12 for i in range(num_teams)}
-        self.observation_spaces = {f"robot_{i}": 48 for i in range(num_teams)}
-        self.state_spaces = {f"robot_{i}": 0 for i in range(num_teams)}
-        self.possible_agents = [f"robot_{i}" for i in range(num_teams)]
-        self.teams = {f"team_{i}": [f"robot_{i}"] for i in range(num_teams)}
-
-        # simulation
         self.sim = SimulationCfg(
             dt=1 / 200,
             render_interval=self.decimation,
@@ -247,44 +283,10 @@ class AnymalCAdversarialSoccerEnvCfg(DirectMARLEnvCfg):
             ),
             debug_vis=False,
         )
-
-        # scene
         self.scene = InteractiveSceneCfg(num_envs=1, env_spacing=16.0, replicate_physics=True)
-
-        # Example: scale friction for each robot (customize as needed)
-        self.physics_material_scales = {
-            f"robot_{i}": {
-                "static_friction_range": (0.7 + 0.02*i, 0.9 + 0.02*i),
-                "dynamic_friction_range": (0.5 + 0.01*i, 0.7 + 0.01*i),
-                "restitution_range": (0.0, 0.1*i),
-            }
-            for i in range(num_teams)
-        }
-        # events
-        self.events = EventCfg(num_teams=num_teams, material_scales=self.physics_material_scales)
-
-        # robots and sensors
-        # Choose spacing mode and params here or expose as config
-        # spacing_mode = getattr(self, "robot_spacing_mode", "linear")
-        # spacing_mode = getattr(self, "robot_spacing_mode", "circular")
-        # spacing_mode = getattr(self, "robot_spacing_mode", "grid")
-        spacing_mode = getattr(self, "robot_spacing_mode", "random")
-        spacing_kwargs = getattr(self, "robot_spacing_kwargs", {})
-        for i in range(num_teams):
-            setattr(self, f"robot_{i}", ANYMAL_C_CFG.replace(prim_path=f"/World/envs/env_.*/Robot_{i}"))
-            contact_sensor = ContactSensorCfg(
-            prim_path=f"/World/envs/env_.*/Robot_{i}/.*", history_length=3, update_period=0.005, track_air_time=True
-            )
-            setattr(self, f"contact_sensor_{i}", contact_sensor)
-            # Set initial state
-            pos, rot = set_robot_spacing_and_rot(i, num_teams, spacing_mode=spacing_mode, **spacing_kwargs)
-            getattr(self, f"robot_{i}").init_state.pos = pos
-            getattr(self, f"robot_{i}").init_state.rot = rot
 
         # reward scales (override from flat config)
         self.flat_orientation_reward_scale = 0.0
-
-        # reward scales
         self.lin_vel_reward_scale = 1.0
         self.yaw_rate_reward_scale = 0.5
         self.z_vel_reward_scale = -2.0
@@ -308,7 +310,6 @@ class AnymalCAdversarialSoccerEnv(DirectMARLEnv):
         self.debug = True
         super().__init__(cfg, render_mode, **kwargs)
         # Joint position command (deviation from default joint positions)
-
         self.actions = {
             agent: torch.zeros(self.num_envs, action_space, device=self.device)
             for agent, action_space in self.cfg.action_spaces.items()
@@ -359,39 +360,35 @@ class AnymalCAdversarialSoccerEnv(DirectMARLEnv):
         marker_locations = []
         marker_orientations = []
         marker_indices = []
-        for i in range(self.cfg.num_teams):
-            robot_id = f"robot_{i}"
-            pos = self.robots[robot_id].data.root_pos_w  # (num_envs, 3)
-            # Place arrow slightly above robot
-            arrow_pos = pos.clone()
-            arrow_pos[:, 2] += .7
-            marker_locations.append(arrow_pos)
-
-            # q = torch.tensor([ 0.0, 0.0, 0.707, 0.707], device=pos.device).expand(pos.shape[0], 4)
-            q = torch.tensor([ 0.0, 0.0, 0.0, 0.0], device=pos.device).expand(pos.shape[0], 4)
-            marker_orientations.append(q)
-            marker_indices.append(i * torch.ones(pos.shape[0], device=pos.device, dtype=torch.long))
-        marker_locations = torch.cat(marker_locations, dim=0)
-        marker_orientations = torch.cat(marker_orientations, dim=0)
-        marker_indices = torch.cat(marker_indices, dim=0)
-        self.team_arrow_visualizer.visualize(
-            marker_locations, marker_orientations, marker_indices=marker_indices
-        )
+        team_list = list(self.cfg.teams.keys())
+        for team_idx, team in enumerate(team_list):
+            for robot_id in self.cfg.teams[team]:
+                pos = self.robots[robot_id].data.root_pos_w  # (num_envs, 3)
+                arrow_pos = pos.clone()
+                arrow_pos[:, 2] += .7
+                marker_locations.append(arrow_pos)
+                q = torch.tensor([0.0, 0.0, 0.0, 0.0], device=pos.device).expand(pos.shape[0], 4)
+                marker_orientations.append(q)
+                marker_indices.append(team_idx * torch.ones(pos.shape[0], device=pos.device, dtype=torch.long))
+        if marker_locations:
+            marker_locations = torch.cat(marker_locations, dim=0)
+            marker_orientations = torch.cat(marker_orientations, dim=0)
+            marker_indices = torch.cat(marker_indices, dim=0)
+            self.team_arrow_visualizer.visualize(
+                marker_locations, marker_orientations, marker_indices=marker_indices
+            )
 
     def _setup_scene(self):
-        self.num_robots = sum(1 for key in self.cfg.__dict__.keys() if "robot_" in key)
         self.robots = {}
         self.contact_sensors = {}
         self.height_scanners = {}
         if self.debug:
             self.my_visualizer = define_markers()
-
-        for i in range(self.num_robots):
-            self.robots[f"robot_{i}"] = Articulation(self.cfg.__dict__["robot_" + str(i)])
-            self.scene.articulations[f"robot_{i}"] = self.robots[f"robot_{i}"]
-            self.contact_sensors[f"robot_{i}"] = ContactSensor(self.cfg.__dict__["contact_sensor_" + str(i)])
-            self.scene.sensors[f"robot_{i}"] = self.contact_sensors[f"robot_{i}"]
-
+        for robot_id in self.cfg.possible_agents:
+            self.robots[robot_id] = Articulation(getattr(self.cfg, robot_id))
+            self.scene.articulations[robot_id] = self.robots[robot_id]
+            self.contact_sensors[robot_id] = ContactSensor(getattr(self.cfg, f"contact_sensor_{robot_id}"))
+            self.scene.sensors[robot_id] = self.contact_sensors[robot_id]
         self.cfg.terrain.num_envs = self.scene.cfg.num_envs
         self.cfg.terrain.env_spacing = self.scene.cfg.env_spacing
         self._terrain = self.cfg.terrain.class_type(self.cfg.terrain)
@@ -417,28 +414,27 @@ class AnymalCAdversarialSoccerEnv(DirectMARLEnv):
 
     def _get_observations(self) -> dict:
         self.previous_actions = copy.deepcopy(self.actions)
-
         obs = {}
-        for i in range(self.cfg.num_teams):
-            robot_id = f"robot_{i}"
-            team_id = f"team_{i}"
-            obs_vec = torch.cat(
-                [
-                    tensor
-                    for tensor in (
-                        self.robots[robot_id].data.root_lin_vel_b,
-                        self.robots[robot_id].data.root_ang_vel_b,
-                        self.robots[robot_id].data.projected_gravity_b,
-                        self._commands,
-                        self.robots[robot_id].data.joint_pos - self.robots[robot_id].data.default_joint_pos,
-                        self.robots[robot_id].data.joint_vel,
-                        self.actions[robot_id],
-                    )
-                    if tensor is not None
-                ],
-                dim=-1,
-            )
-            obs[team_id] = {robot_id: obs_vec}
+        for team, robot_ids in self.cfg.teams.items():
+            obs[team] = {}
+            for robot_id in robot_ids:
+                obs_vec = torch.cat(
+                    [
+                        tensor
+                        for tensor in (
+                            self.robots[robot_id].data.root_lin_vel_b,
+                            self.robots[robot_id].data.root_ang_vel_b,
+                            self.robots[robot_id].data.projected_gravity_b,
+                            self._commands,
+                            self.robots[robot_id].data.joint_pos - self.robots[robot_id].data.default_joint_pos,
+                            self.robots[robot_id].data.joint_vel,
+                            self.actions[robot_id],
+                        )
+                        if tensor is not None
+                    ],
+                    dim=-1,
+                )
+                obs[team][robot_id] = obs_vec
         return obs
 
     def _draw_markers(self, command):
@@ -456,8 +452,10 @@ class AnymalCAdversarialSoccerEnv(DirectMARLEnv):
             dim=0,
         )
 
-        robot_pos = self.robots["robot_0"].data.root_pos_w.clone()
-        robot_yaw = self.robots["robot_0"].data.root_ang_vel_b[:, 2].clone()
+        # Use the first robot id from possible_agents (e.g., "team_0_robot_0")
+        first_robot_id = self.cfg.possible_agents[0]
+        robot_pos = self.robots[first_robot_id].data.root_pos_w.clone()
+        robot_yaw = self.robots[first_robot_id].data.root_ang_vel_b[:, 2].clone()
 
         scale1 = torch.ones((self._commands.shape[0], 3), device=self.device)
         scale1[:, 0] = torch.abs(z_commands)
@@ -479,7 +477,7 @@ class AnymalCAdversarialSoccerEnv(DirectMARLEnv):
             [
                 robot_pos,
                 robot_pos + xy_commands,
-                robot_pos + self.robots["robot_0"].data.root_lin_vel_b,
+                robot_pos + self.robots[first_robot_id].data.root_lin_vel_b,
                 robot_pos + offset1,
                 robot_pos + offset2,
             ],
@@ -558,8 +556,9 @@ class AnymalCAdversarialSoccerEnv(DirectMARLEnv):
             # Logging
             for key, value in rewards.items():
                 self._episode_sums[key] += value
-
-        rewards = {f"team_{i}": all_rewards[f"robot_{i}"] for i in range(self.cfg.num_teams)}
+        # Group rewards by team
+        rewards = {team: torch.stack([all_rewards[robot_id] for robot_id in robot_ids]).sum(dim=0)
+                   for team, robot_ids in self.cfg.teams.items()}
         return rewards
 
     def _get_dones(self) -> tuple[dict, dict]:
@@ -577,7 +576,9 @@ class AnymalCAdversarialSoccerEnv(DirectMARLEnv):
 
     def _reset_idx(self, env_ids: torch.Tensor | None):
         if env_ids is None or len(env_ids) == self.num_envs:
-            env_ids = self.robots["robot_0"]._ALL_INDICES
+            # get 1st robot name
+            name = list(self.robots.keys())[0]
+            env_ids = self.robots[name]._ALL_INDICES
         super()._reset_idx(env_ids)  # once
 
         # spread out resets
@@ -586,7 +587,6 @@ class AnymalCAdversarialSoccerEnv(DirectMARLEnv):
 
         # sample commands once
         self._commands[env_ids] = torch.zeros_like(self._commands[env_ids]).uniform_(-1.0, 1.0)
-
         for robot_id in self.robots.keys():
             self.robots[robot_id].reset(env_ids)
             self.actions[robot_id][env_ids] = 0.0

@@ -246,7 +246,7 @@ class AnymalCAdversarialSoccerEnvCfg(DirectMARLEnvCfg):
                 rel_quat_dim = num_total_robots * 4
                 # actions_dim = 12  # Only the current robot's actions
                 apposing_robots_mask_dim = num_total_robots
-                neighbor_id_dim = num_total_robots  # one-hot encoding of robot id
+                neighbor_id_dim = num_total_robots   # one-hot encoding of robot id
                 total_obs_dim = base_obs_dim + rel_pos_dim + rel_quat_dim + apposing_robots_mask_dim + neighbor_id_dim
                 self.observation_spaces[robot_id] = total_obs_dim
                 # self.observation_spaces[robot_id] = base_obs_dim
@@ -435,39 +435,49 @@ class AnymalCAdversarialSoccerEnv(DirectMARLEnv):
         # Compute neighbor obs for all robots (single call, efficient)
 
         def get_relative_obs(ref_robot_id, other_robot_id_list):
-            # Get absolute states
-            ref_pos = self.robots[ref_robot_id].data.root_pos_w            # [E,3]
-            ref_quat = self.robots[ref_robot_id].data.root_quat_w          # [E,4]
-            other_pos = torch.stack([self.robots[rid].data.root_pos_w for rid in other_robot_id_list], dim=1)   # [E,R,3]
-            other_quat = torch.stack([self.robots[rid].data.root_quat_w for rid in other_robot_id_list], dim=1) # [E,R,4]
+            # Ensure the reference robot is not in the other_robot_id_list
+            filtered_other_robot_id_list = [r for r in other_robot_id_list if r != ref_robot_id]
+            # Absolute states
+            ref_pos  = self.robots[ref_robot_id].data.root_pos_w            # [num_envs,3]
+            ref_quat = self.robots[ref_robot_id].data.root_quat_w           # [num_envs,4]
+            other_pos  = torch.stack([self.robots[r].data.root_pos_w  for r in filtered_other_robot_id_list], dim=1)  # [num_envs,num_others,3]
+            other_quat = torch.stack([self.robots[r].data.root_quat_w for r in filtered_other_robot_id_list], dim=1)  # [num_envs,num_others,4]
 
-            # Sort robots by distance to ref (per env)
-            dists = torch.norm(other_pos - ref_pos.unsqueeze(1), dim=-1)   # [E,R]
-            sorted_idx = torch.argsort(dists, dim=1)                       # [E,R]
-            E, R = sorted_idx.shape
-            device = other_pos.device
-            batch_idx = torch.arange(E, device=device).unsqueeze(1).expand_as(sorted_idx)
+            # ----- include self (ID 0) so neighbor_ids has 0 and rel_* has a self row -----
+            all_pos  = torch.cat([ref_pos.unsqueeze(1),  other_pos],  dim=1)   # [num_envs,num_robots,3]
+            all_quat = torch.cat([ref_quat.unsqueeze(1), other_quat], dim=1)   # [num_envs,num_robots,4]
+            num_envs, num_robots = all_pos.shape[:2]
 
-            # Apply same permutation to all per-robot tensors
-            other_pos = other_pos[batch_idx, sorted_idx]                   # [E,R,3]
-            other_quat = other_quat[batch_idx, sorted_idx]                 # [E,R,4]
+            # IDs: 0=self, 1..num_others map to filtered_other_robot_id_list order (stable across calls if list is stable)
+            base_ids = torch.arange(num_robots, device=all_pos.device).view(1, -1).expand(num_envs, -1)  # [num_envs,num_robots]
 
-            # Relative pose
-            rel_pos = quat_rotate_inverse(ref_quat.unsqueeze(1).expand(-1, R, 4),
-                                          other_pos - ref_pos.unsqueeze(1))                            # [E,R,3]
-            rel_quat = quat_mul(quat_conjugate(ref_quat).unsqueeze(1).expand(-1, R, 4), other_quat)    # [E,R,4]
+            # Sort by squared distance to ref (no sqrt; same ordering)
+            d2  = ((all_pos - ref_pos.unsqueeze(1))**2).sum(dim=-1)            # [num_envs,num_robots]
+            idx = torch.argsort(d2, dim=1)                                     # [num_envs,num_robots]
 
-            # Team mask, permuted the same way
+            # Apply the permutation to all per-robot tensors (use gather for batched reindex)
+            idx3 = idx.unsqueeze(-1).expand(-1, -1, 3)
+            idx4 = idx.unsqueeze(-1).expand(-1, -1, 4)
+            all_pos_sorted  = torch.gather(all_pos,  1, idx3)                  # [num_envs,num_robots,3]
+            all_quat_sorted = torch.gather(all_quat, 1, idx4)                  # [num_envs,num_robots,4]
+            neighbor_ids    = torch.gather(base_ids, 1, idx)                   # [num_envs,num_robots]
+
+            # Relative pose (self row becomes [0,0,0] and identity quat)
+            rel_pos  = quat_rotate_inverse(ref_quat.unsqueeze(1).expand(-1, num_robots, 4),
+                                        all_pos_sorted - ref_pos.unsqueeze(1))        # [num_envs,num_robots,3]
+            rel_quat = quat_mul(quat_conjugate(ref_quat).unsqueeze(1).expand(-1, num_robots, 4),
+                                all_quat_sorted)                                         # [num_envs,num_robots,4]
+
+            # Team mask (False for self), permuted the same way
             team_name = ref_robot_id.split("_robot_")[0]
-            team_mask = torch.tensor([1 if not rid.startswith(team_name) else 0 for rid in other_robot_id_list],
-                                     device=device, dtype=torch.float32).unsqueeze(0).expand(E, -1)    # [E,R]
-            team_mask = team_mask[batch_idx, sorted_idx]                                              # [E,R]
-
-            # Neighbor ids: 0 for self, 1, 2, ... for others (according to original order)
-            neighbor_ids = torch.arange(R, device=device, dtype=torch.int64).unsqueeze(0).expand(E, -1)  # [E,R]
-            neighbor_ids = neighbor_ids[batch_idx, sorted_idx]                                           # [E,R]
+            raw_mask = torch.tensor(
+                [False] + [not rid.startswith(team_name) for rid in filtered_other_robot_id_list],
+                device=all_pos.device, dtype=torch.bool
+            ).view(1, -1).expand(num_envs, -1)                                                  # [num_envs,num_robots, 1]
+            team_mask = torch.gather(raw_mask, 1, idx)                                   # [num_envs,num_robots]
 
             return rel_pos, rel_quat, team_mask, neighbor_ids
+
 
         robot_id_list = list(self.robots.keys())
         robot_id_to_idx = {rid: i for i, rid in enumerate(robot_id_list)}

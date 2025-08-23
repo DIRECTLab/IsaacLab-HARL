@@ -216,7 +216,11 @@ class AnymalCAdversarialSoccerEnvCfg(DirectMARLEnvCfg):
         super().__init__(*args, **kwargs)
         # Default: 2 robots per team for 2 teams
         if team_robot_counts is None:
-            team_robot_counts = {"team_0": 2, "team_1": 3, "team_2": 1}
+            team_robot_counts = {
+                "team_0": 2, 
+                "team_1": 1, 
+                # "team_2": 1
+                }
         self.team_robot_counts = team_robot_counts
         self.num_teams = len(team_robot_counts)
         self.possible_agents = []

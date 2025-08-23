@@ -240,16 +240,14 @@ class AnymalCAdversarialSoccerEnvCfg(DirectMARLEnvCfg):
                 self.teams[team].append(robot_id)
                 self.action_spaces[robot_id] = 12
                 # Calculate observation space dynamically
-                '''
-                [
-                '''
                 base_obs_dim = 48  # self state (13) + base_lin_vel (3) + base_ang_vel (3) + gravity_vec (3) + dof_pos (12) + dof_vel (12)]
                 num_total_robots = sum(team_robot_counts.values())
                 rel_pos_dim = num_total_robots * 3
                 rel_quat_dim = num_total_robots * 4
                 # actions_dim = 12  # Only the current robot's actions
                 apposing_robots_mask_dim = num_total_robots
-                total_obs_dim = base_obs_dim + rel_pos_dim + rel_quat_dim + apposing_robots_mask_dim
+                neighbor_id_dim = num_total_robots  # one-hot encoding of robot id
+                total_obs_dim = base_obs_dim + rel_pos_dim + rel_quat_dim + apposing_robots_mask_dim + neighbor_id_dim
                 self.observation_spaces[robot_id] = total_obs_dim
                 # self.observation_spaces[robot_id] = base_obs_dim
                 self.state_spaces[robot_id] = 0
@@ -444,30 +442,32 @@ class AnymalCAdversarialSoccerEnv(DirectMARLEnv):
             other_quat = torch.stack([self.robots[rid].data.root_quat_w for rid in other_robot_id_list], dim=1) # [E,R,4]
 
             # Sort robots by distance to ref (per env)
-            dists = torch.norm(other_pos - ref_pos.unsqueeze(1), dim=-1)   # [E,R]  (https://pytorch.org/docs/stable/generated/torch.norm.html)
-            sorted_idx = torch.argsort(dists, dim=1)                       # [E,R]  (https://pytorch.org/docs/stable/generated/torch.argsort.html)
+            dists = torch.norm(other_pos - ref_pos.unsqueeze(1), dim=-1)   # [E,R]
+            sorted_idx = torch.argsort(dists, dim=1)                       # [E,R]
             E, R = sorted_idx.shape
             device = other_pos.device
             batch_idx = torch.arange(E, device=device).unsqueeze(1).expand_as(sorted_idx)
 
             # Apply same permutation to all per-robot tensors
-            other_pos = other_pos[batch_idx, sorted_idx]                   # [E,R,3] (https://pytorch.org/docs/stable/tensors.html#combining-indexing-slicing-advanced-indexing)
+            other_pos = other_pos[batch_idx, sorted_idx]                   # [E,R,3]
             other_quat = other_quat[batch_idx, sorted_idx]                 # [E,R,4]
 
-            # Relative pose (rotation preserves distances: order unchanged) (https://en.wikipedia.org/wiki/Orthogonal_matrix#Properties)
+            # Relative pose
             rel_pos = quat_rotate_inverse(ref_quat.unsqueeze(1).expand(-1, R, 4),
-                                        other_pos - ref_pos.unsqueeze(1))                            # [E,R,3] (NO_Idea)
-
-            # Use Hamilton product for quaternions, NOT elementwise multiply
-            rel_quat = quat_mul(quat_conjugate(ref_quat).unsqueeze(1).expand(-1, R, 4), other_quat)   # [E,R,4] (https://en.wikipedia.org/wiki/Quaternion#Multiplication)
+                                          other_pos - ref_pos.unsqueeze(1))                            # [E,R,3]
+            rel_quat = quat_mul(quat_conjugate(ref_quat).unsqueeze(1).expand(-1, R, 4), other_quat)    # [E,R,4]
 
             # Team mask, permuted the same way
             team_name = ref_robot_id.split("_robot_")[0]
             team_mask = torch.tensor([1 if not rid.startswith(team_name) else 0 for rid in other_robot_id_list],
-                                    device=device, dtype=torch.float32).unsqueeze(0).expand(E, -1)    # [E,R] (NO_Idea)
-            team_mask = team_mask[batch_idx, sorted_idx]                                              # [E,R] (https://pytorch.org/docs/stable/tensors.html#combining-indexing-slicing-advanced-indexing)
+                                     device=device, dtype=torch.float32).unsqueeze(0).expand(E, -1)    # [E,R]
+            team_mask = team_mask[batch_idx, sorted_idx]                                              # [E,R]
 
-            return rel_pos, rel_quat, team_mask
+            # Neighbor ids: 0 for self, 1, 2, ... for others (according to original order)
+            neighbor_ids = torch.arange(R, device=device, dtype=torch.int64).unsqueeze(0).expand(E, -1)  # [E,R]
+            neighbor_ids = neighbor_ids[batch_idx, sorted_idx]                                           # [E,R]
+
+            return rel_pos, rel_quat, team_mask, neighbor_ids
 
         robot_id_list = list(self.robots.keys())
         robot_id_to_idx = {rid: i for i, rid in enumerate(robot_id_list)}
@@ -482,11 +482,11 @@ class AnymalCAdversarialSoccerEnv(DirectMARLEnv):
                 joint_pos_delta = self.robots[robot_id].data.joint_pos - self.robots[robot_id].data.default_joint_pos # [num_envs,12]
                 joint_vel = self.robots[robot_id].data.joint_vel # [num_envs,12]
                 actions = self.actions[robot_id] # [num_envs,12]
-                rel_pos, rel_quat, apposing_robots_mask= get_relative_obs(robot_id, robot_id_list)  # [num_envs,num_robots,3], [num_envs,num_robots,4]
+                rel_pos, rel_quat, apposing_robots_mask, neighbor_ids = get_relative_obs(robot_id, robot_id_list)  # [num_envs,num_robots,3], [num_envs,num_robots,4]
                 rel_pos = rel_pos.reshape(rel_pos.shape[0], -1)  # [num_envs,num_robots*3]
                 rel_quat = rel_quat.reshape(rel_quat.shape[0], -1) # [num_envs,num_robots*4]
                 apposing_robots_mask = apposing_robots_mask.reshape(apposing_robots_mask.shape[0], -1) # [num_envs,num_robots*num_teams]
-                # neighbor_ids = torch.eye(len(robot_id_list), device=self.device)[robot_id_to
+                neighbor_ids = neighbor_ids.reshape(neighbor_ids.shape[0], -1) # [num_envs,num_robots*num_teams]
                 
                 # Concatenate all observation components
                 obs_vec = torch.cat(
@@ -501,7 +501,7 @@ class AnymalCAdversarialSoccerEnv(DirectMARLEnv):
                         rel_pos,                  # [num_envs, num_robots*3]
                         rel_quat,                 # [num_envs, num_robots*4]
                         apposing_robots_mask,     # [num_envs, num_robots]
-                    # neighbor_ids,
+                        neighbor_ids,             # [num_envs, num_robots]
                     ],
                     dim=-1,
                 )

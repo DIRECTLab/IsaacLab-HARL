@@ -436,22 +436,19 @@ class AnymalCAdversarialSoccerEnv(DirectMARLEnv):
         obs = {}
         # Compute neighbor obs for all robots (single call, efficient)
 
-        def get_pos_relative_to_robot(ref_robot_id, other_robot_id_list):
+        def get_relative_obs(ref_robot_id, other_robot_id_list):
+            # Get relative positions and quaternions
             ref_pos = self.robots[ref_robot_id].data.root_pos_w  # [num_envs,3]
             ref_quat = self.robots[ref_robot_id].data.root_quat_w  # [num_envs,4]
             other_pos = torch.stack([self.robots[rid].data.root_pos_w for rid in other_robot_id_list], dim=1)  # [num_envs,num_robots,3]
             other_quat = torch.stack([self.robots[rid].data.root_quat_w for rid in other_robot_id_list], dim=1)  # [num_envs,num_robots,4]
             rel_pos = quat_rotate_inverse(ref_quat.unsqueeze(1).expand(-1, other_pos.shape[1], 4), other_pos - ref_pos.unsqueeze(1))  # [num_envs,num_robots,3]
-            # use the quat_from_angle_axis to find the direction to the other robots
             rel_quat = quat_conjugate(ref_quat).unsqueeze(1).expand(-1, other_quat.shape[1], 4) * other_quat  # [num_envs,num_robots,4]
-            return rel_pos, rel_quat  # [num_envs,num_robots,3], [num_envs,num_robots,4]
-        def get_teams_binary_mask(ref_robot_id, other_robot_id_list):
-            # robots not on your team are 1, else 0
+            # Get binary mask for teams (1 if not on your team, else 0)
             team_name = ref_robot_id.split("_robot_")[0]
-            # mask to 1 if not on your team, else 0
             team_mask = torch.tensor([1 if not rid.startswith(team_name) else 0 for rid in other_robot_id_list], device=self.device, dtype=torch.float32)
             team_mask = team_mask.unsqueeze(0).expand(self.num_envs, -1)  # [num_envs,num_robots]
-            return team_mask  # [num_envs,num_robots]
+            return rel_pos, rel_quat, team_mask  # [num_envs,num_robots,3], [num_envs,num_robots,4], [num_envs,num_robots]
         robot_id_list = list(self.robots.keys())
         robot_id_to_idx = {rid: i for i, rid in enumerate(robot_id_list)}
         for team, robot_ids in self.cfg.teams.items():
@@ -465,10 +462,9 @@ class AnymalCAdversarialSoccerEnv(DirectMARLEnv):
                 joint_pos_delta = self.robots[robot_id].data.joint_pos - self.robots[robot_id].data.default_joint_pos # [num_envs,12]
                 joint_vel = self.robots[robot_id].data.joint_vel # [num_envs,12]
                 actions = self.actions[robot_id] # [num_envs,12]
-                rel_pos, rel_quat = get_pos_relative_to_robot(robot_id, robot_id_list)  # [num_envs,num_robots,3], [num_envs,num_robots,4]
+                rel_pos, rel_quat, apposing_robots_mask= get_relative_obs(robot_id, robot_id_list)  # [num_envs,num_robots,3], [num_envs,num_robots,4]
                 rel_pos = rel_pos.reshape(rel_pos.shape[0], -1)  # [num_envs,num_robots*3]
                 rel_quat = rel_quat.reshape(rel_quat.shape[0], -1) # [num_envs,num_robots*4]
-                apposing_robots_mask = get_teams_binary_mask(robot_id, robot_id_list) # [num_envs,num_robots,num_teams]
                 apposing_robots_mask = apposing_robots_mask.reshape(apposing_robots_mask.shape[0], -1) # [num_envs,num_robots*num_teams]
                 # neighbor_ids = torch.eye(len(robot_id_list), device=self.device)[robot_id_to
                 

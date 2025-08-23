@@ -359,7 +359,13 @@ class LeatherbackSumoMAStage1Env(DirectMARLEnv):
             "push_out_reward": push_out_reward_team1,
         }
 
-        # Sum per team
+        # sanitize individual terms before stacking
+        rewards_team0 = {k: torch.nan_to_num(v, nan=0.0, posinf=1e6, neginf=-1e6)
+                        for k, v in rewards_team0.items()}
+        rewards_team1 = {k: torch.nan_to_num(v, nan=0.0, posinf=1e6, neginf=-1e6)
+                        for k, v in rewards_team1.items()}
+
+        # then safely sum
         reward_team0 = torch.sum(torch.stack(list(rewards_team0.values())), dim=0)
         reward_team1 = torch.sum(torch.stack(list(rewards_team1.values())), dim=0)
 

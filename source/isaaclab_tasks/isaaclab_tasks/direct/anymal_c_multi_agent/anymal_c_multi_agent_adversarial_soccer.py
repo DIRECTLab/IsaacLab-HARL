@@ -33,7 +33,7 @@ from isaaclab.terrains.config.rough import ROUGH_TERRAINS_CFG  # isort: skip
 import math
 import colorsys
 
-def set_robot_spacing_and_rot(index, total, spacing_mode="linear", orientation_mode="face_center",linear_range=2.0, circle_radius=2.0, grid_shape=(2,2), grid_spacing=(2.0,2.0)):
+def set_robot_spacing_and_rot(index, total, spacing_mode="linear", orientation_mode="linear",linear_range=4.0, circle_radius=2.0, grid_shape=(2,2), grid_spacing=(2.0,2.0)):
     """
     Returns (x, y, z) position for a robot given its index and total number of robots.
     spacing_mode: 'linear', 'circular', or 'grid'
@@ -106,6 +106,8 @@ def set_robot_spacing_and_rot(index, total, spacing_mode="linear", orientation_m
         dx = center[0] - pos[0]
         dy = center[1] - pos[1]
         yaw = math.atan2(dy, dx)
+    elif orientation_mode == "linear":
+        yaw = 0.0
     else:
         raise ValueError(f"Unknown orientation_mode: {orientation_mode}")
     
@@ -223,7 +225,7 @@ class AnymalCAdversarialSoccerEnvCfg(DirectMARLEnvCfg):
         self.observation_spaces = {}
         self.state_spaces = {}
         self.physics_material_scales = {}
-        spacing_mode = getattr(self, "robot_spacing_mode", "random")
+        spacing_mode = getattr(self, "robot_spacing_mode", "linear") # linear, circular, grid, random
         spacing_kwargs = getattr(self, "robot_spacing_kwargs", {})
         robot_idx = 0
         for team, num_robots in team_robot_counts.items():

@@ -10,7 +10,7 @@ import torch
 
 import isaaclab.envs.mdp as mdp
 import isaaclab.sim as sim_utils
-from isaaclab.utils.math import quat_rotate_inverse, quat_conjugate
+from isaaclab.utils.math import quat_rotate_inverse, quat_conjugate, quat_mul
 from isaaclab.assets import Articulation, ArticulationCfg, RigidObject, RigidObjectCfg
 from isaaclab.envs import DirectMARLEnv, DirectMARLEnvCfg
 from isaaclab.managers import EventTermCfg as EventTerm
@@ -437,18 +437,38 @@ class AnymalCAdversarialSoccerEnv(DirectMARLEnv):
         # Compute neighbor obs for all robots (single call, efficient)
 
         def get_relative_obs(ref_robot_id, other_robot_id_list):
-            # Get relative positions and quaternions
-            ref_pos = self.robots[ref_robot_id].data.root_pos_w  # [num_envs,3]
-            ref_quat = self.robots[ref_robot_id].data.root_quat_w  # [num_envs,4]
-            other_pos = torch.stack([self.robots[rid].data.root_pos_w for rid in other_robot_id_list], dim=1)  # [num_envs,num_robots,3]
-            other_quat = torch.stack([self.robots[rid].data.root_quat_w for rid in other_robot_id_list], dim=1)  # [num_envs,num_robots,4]
-            rel_pos = quat_rotate_inverse(ref_quat.unsqueeze(1).expand(-1, other_pos.shape[1], 4), other_pos - ref_pos.unsqueeze(1))  # [num_envs,num_robots,3]
-            rel_quat = quat_conjugate(ref_quat).unsqueeze(1).expand(-1, other_quat.shape[1], 4) * other_quat  # [num_envs,num_robots,4]
-            # Get binary mask for teams (1 if not on your team, else 0)
+            # Get absolute states
+            ref_pos = self.robots[ref_robot_id].data.root_pos_w            # [E,3]
+            ref_quat = self.robots[ref_robot_id].data.root_quat_w          # [E,4]
+            other_pos = torch.stack([self.robots[rid].data.root_pos_w for rid in other_robot_id_list], dim=1)   # [E,R,3]
+            other_quat = torch.stack([self.robots[rid].data.root_quat_w for rid in other_robot_id_list], dim=1) # [E,R,4]
+
+            # Sort robots by distance to ref (per env)
+            dists = torch.norm(other_pos - ref_pos.unsqueeze(1), dim=-1)   # [E,R]  (https://pytorch.org/docs/stable/generated/torch.norm.html)
+            sorted_idx = torch.argsort(dists, dim=1)                       # [E,R]  (https://pytorch.org/docs/stable/generated/torch.argsort.html)
+            E, R = sorted_idx.shape
+            device = other_pos.device
+            batch_idx = torch.arange(E, device=device).unsqueeze(1).expand_as(sorted_idx)
+
+            # Apply same permutation to all per-robot tensors
+            other_pos = other_pos[batch_idx, sorted_idx]                   # [E,R,3] (https://pytorch.org/docs/stable/tensors.html#combining-indexing-slicing-advanced-indexing)
+            other_quat = other_quat[batch_idx, sorted_idx]                 # [E,R,4]
+
+            # Relative pose (rotation preserves distances: order unchanged) (https://en.wikipedia.org/wiki/Orthogonal_matrix#Properties)
+            rel_pos = quat_rotate_inverse(ref_quat.unsqueeze(1).expand(-1, R, 4),
+                                        other_pos - ref_pos.unsqueeze(1))                            # [E,R,3] (NO_Idea)
+
+            # Use Hamilton product for quaternions, NOT elementwise multiply
+            rel_quat = quat_mul(quat_conjugate(ref_quat).unsqueeze(1).expand(-1, R, 4), other_quat)   # [E,R,4] (https://en.wikipedia.org/wiki/Quaternion#Multiplication)
+
+            # Team mask, permuted the same way
             team_name = ref_robot_id.split("_robot_")[0]
-            team_mask = torch.tensor([1 if not rid.startswith(team_name) else 0 for rid in other_robot_id_list], device=self.device, dtype=torch.float32)
-            team_mask = team_mask.unsqueeze(0).expand(self.num_envs, -1)  # [num_envs,num_robots]
-            return rel_pos, rel_quat, team_mask  # [num_envs,num_robots,3], [num_envs,num_robots,4], [num_envs,num_robots]
+            team_mask = torch.tensor([1 if not rid.startswith(team_name) else 0 for rid in other_robot_id_list],
+                                    device=device, dtype=torch.float32).unsqueeze(0).expand(E, -1)    # [E,R] (NO_Idea)
+            team_mask = team_mask[batch_idx, sorted_idx]                                              # [E,R] (https://pytorch.org/docs/stable/tensors.html#combining-indexing-slicing-advanced-indexing)
+
+            return rel_pos, rel_quat, team_mask
+
         robot_id_list = list(self.robots.keys())
         robot_id_to_idx = {rid: i for i, rid in enumerate(robot_id_list)}
         for team, robot_ids in self.cfg.teams.items():

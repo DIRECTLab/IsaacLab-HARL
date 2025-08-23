@@ -27,7 +27,7 @@ class LeatherbackSumoMAStage1EnvCfg(DirectMARLEnvCfg):
 
     # Observation: teammate (3) + opp1 (3) + opp2 (3) + rcol(1) + dist_center(1) + velocity(3)
     # = 14 per robot
-    observation_spaces = {f"robot_{i}": 8 for i in range(2)}
+    observation_spaces = {f"robot_{i}": 14 for i in range(2)}
 
     state_space = 0
     state_spaces = {f"robot_{i}": 0 for i in range(2)}
@@ -71,7 +71,7 @@ class LeatherbackSumoMAStage1EnvCfg(DirectMARLEnvCfg):
 
     ring_radius_min = 2
     ring_radius_max = 5
-    reward_scale = 10
+    push_out_reward_scale = 10
     # time penalty
     time_penalty = -0.01
     box_velocity_scale = 0.01
@@ -268,23 +268,42 @@ class LeatherbackSumoMAStage1Env(DirectMARLEnv):
             self.robots["robot_0"].data.root_state_w[:, :3], self.robots["robot_0"].data.root_state_w[:, 3:7],
             self.blocks["block_0"].data.root_pos_w
         )
+        robot_0_teammate_pos, _ = subtract_frame_transforms(
+            self.robots["robot_0"].data.root_state_w[:, :3], self.robots["robot_0"].data.root_state_w[:, 3:7],
+            self.robots["robot_1"].data.root_pos_w
+        )
+        robot_0_other_block_pos, _ = subtract_frame_transforms(
+            self.robots["robot_0"].data.root_state_w[:, :3], self.robots["robot_0"].data.root_state_w[:, 3:7],
+            self.blocks["block_1"].data.root_pos_w
+        )
         robot_0_dist_center = torch.norm(
             self.robots["robot_0"].data.root_pos_w - self.scene.env_origins, dim=-1, keepdim=True
         )
         robot_0_vel = self.robots["robot_0"].data.root_lin_vel_b
 
-        robot_0_obs = torch.cat([robot_0_desired_pos, robot_0_dist_center, robot_0_vel, rcol], dim=1)
+        robot_0_obs = torch.cat([robot_0_desired_pos, robot_0_teammate_pos, robot_0_other_block_pos,\
+                                  robot_0_dist_center, robot_0_vel, rcol], dim=1)
 
         robot_1_desired_pos, _ = subtract_frame_transforms(
             self.robots["robot_1"].data.root_state_w[:, :3], self.robots["robot_1"].data.root_state_w[:, 3:7],
             self.blocks["block_1"].data.root_pos_w
+        )
+        robot_1_teammate_pos, _ = subtract_frame_transforms(
+            self.robots["robot_1"].data.root_state_w[:, :3], self.robots["robot_1"].data.root_state_w[:, 3:7],
+            self.robots["robot_0"].data.root_pos_w
+        )
+        robot_1_other_block_pos, _ = subtract_frame_transforms(
+            self.robots["robot_1"].data.root_state_w[:, :3], self.robots["robot_1"].data.root_state_w[:, 3:7],
+            self.blocks["block_0"].data.root_pos_w
         )
         robot_1_dist_center = torch.norm(
             self.robots["robot_1"].data.root_pos_w - self.scene.env_origins, dim=-1, keepdim=True
         )
         robot_1_vel = self.robots["robot_1"].data.root_lin_vel_b
 
-        robot_1_obs = torch.cat([robot_1_desired_pos, robot_1_dist_center, robot_1_vel, rcol], dim=1)
+        robot_1_obs = torch.cat([robot_1_desired_pos, robot_1_teammate_pos, robot_1_other_block_pos,\
+                                  robot_1_dist_center, robot_1_vel, rcol], dim=1)
+
 
         robot_0_obs = torch.nan_to_num(robot_0_obs, nan=0.0, posinf=1e6, neginf=-1e6)
         robot_1_obs = torch.nan_to_num(robot_1_obs, nan=0.0, posinf=1e6, neginf=-1e6)
@@ -322,8 +341,8 @@ class LeatherbackSumoMAStage1Env(DirectMARLEnv):
         robot0_out = out["robot_0"].to(torch.float32)
         robot1_out = out["robot_1"].to(torch.float32)
 
-        push_out_reward_team0 = (block0_out - robot0_out) * self.cfg.reward_scale
-        push_out_reward_team1 = (block1_out - robot1_out) * self.cfg.reward_scale
+        push_out_reward_team0 = (block0_out - robot0_out) * self.cfg.push_out_reward_scale
+        push_out_reward_team1 = (block1_out - robot1_out) * self.cfg.push_out_reward_scale
 
         # --- Rewards per team ---
         rewards_team0 = {
@@ -382,6 +401,9 @@ class LeatherbackSumoMAStage1Env(DirectMARLEnv):
         return dones, timeouts
 
     def _reset_idx(self, env_ids: torch.Tensor | None):
+
+        avg_episode_length = torch.mean(self.episode_length_buf[env_ids].to(torch.float32) + 1)
+
         if env_ids is None:
             env_ids = torch.arange(self.num_envs, device=self.device)
         super()._reset_idx(env_ids)
@@ -430,7 +452,7 @@ class LeatherbackSumoMAStage1Env(DirectMARLEnv):
         extras = dict()
         for key in self._episode_sums.keys():
             episodic_sum_avg = torch.mean(self._episode_sums[key][env_ids])
-            extras["Episode_Reward/"+key] = episodic_sum_avg / self.max_episode_length_s
+            extras["Episode_Reward/"+key] = episodic_sum_avg / avg_episode_length
             self._episode_sums[key][env_ids] = 0.0
 
         self.extras["log"] = dict()

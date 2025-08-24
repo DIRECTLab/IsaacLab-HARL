@@ -350,6 +350,7 @@ class AnymalCAdversarialSoccerEnv(DirectMARLEnv):
                 "feet_air_time",
                 "undesired_contacts",
                 "flat_orientation_l2",
+                "body_ground_contact",
             ]
         }
 
@@ -633,6 +634,12 @@ class AnymalCAdversarialSoccerEnv(DirectMARLEnv):
             # flat orientation
             flat_orientation = torch.sum(torch.square(self.robots[robot_id].data.projected_gravity_b[:, :2]), dim=1)
 
+            # --- Negative reward for touching the ground with the body (base) ---
+            # Check if the base is in contact with the ground
+            base_contact_forces = self.contact_sensors[robot_id].data.net_forces_w_history[:, :, self.base_ids[robot_id]]
+            base_contact = (torch.max(torch.norm(base_contact_forces, dim=-1), dim=1)[0] > 1.0)
+            base_contact_penalty = base_contact.float() * -2.0 * self.step_dt  # scale as needed
+
             rewards = {
                 "track_lin_vel_xy_exp": lin_vel_error_mapped * self.cfg.lin_vel_reward_scale * self.step_dt,
                 "track_ang_vel_z_exp": yaw_rate_error_mapped * self.cfg.yaw_rate_reward_scale * self.step_dt,
@@ -644,6 +651,7 @@ class AnymalCAdversarialSoccerEnv(DirectMARLEnv):
                 "feet_air_time": air_time * self.cfg.feet_air_time_reward_scale * self.step_dt,
                 "undesired_contacts": contacts * self.cfg.undesired_contact_reward_scale * self.step_dt,
                 "flat_orientation_l2": flat_orientation * self.cfg.flat_orientation_reward_scale * self.step_dt,
+                "body_ground_contact": base_contact_penalty.squeeze(-1),
             }
             reward = torch.sum(torch.stack(list(rewards.values())), dim=0)
             all_rewards[robot_id] = reward
@@ -652,7 +660,7 @@ class AnymalCAdversarialSoccerEnv(DirectMARLEnv):
                 self._episode_sums[key] += value
         # Group rewards by team
         rewards = {team: torch.stack([all_rewards[robot_id] for robot_id in robot_ids]).sum(dim=0)
-                   for team, robot_ids in self.cfg.teams.items()}
+                    for team, robot_ids in self.cfg.teams.items()}
         return rewards
 
     def _get_dones(self) -> tuple[dict, dict]:

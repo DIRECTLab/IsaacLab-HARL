@@ -48,6 +48,30 @@
                 "cwd": "${workspaceFolder}"
             },
             "problemMatcher": []
+        },
+        {
+            "label": "Run AnymalC Adversarial Soccer",
+            "type": "shell",
+            "command": "${command:python.interpreterPath}",
+            "args": [
+                "${workspaceFolder}/scripts/reinforcement_learning/harl/train.py",
+                "--video",
+                "--video_length", "600",
+                "--video_interval", "30_000",
+                "--num_envs", "3_000",
+                "--task", "Isaac-Multi-Agent-Flat-Anymal-C-Direct-Adversarial-Soccer-v0",
+                "--seed", "1",
+                "--save_interval", "5",
+                "--log_interval", "1",
+                "--exp_name", "anymalc_soccer_adversarial_sorted_headless",
+                "--num_env_steps", "10_000_000_000",
+                "--algorithm", "happo_adv",
+                "--headless"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "problemMatcher": []
         }
     ]
 }

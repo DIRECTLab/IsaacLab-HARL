@@ -10,7 +10,7 @@ import torch
 
 import isaaclab.envs.mdp as mdp
 import isaaclab.sim as sim_utils
-from isaaclab.utils.math import quat_rotate_inverse, quat_conjugate, quat_mul
+from isaaclab.utils.math import quat_rotate_inverse, quat_conjugate, subtract_frame_transforms
 from isaaclab.assets import Articulation, ArticulationCfg, RigidObject, RigidObjectCfg
 from isaaclab.envs import DirectMARLEnv, DirectMARLEnvCfg
 from isaaclab.managers import EventTermCfg as EventTerm
@@ -221,6 +221,7 @@ class AnymalCAdversarialSoccerEnvCfg(DirectMARLEnvCfg):
                 "team_1": 1, 
                 # "team_2": 1
                 }
+        self.padded_obs_buffer_add = 0
         self.team_robot_counts = team_robot_counts
         self.num_teams = len(team_robot_counts)
         self.possible_agents = []
@@ -242,12 +243,11 @@ class AnymalCAdversarialSoccerEnvCfg(DirectMARLEnvCfg):
                 # Calculate observation space dynamically
                 base_obs_dim = 48  # self state (13) + base_lin_vel (3) + base_ang_vel (3) + gravity_vec (3) + dof_pos (12) + dof_vel (12)]
                 num_total_robots = sum(team_robot_counts.values())
-                rel_pos_dim = num_total_robots * 3
-                rel_quat_dim = num_total_robots * 4
+                rel_T_dim = num_total_robots * 16  # rel_T is now flattened [num_total_robots * (pos 4 * quat 4) ]
                 # actions_dim = 12  # Only the current robot's actions
                 apposing_robots_mask_dim = num_total_robots
                 neighbor_id_dim = num_total_robots   # one-hot encoding of robot id
-                total_obs_dim = base_obs_dim + rel_pos_dim + rel_quat_dim + apposing_robots_mask_dim + neighbor_id_dim
+                total_obs_dim = base_obs_dim + rel_T_dim + apposing_robots_mask_dim + neighbor_id_dim
                 self.observation_spaces[robot_id] = total_obs_dim
                 # self.observation_spaces[robot_id] = base_obs_dim
                 self.state_spaces[robot_id] = 0
@@ -300,7 +300,7 @@ class AnymalCAdversarialSoccerEnvCfg(DirectMARLEnvCfg):
             ),
             debug_vis=False,
         )
-        self.scene = InteractiveSceneCfg(num_envs=1, env_spacing=16.0, replicate_physics=True)
+        self.scene = InteractiveSceneCfg(num_envs=1, env_spacing=7.0, replicate_physics=True)
 
         # reward scales (override from flat config)
         self.flat_orientation_reward_scale = 0.0
@@ -438,14 +438,20 @@ class AnymalCAdversarialSoccerEnv(DirectMARLEnv):
             # Ensure the reference robot is not in the other_robot_id_list
             filtered_other_robot_id_list = [r for r in other_robot_id_list if r != ref_robot_id]
             # Absolute states
-            ref_pos  = self.robots[ref_robot_id].data.root_pos_w            # [num_envs,3]
-            ref_quat = self.robots[ref_robot_id].data.root_quat_w           # [num_envs,4]
-            other_pos  = torch.stack([self.robots[r].data.root_pos_w  for r in filtered_other_robot_id_list], dim=1)  # [num_envs,num_others,3]
-            other_quat = torch.stack([self.robots[r].data.root_quat_w for r in filtered_other_robot_id_list], dim=1)  # [num_envs,num_others,4]
+            ref_pos  = self.robots[ref_robot_id].data.root_pos_w            # [num_envs, 3]
+            ref_quat = self.robots[ref_robot_id].data.root_quat_w           # [num_envs, 4]  (w, x, y, z)
 
-            # ----- include self (ID 0) so neighbor_ids has 0 and rel_* has a self row -----
-            all_pos  = torch.cat([ref_pos.unsqueeze(1),  other_pos],  dim=1)   # [num_envs,num_robots,3]
-            all_quat = torch.cat([ref_quat.unsqueeze(1), other_quat], dim=1)   # [num_envs,num_robots,4]
+            if len(filtered_other_robot_id_list) > 0:
+                other_pos  = torch.stack([self.robots[r].data.root_pos_w  for r in filtered_other_robot_id_list], dim=1)  # [num_envs, num_others, 3]
+                other_quat = torch.stack([self.robots[r].data.root_quat_w for r in filtered_other_robot_id_list], dim=1)  # [num_envs, num_others, 4]
+                # Include self at index 0
+                all_pos  = torch.cat([ref_pos.unsqueeze(1),  other_pos],  dim=1)  # [num_envs, num_robots, 3]
+                all_quat = torch.cat([ref_quat.unsqueeze(1), other_quat], dim=1)  # [num_envs, num_robots, 4]
+            else:
+                # Only the ref robot present
+                all_pos  = ref_pos.unsqueeze(1)                                  # [num_envs, 1, 3]
+                all_quat = ref_quat.unsqueeze(1)                                 # [num_envs, 1, 4]
+
             num_envs, num_robots = all_pos.shape[:2]
 
             # IDs: 0=self, 1..num_others map to filtered_other_robot_id_list order (stable across calls if list is stable)
@@ -462,11 +468,18 @@ class AnymalCAdversarialSoccerEnv(DirectMARLEnv):
             all_quat_sorted = torch.gather(all_quat, 1, idx4)                  # [num_envs,num_robots,4]
             neighbor_ids    = torch.gather(base_ids, 1, idx)                   # [num_envs,num_robots]
 
-            # Relative pose (self row becomes [0,0,0] and identity quat)
-            rel_pos  = quat_rotate_inverse(ref_quat.unsqueeze(1).expand(-1, num_robots, 4),
-                                        all_pos_sorted - ref_pos.unsqueeze(1))        # [num_envs,num_robots,3]
-            rel_quat = quat_mul(quat_conjugate(ref_quat).unsqueeze(1).expand(-1, num_robots, 4),
-                                all_quat_sorted)                                         # [num_envs,num_robots,4]
+            # Compute relative poses via subtract_frame_transforms (frame2 wrt frame1 = ref)
+            t01 = ref_pos.unsqueeze(1).expand(-1, num_robots, 3).reshape(-1, 3)  # ref wrt world
+            q01 = ref_quat.unsqueeze(1).expand(-1, num_robots, 4).reshape(-1, 4)
+            t02 = all_pos_sorted.reshape(-1, 3)                                   # others wrt world
+            q02 = all_quat_sorted.reshape(-1, 4)
+
+            rel_pos_flat, rel_quat_flat = subtract_frame_transforms(t01, q01, t02, q02)  # [N*R,3], [N*R,4]
+            rel_pos  = rel_pos_flat.view(num_envs, num_robots, 3)
+            rel_quat = rel_quat_flat.view(num_envs, num_robots, 4)  # (w, x, y, z)
+
+            # Pack into a single tensor per neighbor: [t, q] => [3 + 4 = 7]
+            rel_tq = torch.cat([rel_pos, rel_quat], dim=-1)                       # [num_envs, num_robots, 7]
 
             # Team mask (False for self), permuted the same way
             team_name = ref_robot_id.split("_robot_")[0]
@@ -476,10 +489,12 @@ class AnymalCAdversarialSoccerEnv(DirectMARLEnv):
             ).view(1, -1).expand(num_envs, -1)                                                  # [num_envs,num_robots, 1]
             team_mask = torch.gather(raw_mask, 1, idx)                                   # [num_envs,num_robots]
 
-            return rel_pos, rel_quat, team_mask, neighbor_ids
+            return rel_tq, team_mask, neighbor_ids
 
 
         robot_id_list = list(self.robots.keys())
+        # if self.padded_obs_buffer_add > 0:
+        #     robot_id_list = robot_id_list + ["fake_robot"] * self.padded_obs_buffer_add
         robot_id_to_idx = {rid: i for i, rid in enumerate(robot_id_list)}
         for team, robot_ids in self.cfg.teams.items():
             obs[team] = {}
@@ -492,9 +507,8 @@ class AnymalCAdversarialSoccerEnv(DirectMARLEnv):
                 joint_pos_delta = self.robots[robot_id].data.joint_pos - self.robots[robot_id].data.default_joint_pos # [num_envs,12]
                 joint_vel = self.robots[robot_id].data.joint_vel # [num_envs,12]
                 actions = self.actions[robot_id] # [num_envs,12]
-                rel_pos, rel_quat, apposing_robots_mask, neighbor_ids = get_relative_obs(robot_id, robot_id_list)  # [num_envs,num_robots,3], [num_envs,num_robots,4]
-                rel_pos = rel_pos.reshape(rel_pos.shape[0], -1)  # [num_envs,num_robots*3]
-                rel_quat = rel_quat.reshape(rel_quat.shape[0], -1) # [num_envs,num_robots*4]
+                rel_T, apposing_robots_mask, neighbor_ids = get_relative_obs(robot_id, robot_id_list)  # [num_envs,num_robots,4,4], [num_envs,num_robots], [num_envs,num_robots]
+                rel_T_flat = rel_T.reshape(rel_T.shape[0], -1)  # [num_envs, num_robots* 7]
                 apposing_robots_mask = apposing_robots_mask.reshape(apposing_robots_mask.shape[0], -1) # [num_envs,num_robots*num_teams]
                 neighbor_ids = neighbor_ids.reshape(neighbor_ids.shape[0], -1) # [num_envs,num_robots*num_teams]
                 
@@ -508,8 +522,7 @@ class AnymalCAdversarialSoccerEnv(DirectMARLEnv):
                         joint_pos_delta,          # [num_envs, 12]
                         joint_vel,                # [num_envs, 12]
                         actions,                  # [num_envs, 12]
-                        rel_pos,                  # [num_envs, num_robots*3]
-                        rel_quat,                 # [num_envs, num_robots*4]
+                        rel_T_flat,               # [num_envs, num_robots* len([tx, ty, tz, qw, qx, qy, qz])]
                         apposing_robots_mask,     # [num_envs, num_robots]
                         neighbor_ids,             # [num_envs, num_robots]
                     ],

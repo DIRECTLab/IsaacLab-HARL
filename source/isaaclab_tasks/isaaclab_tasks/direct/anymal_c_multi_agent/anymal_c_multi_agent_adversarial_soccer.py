@@ -776,7 +776,7 @@ class AnymalCAdversarialSoccerEnv(DirectMARLEnv):
             # Check if the base is in contact with the ground
             base_contact_forces = self.contact_sensors[robot_id].data.net_forces_w_history[:, :, self.base_ids[robot_id]]
             base_contact = (torch.max(torch.norm(base_contact_forces, dim=-1), dim=1)[0] > 1.0)
-            base_contact_penalty = base_contact.float() * -2.0 * self.step_dt  # scale as needed
+            base_contact_penalty = base_contact.float() * -5.0 * self.step_dt  # scale as needed
 
             rewards = {
                 "track_lin_vel_xy_exp": lin_vel_error_mapped * self.cfg.lin_vel_reward_scale * self.step_dt,

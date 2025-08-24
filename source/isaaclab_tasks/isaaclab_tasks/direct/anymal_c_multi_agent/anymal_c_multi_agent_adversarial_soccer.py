@@ -10,7 +10,7 @@ import torch
 
 import isaaclab.envs.mdp as mdp
 import isaaclab.sim as sim_utils
-from isaaclab.utils.math import quat_rotate_inverse, quat_conjugate, subtract_frame_transforms
+from isaaclab.utils.math import quat_rotate_inverse, quat_conjugate, quat_apply, subtract_frame_transforms
 from isaaclab.assets import Articulation, ArticulationCfg, RigidObject, RigidObjectCfg
 from isaaclab.envs import DirectMARLEnv, DirectMARLEnvCfg
 from isaaclab.managers import EventTermCfg as EventTerm
@@ -159,32 +159,35 @@ class EventCfg:
             )
 
 
-def define_markers() -> VisualizationMarkers:
+def define_markers_single() -> VisualizationMarkers:
+    arrow_usd = f"{ISAAC_NUCLEUS_DIR}/Props/UIElements/arrow_x.usd"  # (NO_Idea)
+
     marker_cfg = VisualizationMarkersCfg(
-        prim_path="/Visuals/myMarkers",
+        prim_path="/Visuals/combined_arrows",
         markers={
-            "sphere1": sim_utils.SphereCfg(
-                radius=0.1,
-                visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(0.8, 0.0, 0.0)),
+            "cmd_arrow": sim_utils.UsdFileCfg(
+                usd_path=arrow_usd,
+                scale=(1.0, 1.0, 1.0),
+                visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(0.95, 0.2, 0.2)),  # red
             ),
-            "sphere2": sim_utils.SphereCfg(
-                radius=0.1,
-                visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(0.0, 1.0, 1.0)),
+            "vel_arrow": sim_utils.UsdFileCfg(
+                usd_path=arrow_usd,
+                scale=(1.0, 1.0, 1.0),
+                visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(0.2, 0.35, 1.0)),  # blue
             ),
-            "arrow1": sim_utils.UsdFileCfg(
-                usd_path=f"{ISAAC_NUCLEUS_DIR}/Props/UIElements/arrow_x.usd",
-                scale=(0.1, 0.1, 1.0),
-                visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(0.8, 0.0, 0.0)),
+            "cmd_rot_arrow": sim_utils.UsdFileCfg(
+                usd_path=arrow_usd,
+                scale=(1.0, 1.0, 1.0),
+                visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(0.95, 0.7, 0.2)),  # orange/yellow
             ),
-            "arrow2": sim_utils.UsdFileCfg(
-                usd_path=f"{ISAAC_NUCLEUS_DIR}/Props/UIElements/arrow_x.usd",
-                scale=(0.1, 0.1, 1.0),
-                visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(0.0, 1.0, 1.0)),
+            "vel_rot_arrow": sim_utils.UsdFileCfg(
+                usd_path=arrow_usd,
+                scale=(1.0, 1.0, 1.0),
+                visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(0.2, 0.95, 0.4)),  # green
             ),
         },
     )
     return VisualizationMarkers(marker_cfg)
-
 # --- Team arrow marker utilities ---
 def get_n_colors(n):
     """Returns n visually distinct RGB colors as (r,g,b) tuples in [0,1]."""
@@ -197,7 +200,7 @@ def define_team_arrow_markers(num_teams):
     markers = {
         f"team_arrow_{i}": sim_utils.ConeCfg(
             radius=0.25,
-            height=-1.0,
+            height=-.50,
             visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=color),
         )
         for i, color in enumerate(colors)
@@ -359,8 +362,9 @@ class AnymalCAdversarialSoccerEnv(DirectMARLEnv):
         self.undesired_body_contact_ids = {}
 
         if self.debug:
-            self.my_visualizer = define_markers()
+
             self.team_arrow_visualizer = define_team_arrow_markers(self.cfg.num_teams)
+            self.arrows = define_markers_single()
 
         for robot_id, contact_sensor in self.contact_sensors.items():
             _base_id, _ = contact_sensor.find_bodies("base")
@@ -380,7 +384,7 @@ class AnymalCAdversarialSoccerEnv(DirectMARLEnv):
             for robot_id in self.cfg.teams[team]:
                 pos = self.robots[robot_id].data.root_pos_w  # (num_envs, 3)
                 arrow_pos = pos.clone()
-                arrow_pos[:, 2] += .7
+                arrow_pos[:, 2] += 1.0
                 marker_locations.append(arrow_pos)
                 q = torch.tensor([0.0, 0.0, 0.0, 0.0], device=pos.device).expand(pos.shape[0], 4)
                 marker_orientations.append(q)
@@ -398,7 +402,7 @@ class AnymalCAdversarialSoccerEnv(DirectMARLEnv):
         self.contact_sensors = {}
         self.height_scanners = {}
         if self.debug:
-            self.my_visualizer = define_markers()
+            self.my_visualizer = define_markers_single()
         for robot_id in self.cfg.possible_agents:
             self.robots[robot_id] = Articulation(getattr(self.cfg, robot_id))
             self.scene.articulations[robot_id] = self.robots[robot_id]
@@ -532,74 +536,125 @@ class AnymalCAdversarialSoccerEnv(DirectMARLEnv):
                 obs[team][robot_id] = obs_vec # [num_envs, obs_dim=48 + num_robots*9]
         return obs
 
-    def _draw_markers(self, command):
-        xy_commands = command.clone()
-        z_commands = xy_commands[:, 2].clone()
-        xy_commands[:, 2] = 0
+    def _draw_cmd_and_vel(self,
+                        gain_lin=3.0, min_len_lin=0.05, z_cmd=0.25, z_vel=0.30, thickness=0.1,
+                        gain_rot=2.0, min_len_rot=0.04, z_rot=0.5):
+        """
+        (single visualizer with two prototypes):
+        - marker_indices=0 -> 'cmd_arrow' (red)
+        - marker_indices=1 -> 'vel_arrow' (blue)
 
-        marker_ids = torch.concat(
-            [
-                0 * torch.zeros(2 * self._commands.shape[0]),
-                1 * torch.ones(self._commands.shape[0]),
-                2 * torch.ones(self._commands.shape[0]),
-                3 * torch.ones(self._commands.shape[0]),
-            ],
-            dim=0,
-        )
+        Draw per robot, per env:
+        1) Command XY arrow   (red)
+        2) Velocity XY arrow  (blue)
+        3) Command yaw arrow  (red, up for +yaw, down for -yaw)
+        4) Velocity yaw arrow (blue, up for +yaw, down for -yaw)
+        """
+        first_robot = next(iter(self.robots.values()))
+        N      = first_robot.data.root_pos_w.shape[0]
+        device = first_robot.data.root_pos_w.device
+        dtype  = first_robot.data.root_pos_w.dtype
 
-        # Use the first robot id from possible_agents (e.g., "team_0_robot_0")
-        first_robot_id = self.cfg.possible_agents[0]
-        robot_pos = self.robots[first_robot_id].data.root_pos_w.clone()
-        robot_yaw = self.robots[first_robot_id].data.root_ang_vel_b[:, 2].clone()
+        # Shared command in world (XY + yaw rate)
+        cmd_w = self._commands.to(device=device, dtype=dtype).clone()  # [N,3]
+        cmd_w[:, 2] = cmd_w[:, 2]  # yaw rate (rad/s), keep as-is
+        cmd_xy = cmd_w[:, :2]
+        omega_cmd = cmd_w[:, 2]                                        # [N]
 
-        scale1 = torch.ones((self._commands.shape[0], 3), device=self.device)
-        scale1[:, 0] = torch.abs(z_commands)
+        # Unit axes (batched) for angle-axis
+        z_axis = torch.zeros((N, 3), device=device, dtype=dtype); z_axis[:, 2] = 1.0  # +Z
+        y_axis = torch.zeros((N, 3), device=device, dtype=dtype); y_axis[:, 1] = 1.0  # +Y
 
-        scale2 = torch.ones((self._commands.shape[0], 3), device=self.device)
-        scale2[:, 0] = torch.abs(robot_yaw)
+        all_loc, all_ori, all_scl, all_idx = [], [], [], []
 
-        offset1 = torch.zeros((self._commands.shape[0], 3), device=self.device)
-        offset1[:, 1] = 0
+        for _, robot_ids in self.cfg.teams.items():
+            for rid in robot_ids:
+                pos_w  = self.robots[rid].data.root_pos_w.to(device=device, dtype=dtype)   # [N,3]
+                quat_w = self.robots[rid].data.root_quat_w.to(device=device, dtype=dtype)  # [N,4] (w,x,y,z)
 
-        offset2 = torch.zeros((self._commands.shape[0], 3), device=self.device)
-        offset2[:, 1] = 0
+                # Linear velocity in world (fallback body->world)
+                if hasattr(self.robots[rid].data, "root_lin_vel_w"):
+                    vel_w = self.robots[rid].data.root_lin_vel_w.to(device=device, dtype=dtype).clone()
+                else:
+                    v_b = self.robots[rid].data.root_lin_vel_b.to(device=device, dtype=dtype)
+                    vel_w = quat_apply(quat_w, v_b)
+                vel_w[:, 2] = 0.0
 
-        marker_scales = torch.concat(
-            [torch.ones((3 * self._commands.shape[0], 3), device=self.device), scale1, scale2], dim=0
-        )
+                # Angular velocity about world Z (fallback body->world then take z)
+                if hasattr(self.robots[rid].data, "root_ang_vel_w"):
+                    omega_w = self.robots[rid].data.root_ang_vel_w.to(device=device, dtype=dtype)  # [N,3]
+                else:
+                    # rotate ω_b to world via q v q*
+                    omega_b = self.robots[rid].data.root_ang_vel_b.to(device=device, dtype=dtype)  # [N,3]
+                    omega_w = quat_apply(quat_w, omega_b)
+                omega_world_z = omega_w[:, 2]  # [N]
 
-        marker_locations = torch.concat(
-            [
-                robot_pos,
-                robot_pos + xy_commands,
-                robot_pos + self.robots[first_robot_id].data.root_lin_vel_b,
-                robot_pos + offset1,
-                robot_pos + offset2,
-            ],
-            dim=0,
-        )
+                # ---------- 1) Command XY (index 0, red) ----------
+                len_cmd = (cmd_xy.pow(2).sum(-1).sqrt() * gain_lin).clamp_min(min_len_lin)
+                yaw_cmd = torch.atan2(cmd_xy[:, 1], cmd_xy[:, 0]).to(dtype)
+                q_cmd_xy = quat_from_angle_axis(yaw_cmd, z_axis)                  # yaw about +Z
+                p_cmd_xy = pos_w.clone(); p_cmd_xy[:, 2] += z_cmd
+                s_cmd_xy = torch.stack([len_cmd,
+                                        torch.full_like(len_cmd, thickness),
+                                        torch.full_like(len_cmd, thickness)], dim=-1)
+                idx_cmd_xy = torch.zeros(N, device=device, dtype=torch.long)
 
-        _90 = (-3.14 / 2) * torch.ones(self._commands.shape[0]).to(self.device)
+                # ---------- 2) Velocity XY (index 1, blue) ----------
+                v_xy   = vel_w[:, :2]
+                len_v  = (v_xy.pow(2).sum(-1).sqrt() * gain_lin).clamp_min(min_len_lin)
+                yaw_v  = torch.atan2(v_xy[:, 1], v_xy[:, 0]).to(dtype)
+                q_vel_xy = quat_from_angle_axis(yaw_v, z_axis)
+                p_vel_xy = pos_w.clone(); p_vel_xy[:, 2] += z_vel
+                s_vel_xy = torch.stack([len_v,
+                                        torch.full_like(len_v, thickness),
+                                        torch.full_like(len_v, thickness)], dim=-1)
+                idx_vel_xy = torch.ones(N, device=device, dtype=torch.long)
 
-        marker_orientations = quat_from_angle_axis(
-            torch.concat(
-                [
-                    torch.zeros(3 * self._commands.shape[0]).to(self.device),
-                    torch.sign(z_commands) * _90,
-                    torch.sign(robot_yaw) * _90,
-                ],
-                dim=0,
-            ),
-            torch.tensor([0.0, 1.0, 0.0], device=self.device),
-        )
+                # ---------- 3) Command yaw (index 0, red; up for +, down for -) ----------
+                len_cmd_yaw = (omega_cmd.abs() * gain_rot).clamp_min(min_len_rot)
+                # rotate +X to ±Z via ±π/2 about +Y
+                ang_cmd_yaw = torch.sign(omega_cmd).to(dtype) * (math.pi / 2)
+                q_cmd_yaw   = quat_from_angle_axis(ang_cmd_yaw, y_axis)          # up (+), down (-)
+                p_cmd_yaw   = pos_w.clone(); p_cmd_yaw[:, 2] += z_rot
+                s_cmd_yaw   = torch.stack([len_cmd_yaw,
+                                        torch.full_like(len_cmd_yaw, thickness),
+                                        torch.full_like(len_cmd_yaw, thickness)], dim=-1)
+                idx_cmd_yaw = torch.zeros(N, device=device, dtype=torch.long)
 
-        self.my_visualizer.visualize(
-            marker_locations, marker_orientations, scales=marker_scales, marker_indices=marker_ids
-        )
+                # ---------- 4) Velocity yaw (index 1, blue; up for +, down for -) ----------
+                len_vel_yaw = (omega_world_z.abs() * gain_rot).clamp_min(min_len_rot)
+                ang_vel_yaw = torch.sign(omega_world_z).to(dtype) * (math.pi / 2)
+                q_vel_yaw   = quat_from_angle_axis(ang_vel_yaw, y_axis)
+                p_vel_yaw   = pos_w.clone(); p_vel_yaw[:, 2] += (z_rot + 0.05)    # slight offset to avoid overlap
+                s_vel_yaw   = torch.stack([len_vel_yaw,
+                                        torch.full_like(len_vel_yaw, thickness),
+                                        torch.full_like(len_vel_yaw, thickness)], dim=-1)
+                idx_vel_yaw = torch.ones(N, device=device, dtype=torch.long)
+
+                # Append all four arrows (2 linear + 2 rotational)
+                all_loc.append(torch.cat([p_cmd_xy, p_vel_xy, p_cmd_yaw, p_vel_yaw], dim=0))
+                all_ori.append(torch.cat([q_cmd_xy, q_vel_xy, q_cmd_yaw, q_vel_yaw], dim=0))
+                all_scl.append(torch.cat([s_cmd_xy, s_vel_xy, s_cmd_yaw, s_vel_yaw], dim=0))
+                # Use marker indices: 0=cmd_arrow, 1=vel_arrow, 2=cmd_rot_arrow, 3=vel_rot_arrow
+                all_idx.append(torch.cat([
+                    torch.zeros(N, device=device, dtype=torch.long),      # cmd_arrow
+                    torch.ones(N, device=device, dtype=torch.long),       # vel_arrow
+                    torch.full((N,), 2, device=device, dtype=torch.long), # cmd_rot_arrow
+                    torch.full((N,), 3, device=device, dtype=torch.long)  # vel_rot_arrow
+                ], dim=0))
+
+        if all_loc:
+            self.arrows.visualize(
+                torch.cat(all_loc, dim=0),
+                torch.cat(all_ori, dim=0),
+                scales=torch.cat(all_scl, dim=0),
+                marker_indices=torch.cat(all_idx, dim=0),
+            )
 
     def _get_rewards(self) -> dict:
         if self.debug:
-            self._draw_markers(self._commands)
+            # self._draw_markers(self._commands)
+            self._draw_cmd_and_vel()
             self._draw_team_arrows()
         all_rewards = {}
         for robot_id in self.robots.keys():

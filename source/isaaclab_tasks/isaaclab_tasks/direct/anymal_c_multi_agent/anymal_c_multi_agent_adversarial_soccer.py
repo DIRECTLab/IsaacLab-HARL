@@ -221,7 +221,7 @@ class AnymalCAdversarialSoccerEnvCfg(DirectMARLEnvCfg):
                 "team_1": 1, 
                 # "team_2": 1
                 }
-        self.padded_obs_buffer_add = 0
+        self.padded_dummy_obs_buffer_add = 0
         self.team_robot_counts = team_robot_counts
         self.num_teams = len(team_robot_counts)
         self.possible_agents = []
@@ -243,11 +243,8 @@ class AnymalCAdversarialSoccerEnvCfg(DirectMARLEnvCfg):
                 # Calculate observation space dynamically
                 base_obs_dim = 48  # self state (13) + base_lin_vel (3) + base_ang_vel (3) + gravity_vec (3) + dof_pos (12) + dof_vel (12)]
                 num_total_robots = sum(team_robot_counts.values())
-                rel_T_dim = num_total_robots * 16  # rel_T is now flattened [num_total_robots * (pos 4 * quat 4) ]
-                # actions_dim = 12  # Only the current robot's actions
-                apposing_robots_mask_dim = num_total_robots
-                neighbor_id_dim = num_total_robots   # one-hot encoding of robot id
-                total_obs_dim = base_obs_dim + rel_T_dim + apposing_robots_mask_dim + neighbor_id_dim
+                rel_T_dim = (num_total_robots + self.padded_dummy_obs_buffer_add) * 9  # rel_T is [num_total_robots, 9] (7 pose + 1 team mask + 1 neighbor id)
+                total_obs_dim = base_obs_dim + rel_T_dim  # rel_T already includes team mask and neighbor id per robot
                 self.observation_spaces[robot_id] = total_obs_dim
                 # self.observation_spaces[robot_id] = base_obs_dim
                 self.state_spaces[robot_id] = 0
@@ -444,7 +441,7 @@ class AnymalCAdversarialSoccerEnv(DirectMARLEnv):
             if len(filtered_other_robot_id_list) > 0:
                 other_pos  = torch.stack([self.robots[r].data.root_pos_w  for r in filtered_other_robot_id_list], dim=1)  # [num_envs, num_others, 3]
                 other_quat = torch.stack([self.robots[r].data.root_quat_w for r in filtered_other_robot_id_list], dim=1)  # [num_envs, num_others, 4]
-                # Include self at index 0
+                # Include self at index 0 (unsorted)
                 all_pos  = torch.cat([ref_pos.unsqueeze(1),  other_pos],  dim=1)  # [num_envs, num_robots, 3]
                 all_quat = torch.cat([ref_quat.unsqueeze(1), other_quat], dim=1)  # [num_envs, num_robots, 4]
             else:
@@ -454,43 +451,48 @@ class AnymalCAdversarialSoccerEnv(DirectMARLEnv):
 
             num_envs, num_robots = all_pos.shape[:2]
 
-            # IDs: 0=self, 1..num_others map to filtered_other_robot_id_list order (stable across calls if list is stable)
-            base_ids = torch.arange(num_robots, device=all_pos.device).view(1, -1).expand(num_envs, -1)  # [num_envs,num_robots]
+            # Local IDs prior to sorting (0=self, 1..others)
+            base_ids = torch.arange(num_robots, device=all_pos.device).view(1, -1).expand(num_envs, -1)  # [num_envs, num_robots]
 
-            # Sort by squared distance to ref (no sqrt; same ordering)
-            d2  = ((all_pos - ref_pos.unsqueeze(1))**2).sum(dim=-1)            # [num_envs,num_robots]
-            idx = torch.argsort(d2, dim=1)                                     # [num_envs,num_robots]
-
-            # Apply the permutation to all per-robot tensors (use gather for batched reindex)
-            idx3 = idx.unsqueeze(-1).expand(-1, -1, 3)
-            idx4 = idx.unsqueeze(-1).expand(-1, -1, 4)
-            all_pos_sorted  = torch.gather(all_pos,  1, idx3)                  # [num_envs,num_robots,3]
-            all_quat_sorted = torch.gather(all_quat, 1, idx4)                  # [num_envs,num_robots,4]
-            neighbor_ids    = torch.gather(base_ids, 1, idx)                   # [num_envs,num_robots]
-
-            # Compute relative poses via subtract_frame_transforms (frame2 wrt frame1 = ref)
-            t01 = ref_pos.unsqueeze(1).expand(-1, num_robots, 3).reshape(-1, 3)  # ref wrt world
-            q01 = ref_quat.unsqueeze(1).expand(-1, num_robots, 4).reshape(-1, 4)
-            t02 = all_pos_sorted.reshape(-1, 3)                                   # others wrt world
-            q02 = all_quat_sorted.reshape(-1, 4)
+            # --- Compute relatives FIRST (unsorted) ---
+            t01 = ref_pos.unsqueeze(1).expand(-1, num_robots, 3).reshape(-1, 3)   # [num_envs*num_robots, 3]
+            q01 = ref_quat.unsqueeze(1).expand(-1, num_robots, 4).reshape(-1, 4)  # [num_envs*num_robots, 4]
+            t02 = all_pos.reshape(-1, 3)                                          # [num_envs*num_robots, 3]
+            q02 = all_quat.reshape(-1, 4)                                         # [num_envs*num_robots, 4]
 
             rel_pos_flat, rel_quat_flat = subtract_frame_transforms(t01, q01, t02, q02)  # [N*R,3], [N*R,4]
-            rel_pos  = rel_pos_flat.view(num_envs, num_robots, 3)
-            rel_quat = rel_quat_flat.view(num_envs, num_robots, 4)  # (w, x, y, z)
+            rel_pos  = rel_pos_flat.view(num_envs, num_robots, 3)                 # [num_envs, num_robots, 3]
+            rel_quat = rel_quat_flat.view(num_envs, num_robots, 4)                # [num_envs, num_robots, 4] (w,x,y,z)
+            rel_tq   = torch.cat([rel_pos, rel_quat], dim=-1)                     # [num_envs, num_robots, 7]
 
-            # Pack into a single tensor per neighbor: [t, q] => [3 + 4 = 7]
-            rel_tq = torch.cat([rel_pos, rel_quat], dim=-1)                       # [num_envs, num_robots, 7]
+            # --- Sort by distance in reference frame (equivalent to world) ---
+            d2  = (rel_pos ** 2).sum(dim=-1)                                      # [num_envs, num_robots]
+            idx = torch.argsort(d2, dim=1)                                        # [num_envs, num_robots]
 
-            # Team mask (False for self), permuted the same way
+            # Apply permutation to features and ids
+            idx7 = idx.unsqueeze(-1).expand(-1, -1, 7)
+            rel_tq_sorted = torch.gather(rel_tq, 1, idx7)                         # [num_envs, num_robots, 7]
+            neighbor_ids  = torch.gather(base_ids, 1, idx)                        # [num_envs, num_robots]
+
+            # Team mask (False for self), then permute
             team_name = ref_robot_id.split("_robot_")[0]
             raw_mask = torch.tensor(
                 [False] + [not rid.startswith(team_name) for rid in filtered_other_robot_id_list],
                 device=all_pos.device, dtype=torch.bool
-            ).view(1, -1).expand(num_envs, -1)                                                  # [num_envs,num_robots, 1]
-            team_mask = torch.gather(raw_mask, 1, idx)                                   # [num_envs,num_robots]
+            ).view(1, -1).expand(num_envs, -1)                                    # [num_envs, num_robots]
+            team_mask = torch.gather(raw_mask, 1, idx)                             # [num_envs, num_robots] (bool)
 
-            return rel_tq, team_mask, neighbor_ids
+            # Single per-robot row: [tx,ty,tz,qw,qx,qy,qz, team_mask(float), neighbor_id(float)]
+            rel_T = torch.cat(
+                [
+                    rel_tq_sorted,                                 # [num_envs, num_robots, 7]
+                    team_mask.unsqueeze(-1).to(rel_tq.dtype),      # [num_envs, num_robots, 1]
+                    neighbor_ids.unsqueeze(-1).to(rel_tq.dtype),   # [num_envs, num_robots, 1]
+                ],
+                dim=-1,
+            )  # -> [num_envs, num_robots, 9]
 
+            return rel_T  # [num_envs, num_robots, 9]
 
         robot_id_list = list(self.robots.keys())
         # if self.padded_obs_buffer_add > 0:
@@ -500,18 +502,17 @@ class AnymalCAdversarialSoccerEnv(DirectMARLEnv):
             obs[team] = {}
             for robot_id in robot_ids:
                 # Gather observation components for this robot
-                root_lin_vel_b = self.robots[robot_id].data.root_lin_vel_b # [num_envs,3]
-                root_ang_vel_b = self.robots[robot_id].data.root_ang_vel_b # [num_envs,3]
-                projected_gravity_b = self.robots[robot_id].data.projected_gravity_b # [num_envs,3]
-                commands = self._commands # [num_envs,3], shared command for all robots
-                joint_pos_delta = self.robots[robot_id].data.joint_pos - self.robots[robot_id].data.default_joint_pos # [num_envs,12]
-                joint_vel = self.robots[robot_id].data.joint_vel # [num_envs,12]
-                actions = self.actions[robot_id] # [num_envs,12]
-                rel_T, apposing_robots_mask, neighbor_ids = get_relative_obs(robot_id, robot_id_list)  # [num_envs,num_robots,4,4], [num_envs,num_robots], [num_envs,num_robots]
-                rel_T_flat = rel_T.reshape(rel_T.shape[0], -1)  # [num_envs, num_robots* 7]
-                apposing_robots_mask = apposing_robots_mask.reshape(apposing_robots_mask.shape[0], -1) # [num_envs,num_robots*num_teams]
-                neighbor_ids = neighbor_ids.reshape(neighbor_ids.shape[0], -1) # [num_envs,num_robots*num_teams]
-                
+                root_lin_vel_b = self.robots[robot_id].data.root_lin_vel_b # [num_envs, 3]
+                root_ang_vel_b = self.robots[robot_id].data.root_ang_vel_b # [num_envs, 3]
+                projected_gravity_b = self.robots[robot_id].data.projected_gravity_b # [num_envs, 3]
+                commands = self._commands # [num_envs, 3], shared command for all robots
+                joint_pos_delta = self.robots[robot_id].data.joint_pos - self.robots[robot_id].data.default_joint_pos # [num_envs, 12]
+                joint_vel = self.robots[robot_id].data.joint_vel # [num_envs, 12]
+                actions = self.actions[robot_id] # [num_envs, 12]
+
+                rel_T = get_relative_obs(robot_id, robot_id_list)  # [num_envs, num_robots, 9]
+                rel_T_flat = rel_T.reshape(rel_T.shape[0], -1)     # [num_envs, num_robots * 9]
+
                 # Concatenate all observation components
                 obs_vec = torch.cat(
                     [
@@ -522,13 +523,12 @@ class AnymalCAdversarialSoccerEnv(DirectMARLEnv):
                         joint_pos_delta,          # [num_envs, 12]
                         joint_vel,                # [num_envs, 12]
                         actions,                  # [num_envs, 12]
-                        rel_T_flat,               # [num_envs, num_robots* len([tx, ty, tz, qw, qx, qy, qz])]
-                        apposing_robots_mask,     # [num_envs, num_robots]
-                        neighbor_ids,             # [num_envs, num_robots]
+                        rel_T_flat,               # [num_envs, num_robots * 9] 
+                        # Note: (9 = [tx,ty,tz, qw,qx,qy,qz, team_mask, neighbor_id])
                     ],
                     dim=-1,
                 )
-                obs[team][robot_id] = obs_vec
+                obs[team][robot_id] = obs_vec # [num_envs, obs_dim=48 + num_robots*9]
         return obs
 
     def _draw_markers(self, command):

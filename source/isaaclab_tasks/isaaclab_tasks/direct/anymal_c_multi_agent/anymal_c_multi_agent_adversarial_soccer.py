@@ -33,7 +33,7 @@ from isaaclab.terrains.config.rough import ROUGH_TERRAINS_CFG  # isort: skip
 import math
 import colorsys
 
-def set_robot_spacing_and_rot(index, total, spacing_mode="linear", orientation_mode="linear",linear_range=4.0, circle_radius=2.0, grid_shape=(2,2), grid_spacing=(2.0,2.0)):
+def set_robot_spacing_and_rot(index, total, spacing_mode="linear", orientation_mode="linear",linear_range=7.0, circle_radius=2.0, grid_shape=(2,2), grid_spacing=(2.0,2.0)):
     """
     Returns (x, y, z) position for a robot given its index and total number of robots.
     spacing_mode: 'linear', 'circular', or 'grid'
@@ -91,17 +91,7 @@ def set_robot_spacing_and_rot(index, total, spacing_mode="linear", orientation_m
     if orientation_mode == "random":
         yaw = random.uniform(-math.pi, math.pi)
     elif orientation_mode == "face_center":
-        # Compute the center of all robots (assuming all at same z)
-        if spacing_mode == "linear":
-            center_y = 0.0
-            center = (0.0, center_y, 0.5)
-        elif spacing_mode == "circular":
-            center = (0.0, 0.0, 0.5)
-        elif spacing_mode == "grid":
-            rows, cols = grid_shape
-            center = (0.0, 0.0, 0.5)
-        else:
-            center = (0.0, 0.0, 0.5)
+        center = (0.0, 0.0, 0.5)
 
         dx = center[0] - pos[0]
         dy = center[1] - pos[1]
@@ -220,11 +210,11 @@ class AnymalCAdversarialSoccerEnvCfg(DirectMARLEnvCfg):
         # Default: 2 robots per team for 2 teams
         if team_robot_counts is None:
             team_robot_counts = {
-                "team_0": 2, 
-                "team_1": 1, 
+                "team_0": 3, 
+                "team_1": 5, 
                 # "team_2": 1
                 }
-        self.padded_dummy_obs_buffer_add = 0
+        self.max_neighbor_obs = 4  # Maximum number of other robots to include in observation (including teammates and adversaries)
         self.team_robot_counts = team_robot_counts
         self.num_teams = len(team_robot_counts)
         self.possible_agents = []
@@ -246,7 +236,7 @@ class AnymalCAdversarialSoccerEnvCfg(DirectMARLEnvCfg):
                 # Calculate observation space dynamically
                 base_obs_dim = 48  # self state (13) + base_lin_vel (3) + base_ang_vel (3) + gravity_vec (3) + dof_pos (12) + dof_vel (12)]
                 num_total_robots = sum(team_robot_counts.values())
-                rel_T_dim = (num_total_robots + self.padded_dummy_obs_buffer_add) * 9  # rel_T is [num_total_robots, 9] (7 pose + 1 team mask + 1 neighbor id)
+                rel_T_dim = min(self.max_neighbor_obs, num_total_robots) * 9  # rel_T is [max_neighbor_obs, 9] (7 pose + 1 team mask + 1 neighbor id)
                 total_obs_dim = base_obs_dim + rel_T_dim  # rel_T already includes team mask and neighbor id per robot
                 self.observation_spaces[robot_id] = total_obs_dim
                 # self.observation_spaces[robot_id] = base_obs_dim
@@ -495,6 +485,11 @@ class AnymalCAdversarialSoccerEnv(DirectMARLEnv):
                 ],
                 dim=-1,
             )  # -> [num_envs, num_robots, 9]
+
+            # use only up to max_neighbor_obs
+            max_dim = min(self.cfg.max_neighbor_obs, len(other_robot_id_list))
+            if max_dim > 0 and rel_T.shape[1] > max_dim:
+                rel_T = rel_T[:, :max_dim, :]  # [num_envs, max_neighbor_obs, 9] 
 
             return rel_T  # [num_envs, num_robots, 9]
 

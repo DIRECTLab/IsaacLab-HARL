@@ -6,19 +6,11 @@
 from __future__ import annotations
 
 import copy
-import math
-import colorsys
 import torch
 
 import isaaclab.envs.mdp as mdp
 import isaaclab.sim as sim_utils
-from isaaclab.utils.math import (
-    quat_rotate_inverse,
-    quat_conjugate,
-    quat_apply,
-    subtract_frame_transforms,
-    quat_from_angle_axis,
-)
+from isaaclab.utils.math import quat_rotate_inverse, quat_conjugate, quat_apply, subtract_frame_transforms
 from isaaclab.assets import Articulation, ArticulationCfg, RigidObject, RigidObjectCfg
 from isaaclab.envs import DirectMARLEnv, DirectMARLEnvCfg
 from isaaclab.managers import EventTermCfg as EventTerm
@@ -30,6 +22,7 @@ from isaaclab.sim import SimulationCfg
 from isaaclab.terrains import TerrainImporterCfg
 from isaaclab.utils import configclass
 from isaaclab.utils.assets import ISAAC_NUCLEUS_DIR
+from isaaclab.utils.math import quat_from_angle_axis
 
 ##
 # Pre-defined configs
@@ -37,21 +30,10 @@ from isaaclab.utils.assets import ISAAC_NUCLEUS_DIR
 from isaaclab_assets.robots.anymal import ANYMAL_C_CFG  # isort: skip
 from isaaclab.terrains.config.rough import ROUGH_TERRAINS_CFG  # isort: skip
 
+import math
+import colorsys
 
-# ----------------------------------------------------------------------------------------
-# Position & orientation helpers for initial robot placement
-# ----------------------------------------------------------------------------------------
-
-def set_robot_spacing_and_rot(
-    index,
-    total,
-    spacing_mode: str = "linear",
-    orientation_mode: str = "linear",
-    linear_range: float = 4.0,
-    circle_radius: float = 2.0,
-    grid_shape=(2, 2),
-    grid_spacing=(2.0, 2.0),
-):
+def set_robot_spacing_and_rot(index, total, spacing_mode="linear", orientation_mode="linear",linear_range=4.0, circle_radius=2.0, grid_shape=(2,2), grid_spacing=(2.0,2.0)):
     """
     Returns (x, y, z) position for a robot given its index and total number of robots.
     spacing_mode: 'linear', 'circular', or 'grid'
@@ -66,6 +48,7 @@ def set_robot_spacing_and_rot(
     orientation_mode: 'random' or 'face_center'
     """
     import random
+    from isaaclab.utils.math import quat_from_angle_axis
 
     # --- Position ---
     if spacing_mode == "linear":
@@ -88,7 +71,8 @@ def set_robot_spacing_and_rot(
         y = (row - (rows - 1) / 2) * dy
         pos = (x, y, 0.5)
     elif spacing_mode == "random":
-        # Divide the ring area into per-robot sectors to reduce collisions
+        # space the robots with in some distribution, but with spacing (w) from each other 
+        # Divide the area into non-overlapping sectors for each robot
         angle_sector = 2 * math.pi / total
         angle_start = index * angle_sector
         angle_end = angle_start + angle_sector
@@ -102,12 +86,23 @@ def set_robot_spacing_and_rot(
 
     else:
         raise ValueError(f"Unknown spacing_mode: {spacing_mode}")
-
-    # --- Orientation (yaw) ---
+    
+    # --- orientation ---
     if orientation_mode == "random":
         yaw = random.uniform(-math.pi, math.pi)
     elif orientation_mode == "face_center":
-        center = (0.0, 0.0, 0.5)
+        # Compute the center of all robots (assuming all at same z)
+        if spacing_mode == "linear":
+            center_y = 0.0
+            center = (0.0, center_y, 0.5)
+        elif spacing_mode == "circular":
+            center = (0.0, 0.0, 0.5)
+        elif spacing_mode == "grid":
+            rows, cols = grid_shape
+            center = (0.0, 0.0, 0.5)
+        else:
+            center = (0.0, 0.0, 0.5)
+
         dx = center[0] - pos[0]
         dy = center[1] - pos[1]
         yaw = math.atan2(dy, dx)
@@ -222,12 +217,6 @@ def define_team_arrow_markers(num_teams):
 class AnymalCAdversarialSoccerEnvCfg(DirectMARLEnvCfg):
     def __init__(self, team_robot_counts=None, *args, **kwargs):
         super().__init__(*args, **kwargs)
-
-        # Hard cap for number of relative robot slots included in the observation
-        self.max_rel_robots_in_obs = getattr(self, "max_rel_robots_in_obs", 8)
-        # How to pad if fewer real robots exist than the cap: "random" | "zeros"
-        self.dummy_pad_mode = getattr(self, "dummy_pad_mode", "random")
-
         # Default: 2 robots per team for 2 teams
         if team_robot_counts is None:
             team_robot_counts = {
@@ -235,7 +224,7 @@ class AnymalCAdversarialSoccerEnvCfg(DirectMARLEnvCfg):
                 "team_1": 1, 
                 # "team_2": 1
                 }
-        self.padded_dummy_obs_buffer_add = max(0, self.max_rel_robots_in_obs - max(team_robot_counts.values()) - 1)
+        self.padded_dummy_obs_buffer_add = 0
         self.team_robot_counts = team_robot_counts
         self.num_teams = len(team_robot_counts)
         self.possible_agents = []
@@ -260,8 +249,8 @@ class AnymalCAdversarialSoccerEnvCfg(DirectMARLEnvCfg):
                 rel_T_dim = (num_total_robots + self.padded_dummy_obs_buffer_add) * 9  # rel_T is [num_total_robots, 9] (7 pose + 1 team mask + 1 neighbor id)
                 total_obs_dim = base_obs_dim + rel_T_dim  # rel_T already includes team mask and neighbor id per robot
                 self.observation_spaces[robot_id] = total_obs_dim
+                # self.observation_spaces[robot_id] = base_obs_dim
                 self.state_spaces[robot_id] = 0
-
                 self.physics_material_scales[robot_id] = {
                     "static_friction_range": (0.7 + 0.02*robot_idx, 0.9 + 0.02*robot_idx),
                     "dynamic_friction_range": (0.5 + 0.01*robot_idx, 0.7 + 0.01*robot_idx),
@@ -440,67 +429,14 @@ class AnymalCAdversarialSoccerEnv(DirectMARLEnv):
     def _apply_action(self):
         for robot_id, robot in self.robots.items():
             robot.set_joint_position_target(self.processed_actions[robot_id])
-    def _ensure_dummy_cache(self):
-        cap = self.cfg.max_rel_robots_in_obs
-        R = len(self.robots)  # includes self
-        self._pad_per_obs = max(0, cap - R)
-        if self._pad_per_obs == 0:
-            self._dummy_rel_T_cache = None
-            return
-        # Allocate if missing or wrong shape
-        need_alloc = (
-            not hasattr(self, "_dummy_rel_T_cache")
-            or self._dummy_rel_T_cache.shape != (self.num_envs, self._pad_per_obs, 9)
-        )
-        if need_alloc:
-            self._dummy_rel_T_cache = torch.zeros(self.num_envs, self._pad_per_obs, 9, device=self.device)
 
-    def _sample_dummy_rel_T(self, n_envs: int, m_slots: int, *, device, dtype,
-                            r_range=(10.0, 30.0), z_height=0.50) -> torch.Tensor:
-        """Create [n_envs, m_slots, 9] dummy rows: [tx,ty,tz,qw,qx,qy,qz, team_mask, neighbor_id]."""
-        if m_slots == 0:
-            return torch.zeros((n_envs, 0, 9), device=device, dtype=dtype)
-
-        # Random polar position in XY
-        u = torch.rand((n_envs, m_slots, 2), device=device, dtype=dtype)
-        r = r_range[0] + (r_range[1] - r_range[0]) * u[..., 0]
-        ang = -math.pi + 2 * math.pi * u[..., 1]
-        tx = r * torch.cos(ang)
-        ty = r * torch.sin(ang)
-        tz = torch.full_like(tx, z_height)
-        t = torch.stack([tx, ty, tz], dim=-1)  # [N,M,3]
-
-        # Random yaw-only quaternion about +Z
-        yaw = -math.pi + 2 * math.pi * torch.rand((n_envs, m_slots), device=device, dtype=dtype)
-        half = 0.5 * yaw
-        qw = torch.cos(half)
-        qx = torch.zeros_like(qw)
-        qy = torch.zeros_like(qw)
-        qz = torch.sin(half)
-        q = torch.stack([qw, qx, qy, qz], dim=-1)  # [N,M,4]
-
-        # team_mask=1.0 (treat as opponent), neighbor_id=-1.0 sentinel
-        team_mask = torch.ones((n_envs, m_slots, 1), device=device, dtype=dtype)
-        # Create random unique neighbor ids in [real_robots, 1000)
-        num_real_robots = len(self.robots)
-        neighbor_id = torch.randint(num_real_robots, 1000, (n_envs, m_slots, 1), device=device, dtype=dtype)
-
-        return torch.cat([t, q, team_mask, neighbor_id], dim=-1)  # [N,M,9]
-
-    # ------------------------
-    # Observations
-    # ------------------------
     def _get_observations(self) -> dict:
         self.previous_actions = copy.deepcopy(self.actions)
         obs = {}
         # Compute neighbor obs for all robots (single call, efficient)
 
-        def get_relative_obs(ref_robot_id: str, other_robot_id_list: list[str], num_slots: int) -> torch.Tensor:
-            """
-            Returns [N, num_slots, 9] for the reference robot, sorted by distance (self included if present),
-            truncated to K=min(R, num_slots), and padded (random or zeros) to num_slots.
-            """
-            # Remove ref from candidate list if present (we will add self explicitly below)
+        def get_relative_obs(ref_robot_id, other_robot_id_list):
+            # Ensure the reference robot is not in the other_robot_id_list
             filtered_other_robot_id_list = [r for r in other_robot_id_list if r != ref_robot_id]
             # Absolute states
             ref_pos  = self.robots[ref_robot_id].data.root_pos_w            # [num_envs, 3]
@@ -551,36 +487,21 @@ class AnymalCAdversarialSoccerEnv(DirectMARLEnv):
             team_mask = torch.gather(raw_mask, 1, idx)                             # [num_envs, num_robots] (bool)
 
             # Single per-robot row: [tx,ty,tz,qw,qx,qy,qz, team_mask(float), neighbor_id(float)]
+            rel_T = torch.cat(
+                [
+                    rel_tq_sorted,                                 # [num_envs, num_robots, 7]
+                    team_mask.unsqueeze(-1).to(rel_tq.dtype),      # [num_envs, num_robots, 1]
+                    neighbor_ids.unsqueeze(-1).to(rel_tq.dtype),   # [num_envs, num_robots, 1]
+                ],
+                dim=-1,
+            )  # -> [num_envs, num_robots, 9]
 
-            # Keep K nearest
-            R = rel_tq_sorted.shape[1]
-            K = min(R, num_slots)
-            if num_slots == 0:
-                # No relative info requested
-                return torch.zeros((num_envs, 0, 9), device=rel_tq_sorted.device, dtype=rel_tq_sorted.dtype)
-
-            rel_tq_k = rel_tq_sorted[:, :K, :]  # [N,K,7]
-            team_mask_k = team_mask[:, :K].unsqueeze(-1).to(rel_tq_k.dtype)  # [N,K,1]
-            neighbor_ids_k = neighbor_ids[:, :K].unsqueeze(-1).to(rel_tq_k.dtype)  # [N,K,1]
-            kept = torch.cat([rel_tq_k, team_mask_k, neighbor_ids_k], dim=-1)  # [N,K,9]
-
-            if K == num_slots:
-                return kept  # [N,num_slots,9]
-
-            # Need padding
-            pad_count = num_slots - K
-            if pad_count > 0:
-                if self._dummy_rel_T_cache is not None:
-                    pad = self._dummy_rel_T_cache[:, :pad_count, :]  # stable across the episode
-                else:
-                    pad = torch.zeros((num_envs, pad_count, 9), device=kept.device, dtype=kept.dtype)
-                rel_T = torch.cat([kept, pad], dim=1)
-            else:
-                rel_T = kept
-                
-            return rel_T
+            return rel_T  # [num_envs, num_robots, 9]
 
         robot_id_list = list(self.robots.keys())
+        # if self.padded_obs_buffer_add > 0:
+        #     robot_id_list = robot_id_list + ["fake_robot"] * self.padded_obs_buffer_add
+        robot_id_to_idx = {rid: i for i, rid in enumerate(robot_id_list)}
         for team, robot_ids in self.cfg.teams.items():
             obs[team] = {}
             for robot_id in robot_ids:
@@ -589,15 +510,11 @@ class AnymalCAdversarialSoccerEnv(DirectMARLEnv):
                 root_ang_vel_b = self.robots[robot_id].data.root_ang_vel_b # [num_envs, 3]
                 projected_gravity_b = self.robots[robot_id].data.projected_gravity_b # [num_envs, 3]
                 commands = self._commands # [num_envs, 3], shared command for all robots
-                joint_pos_delta = (
-                    self.robots[robot_id].data.joint_pos - self.robots[robot_id].data.default_joint_pos
-                )  # [N,12]
+                joint_pos_delta = self.robots[robot_id].data.joint_pos - self.robots[robot_id].data.default_joint_pos # [num_envs, 12]
                 joint_vel = self.robots[robot_id].data.joint_vel # [num_envs, 12]
                 actions = self.actions[robot_id] # [num_envs, 12]
 
-                # Relative block with cap + padding
-                num_slots = self.cfg.max_rel_robots_in_obs
-                rel_T = get_relative_obs(robot_id, robot_id_list, num_slots)  # [num_envs, num_robots, 9]
+                rel_T = get_relative_obs(robot_id, robot_id_list)  # [num_envs, num_robots, 9]
                 rel_T_flat = rel_T.reshape(rel_T.shape[0], -1)     # [num_envs, num_robots * 9]
 
                 # Concatenate all observation components
@@ -831,18 +748,6 @@ class AnymalCAdversarialSoccerEnv(DirectMARLEnv):
             self.robots[robot_id].write_root_velocity_to_sim(default_root_state[:, 7:], env_ids)
             self.robots[robot_id].write_joint_state_to_sim(joint_pos, joint_vel, None, env_ids)
 
-        self._ensure_dummy_cache()
-        if self._dummy_rel_T_cache is not None:
-            if self.cfg.dummy_pad_mode == "zeros":
-                self._dummy_rel_T_cache[env_ids] = 0.0
-            else:
-                pad = self._sample_dummy_rel_T(
-                    n_envs=len(env_ids),
-                    m_slots=self._pad_per_obs,
-                    device=self.device,
-                    dtype=torch.float32,
-                )
-                self._dummy_rel_T_cache[env_ids] = pad
         # logging
         extras = {}
         for key in self._episode_sums.keys():

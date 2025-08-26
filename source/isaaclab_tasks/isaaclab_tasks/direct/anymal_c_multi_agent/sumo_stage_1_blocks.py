@@ -82,7 +82,7 @@ class SumoStage1BlocksEnvCfg(DirectMARLEnvCfg):
 
     # Observation: teammate (3) + opp1 (3) + opp2 (3) + rcol(1) + dist_center(1) + velocity(3)
     # = 14 per robot
-    observation_spaces = {f"robot_{i}": 48 for i in range(2)}
+    observation_spaces = {f"robot_{i}": 56 for i in range(2)}
 
     state_space = 0
     state_spaces = {f"robot_{i}": 0 for i in range(2)}
@@ -101,11 +101,11 @@ class SumoStage1BlocksEnvCfg(DirectMARLEnvCfg):
 
     robot_0: ArticulationCfg = ANYMAL_C_CFG.replace(prim_path="/World/envs/env_.*/Robot_0")
     robot_0.init_state.rot = get_quaternion_tuple_from_xyz(0,0,torch.pi/2)
-    robot_0.init_state.pos = (0.0, 1.0, 0.3)
+    robot_0.init_state.pos = (0.0, 1.0, 0.5)
 
     robot_1: ArticulationCfg = ANYMAL_C_CFG.replace(prim_path="/World/envs/env_.*/Robot_1")
     robot_1.init_state.rot = get_quaternion_tuple_from_xyz(0,0,torch.pi/2)
-    robot_1.init_state.pos = (0.0, -1.0, 0.3)
+    robot_1.init_state.pos = (0.0, -1.0, 0.5)
 
     contact_sensor_0: ContactSensorCfg = ContactSensorCfg(
         prim_path="/World/envs/env_.*/Robot_0/.*", history_length=3, update_period=0.005, track_air_time=True,
@@ -380,11 +380,11 @@ class SumoStage1BlocksEnv(DirectMARLEnv):
                 self.robots["robot_0"].data.joint_pos - self.robots["robot_0"].data.default_joint_pos,
                 self.robots["robot_0"].data.joint_vel,
                 self.actions["robot_0"],
-                # robot_0_teammate_pos,
+                robot_0_teammate_pos,
                 robot_0_desired_pos,
-                # robot_0_other_block_pos,
-                # robot_0_dist_center,
-                # rcol,
+                robot_0_other_block_pos,
+                robot_0_dist_center,
+                rcol,
                 # time_remaining
             ],
             dim=-1,
@@ -414,11 +414,11 @@ class SumoStage1BlocksEnv(DirectMARLEnv):
                 self.robots["robot_1"].data.joint_pos - self.robots["robot_1"].data.default_joint_pos,
                 self.robots["robot_1"].data.joint_vel,
                 self.actions["robot_1"],
-                # robot_1_teammate_pos,
+                robot_1_teammate_pos,
                 robot_1_desired_pos,
-                # robot_1_other_block_pos,
-                # robot_1_dist_center,
-                # rcol,
+                robot_1_other_block_pos,
+                robot_1_dist_center,
+                rcol,
                 # time_remaining
             ],
             dim=-1,

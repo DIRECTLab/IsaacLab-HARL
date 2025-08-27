@@ -71,20 +71,20 @@ class LeatherbackSumoMAStage2EnvCfg(DirectMARLEnvCfg):
         "Knuckle__Upright__Front_Left",
     ]
 
-    env_spacing = 10.0
-    scene: InteractiveSceneCfg = InteractiveSceneCfg(num_envs=4096, env_spacing=env_spacing, replicate_physics=True)
 
     throttle_scale = 10
     throttle_max = 50
     steering_scale = 0.1
     steering_max = 0.75
 
-    ring_radius_min = 1
-    ring_radius_max = 5
+    ring_radius_min = 3
+    ring_radius_max = 6
     reward_scale = 10
     # time penalty
     time_penalty = -0.01
 
+    env_spacing = 10.0
+    scene: InteractiveSceneCfg = InteractiveSceneCfg(num_envs=4096, env_spacing=ring_radius_max * 2, replicate_physics=True)
 
 class LeatherbackSumoMAStage2Env(DirectMARLEnv):
     cfg: LeatherbackSumoMAStage2EnvCfg
@@ -116,18 +116,6 @@ class LeatherbackSumoMAStage2Env(DirectMARLEnv):
         )
         self.ring_markers = VisualizationMarkers(ring_marker_cfg)
 
-        self._episode_sums = {
-            key: torch.zeros(self.num_envs, dtype=torch.float, device=self.device)
-            for key in [
-                "other_dist_from_center_reward",
-                "dist_to_other_robot_reward",
-                "other_dist_from_center",
-                "dist_to_other_robot",
-                "time_out_reward",
-                "push_out_reward"
-            ]
-        }
-
         team_dot_markers = {
             "blue": sim_utils.SphereCfg(
                 radius=0.08,
@@ -141,6 +129,15 @@ class LeatherbackSumoMAStage2Env(DirectMARLEnv):
         self.team_markers = VisualizationMarkers(
             VisualizationMarkersCfg(prim_path="/World/TeamDots", markers=team_dot_markers)
         )
+
+
+        self._episode_sums = {
+            key: torch.zeros(self.num_envs, dtype=torch.float, device=self.device)
+            for key in [
+                "team_0_push_out_reward",
+                "team_1_push_out_reward"
+            ]
+        }
 
 
     @torch.no_grad()
@@ -257,122 +254,72 @@ class LeatherbackSumoMAStage2Env(DirectMARLEnv):
 
     def _apply_action(self) -> None:
         for robot_id in self.robots.keys():
-            # self._throttle_state[robot_id] = -5*torch.ones_like(self._throttle_state[robot_id], device=self.device)
+            # self._throttle_state[robot_id] = torch.zeros_like(self._throttle_state[robot_id], device=self.device)
             self.robots[robot_id].set_joint_velocity_target(self._throttle_state[robot_id], joint_ids=self._throttle_dof_idx)
             self.robots[robot_id].set_joint_position_target(self._steering_state[robot_id], joint_ids=self._steering_dof_idx)
 
     def _get_observations(self) -> dict:
         obs = {}
-        for team_name, robots in self.cfg.teams.items():
-            team_obs = {}
-            for i, robot_id in enumerate(robots):
-                teammate_id = robots[1-i]
-                enemies = [r for r in self.robots.keys() if r not in robots]
+        rcol = self.ring_radius.view(-1, 1)
 
-                # relative positions
-                teammate_pos, _ = subtract_frame_transforms(
-                    self.robots[robot_id].data.root_state_w[:, :3],
-                    self.robots[robot_id].data.root_state_w[:, 3:7],
-                    self.robots[teammate_id].data.root_pos_w,
+        for i, (team, agents) in enumerate(self.cfg.teams.items()):
+            obs[team] = {}
+            for robot_id in agents:
+                teammate_id = [a for a in agents if a != robot_id][0]
+                enemy_team = [a for a in self.cfg.teams.keys() if a != team][0]
+                enemies = self.cfg.teams[enemy_team]
+
+                enemy_0_id = enemies[0]
+                enemy_1_id = enemies[1]
+
+                enemy_0_pos, _ = subtract_frame_transforms(
+                    self.robots[robot_id].data.root_state_w[:, :3], self.robots[robot_id].data.root_state_w[:, 3:7],
+                    self.robots[enemy_0_id].data.root_pos_w
                 )
-                enemy_pos = []
-                for enemy_id in enemies:
-                    epos, _ = subtract_frame_transforms(
-                        self.robots[robot_id].data.root_state_w[:, :3],
-                        self.robots[robot_id].data.root_state_w[:, 3:7],
-                        self.robots[enemy_id].data.root_pos_w,
-                    )
-                    enemy_pos.append(epos)
 
-                # center dist + vel
-                dist_center = torch.norm(self.robots[robot_id].data.root_pos_w - self.scene.env_origins, dim=-1, keepdim=True)
-                vel = self.robots[robot_id].data.root_lin_vel_b
-                rcol = self.ring_radius.view(-1,1)
+                teammate_pos, _ = subtract_frame_transforms(
+                    self.robots[robot_id].data.root_state_w[:, :3], self.robots[robot_id].data.root_state_w[:, 3:7],
+                    self.robots[teammate_id].data.root_pos_w
+                )
 
-                obs_vec = torch.cat([teammate_pos] + enemy_pos + [rcol, dist_center, vel], dim=1)
-                team_obs[robot_id] = obs_vec
-            obs[team_name] = team_obs
+                enemy_1_pos, _ = subtract_frame_transforms(
+                    self.robots[robot_id].data.root_state_w[:, :3], self.robots[robot_id].data.root_state_w[:, 3:7],
+                    self.robots[enemy_1_id].data.root_pos_w
+                )
+
+                dist_center = torch.norm(
+                    self.robots[robot_id].data.root_pos_w - self.scene.env_origins, dim=-1, keepdim=True
+                )
+
+                robot_vel = self.robots[robot_id].data.root_lin_vel_b
+
+                robot_obs = torch.cat([enemy_0_pos, teammate_pos, enemy_1_pos, dist_center, robot_vel, rcol], dim=1)
+                robot_obs = torch.nan_to_num(robot_obs, nan=0.0, posinf=1e6, neginf=-1e6)
+
+                obs[team][robot_id] = robot_obs
+
         return obs
     
     def _get_rewards(self) -> dict:
         self._draw_team_dots()
 
-        circle_centers = self.scene.env_origins
-
-        # --- Distances from center (per robot) ---
-        team0_dists = torch.stack([
-            torch.norm(self.robots["robot_0"].data.root_pos_w - circle_centers, dim=-1),
-            torch.norm(self.robots["robot_1"].data.root_pos_w - circle_centers, dim=-1),
-        ], dim=1)  # (E, 2)
-        team1_dists = torch.stack([
-            torch.norm(self.robots["robot_2"].data.root_pos_w - circle_centers, dim=-1),
-            torch.norm(self.robots["robot_3"].data.root_pos_w - circle_centers, dim=-1),
-        ], dim=1)  # (E, 2)
-
-        # Team averages
-        team0_avg_dist = team0_dists.mean(dim=1)  # (E,)
-        team1_avg_dist = team1_dists.mean(dim=1)  # (E,)
-
-        # Map through tanh like before
-        team0_avg_mapped = torch.tanh(team0_avg_dist / 0.8)
-        team1_avg_mapped = torch.tanh(team1_avg_dist / 0.8)
-
-        # --- Inter-team distances (average of pairwise) ---
-        team0_positions = torch.stack([
-            self.robots["robot_0"].data.root_pos_w,
-            self.robots["robot_1"].data.root_pos_w,
-        ], dim=1)  # (E, 2, 3)
-        team1_positions = torch.stack([
-            self.robots["robot_2"].data.root_pos_w,
-            self.robots["robot_3"].data.root_pos_w,
-        ], dim=1)  # (E, 2, 3)
-
-        # Compute all pairwise distances between robots of different teams
-        diff = team0_positions.unsqueeze(2) - team1_positions.unsqueeze(1)  # (E, 2, 2, 3)
-        pairwise_dists = torch.norm(diff, dim=-1)  # (E, 2, 2)
-        avg_team_dist = pairwise_dists.mean(dim=(1, 2))  # (E,)
-
-        # Map like before
-        avg_team_dist_mapped = 1 - torch.tanh(avg_team_dist / 0.8)
-
-        # --- Time penalty ---
-        time_penalty = self.cfg.time_penalty * torch.ones_like(avg_team_dist, device=self.device)
-
-        # --- Push out reward (adversarial) ---
         out = self._robots_out_of_ring()
         team0_out = torch.any(torch.stack([out["robot_0"], out["robot_1"]]), dim=0)
         team1_out = torch.any(torch.stack([out["robot_2"], out["robot_3"]]), dim=0)
 
         team0_lost = team0_out.to(torch.float32)
         team1_lost = team1_out.to(torch.float32)
-        push_out_reward_0 = (team1_lost - team0_lost) * self.cfg.reward_scale
-        push_out_reward_1 = (team0_lost - team1_lost) * self.cfg.reward_scale
+        time_out = (self.episode_length_buf >= self.max_episode_length - 1).to(torch.int8)
+        
+        push_out_reward_0 = (team1_lost - team0_lost - time_out) * self.cfg.reward_scale
+        push_out_reward_1 = (team0_lost - team1_lost - time_out) * self.cfg.reward_scale
 
-        # --- Combine rewards ---
-        rewards_team0 = (
-            (-team0_avg_mapped + team1_avg_mapped) * self.step_dt   # other team further
-            + (-avg_team_dist_mapped) * self.step_dt               # closer to opponents
-            + time_penalty
-            + push_out_reward_0
-        )
-        rewards_team1 = (
-            (-team1_avg_mapped + team0_avg_mapped) * self.step_dt
-            + (-avg_team_dist_mapped) * self.step_dt
-            + time_penalty
-            + push_out_reward_1
-        )
-
-        # Log components
-        self._episode_sums["other_dist_from_center_reward"] += (team1_avg_mapped - team0_avg_mapped) * self.step_dt
-        self._episode_sums["dist_to_other_robot_reward"] += avg_team_dist_mapped * self.step_dt
-        self._episode_sums["time_out_reward"] += time_penalty
-        self._episode_sums["push_out_reward"] += push_out_reward_0 + push_out_reward_1
-        self._episode_sums["other_dist_from_center"] = torch.cat([team0_avg_dist.unsqueeze(1), team1_avg_dist.unsqueeze(1)], dim=1).mean(dim=1)
-        self._episode_sums["dist_to_other_robot"] = avg_team_dist
+        self._episode_sums["team_0_push_out_reward"] += push_out_reward_0
+        self._episode_sums["team_1_push_out_reward"] += push_out_reward_1
 
         return {
-            "team_0": rewards_team0,
-            "team_1": rewards_team1,
+            "team_0": push_out_reward_0,
+            "team_1": push_out_reward_1,
         }
 
     def _robots_out_of_ring(self) -> dict[str, torch.Tensor]:
@@ -389,6 +336,9 @@ class LeatherbackSumoMAStage2Env(DirectMARLEnv):
         team0_out = torch.any(torch.stack([out_map["robot_0"], out_map["robot_1"]]), dim=0)
         team1_out = torch.any(torch.stack([out_map["robot_2"], out_map["robot_3"]]), dim=0)
 
+        self.team0_win = team1_out
+        self.team1_win = team0_out
+
         done = team0_out | team1_out
         dones = {team: done for team in self.cfg.teams.keys()}
 
@@ -397,6 +347,8 @@ class LeatherbackSumoMAStage2Env(DirectMARLEnv):
         return dones, timeouts
 
     def _reset_idx(self, env_ids: torch.Tensor | None):
+        avg_episode_length = torch.mean(self.episode_length_buf[env_ids].to(torch.float32) + 1)
+
         if env_ids is None:
             env_ids = torch.arange(self.num_envs, device=self.device)
         super()._reset_idx(env_ids)
@@ -414,61 +366,75 @@ class LeatherbackSumoMAStage2Env(DirectMARLEnv):
         origins = self.scene.env_origins[env_ids]  # (N, 3)
         N = env_ids.shape[0]
 
-        # Teams
-        team0 = ["robot_0", "robot_1"]
-        team1 = ["robot_2", "robot_3"]
-        all_teams = [team0, team1]
+        grid_offsets = self._sample_positions_grid(N, self.ring_radius[env_ids], self.num_robots)
 
-        # spacing for teammates
-        teammate_spacing = 0.5  # meters apart
+        for i, robot_id in enumerate(self.robots):
+            default_root_state = self.robots[robot_id].data.default_root_state[env_ids].clone()
+            default_root_state[:, :3] = origins
+            default_root_state[:, 0:2] += grid_offsets[:, i, 0:2]
+            self.robots[robot_id].write_root_pose_to_sim(default_root_state[:, :7], env_ids)
+            self.robots[robot_id].write_root_velocity_to_sim(default_root_state[:, 7:], env_ids)
 
-        for team in all_teams:
-            # sample a random base angle for the team
-            theta = 2.0 * torch.pi * torch.rand(N, device=self.device)
-            r = 0.5 * self.ring_radius[env_ids]  # place near half radius (inside ring)
-
-            # base position for team center
-            base_offsets = torch.zeros((N, 3), device=self.device)
-            base_offsets[:, 0] = r * torch.cos(theta)
-            base_offsets[:, 1] = r * torch.sin(theta)
-
-            # tangent direction (perpendicular to radial vector) for teammate spacing
-            tangent = torch.zeros((N, 2), device=self.device)
-            tangent[:, 0] = -torch.sin(theta)
-            tangent[:, 1] = torch.cos(theta)
-
-            # offsets for teammates
-            teammate_offsets = [
-                base_offsets.clone(),
-                base_offsets.clone()
-            ]
-            teammate_offsets[0][:, 0:2] += 0.5 * teammate_spacing * tangent
-            teammate_offsets[1][:, 0:2] -= 0.5 * teammate_spacing * tangent
-
-            # assign to robots
-            for robot_id, offsets in zip(team, teammate_offsets):
-                self.robots[robot_id].reset(env_ids)
-                self.actions[robot_id][env_ids] = 0.0
-
-                joint_pos = self.robots[robot_id].data.default_joint_pos[env_ids]
-                joint_vel = self.robots[robot_id].data.default_joint_vel[env_ids]
-                default_root_state = self.robots[robot_id].data.default_root_state[env_ids].clone()
-
-                default_root_state[:, :3] = origins
-                default_root_state[:, 0:2] += offsets[:, 0:2]
-                default_root_state[:, 2] += self.robots[robot_id].data.default_root_state[env_ids][:, 2]
-
-                self.robots[robot_id].write_root_pose_to_sim(default_root_state[:, :7], env_ids)
-                self.robots[robot_id].write_root_velocity_to_sim(default_root_state[:, 7:], env_ids)
-                self.robots[robot_id].write_joint_state_to_sim(joint_pos, joint_vel, None, env_ids)
-
-        # Draw markers & reset episode logs
         self._draw_ring_markers()
         self._draw_team_dots()
         extras = dict()
+        
+        if hasattr(self, "team0_win"):
+            extras["team0_win_percentage"] = (torch.count_nonzero(self.team0_win[env_ids]).item() / N) if N > 0 else 0
+            extras["team1_win_percentage"] = (torch.count_nonzero(self.team1_win[env_ids]).item() / N) if N > 0 else 0
+
         for key in self._episode_sums.keys():
             episodic_sum_avg = torch.mean(self._episode_sums[key][env_ids])
-            extras[key] = episodic_sum_avg / self.max_episode_length_s
+            extras["Episode_Reward/"+key] = episodic_sum_avg / avg_episode_length
             self._episode_sums[key][env_ids] = 0.0
+
         self.extras["log"] = dict()
         self.extras["log"].update(extras)
+
+
+    def _sample_positions_grid(self, N, radii, num_samples, min_dist=0.6, grid_spacing=0.5):
+        """
+        Sample positions from a grid inside the circle.
+
+        Args:
+            N: number of environments
+            radii: tensor of ring radii (N,)
+            num_samples: number of positions needed per environment
+            min_dist: minimum allowed spacing (still enforced between chosen grid spots)
+            grid_spacing: spacing between candidate grid points
+        Returns:
+            (N, num_samples, 3) tensor of sampled positions
+        """
+        device = radii.device
+        offsets = torch.zeros((N, num_samples, 3), device=device)
+
+        for i in range(N):
+            r = radii[i].item()
+
+            # Build grid within bounding square [-r, r]
+            xs = torch.arange(-r, r + grid_spacing, grid_spacing, device=device)
+            ys = torch.arange(-r, r + grid_spacing, grid_spacing, device=device)
+            grid_x, grid_y = torch.meshgrid(xs, ys, indexing="xy")
+            grid = torch.stack([grid_x.flatten(), grid_y.flatten()], dim=1)
+
+            # Keep only points inside circle
+            mask = torch.linalg.norm(grid, dim=1) < r
+            candidates = grid[mask]
+
+            # Shuffle candidates
+            perm = torch.randperm(candidates.shape[0], device=device)
+            candidates = candidates[perm]
+
+            chosen = []
+            for pt in candidates:
+                if len(chosen) == num_samples:
+                    break
+                if all(torch.norm(pt - c) >= min_dist for c in chosen):
+                    chosen.append(pt)
+
+            if len(chosen) < num_samples:
+                raise RuntimeError(f"Not enough valid grid positions for env {i}.")
+
+            offsets[i, :, 0:2] = torch.stack(chosen, dim=0)
+
+        return offsets

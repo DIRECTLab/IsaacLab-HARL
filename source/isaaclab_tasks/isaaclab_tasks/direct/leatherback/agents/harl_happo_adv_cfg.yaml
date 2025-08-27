@@ -117,9 +117,9 @@ algo:
   # whether to use a fixed optimisation order
   fixed_order: True
   # the training mode of the adversarial framework, choose from parallel, leapfrog, ladder
-  adversarial_training_mode: "leapfrog"
+  adversarial_training_mode: "ladder"
   # how often to alternate the training mode in the adversarial framework
-  adversarial_training_iterations: 50000000
+  adversarial_training_iterations: 10000000
 logger:
   # logging directory
   log_dir: "./results"

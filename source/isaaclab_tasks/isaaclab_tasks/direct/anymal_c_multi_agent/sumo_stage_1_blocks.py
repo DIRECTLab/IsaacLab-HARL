@@ -101,11 +101,11 @@ class SumoStage1BlocksEnvCfg(DirectMARLEnvCfg):
 
     robot_0: ArticulationCfg = ANYMAL_C_CFG.replace(prim_path="/World/envs/env_.*/Robot_0")
     robot_0.init_state.rot = get_quaternion_tuple_from_xyz(0,0,torch.pi/2)
-    robot_0.init_state.pos = (0.0, 1.0, 0.3)
+    robot_0.init_state.pos = (0.0, 1.0, 0.5)
 
     robot_1: ArticulationCfg = ANYMAL_C_CFG.replace(prim_path="/World/envs/env_.*/Robot_1")
     robot_1.init_state.rot = get_quaternion_tuple_from_xyz(0,0,torch.pi/2)
-    robot_1.init_state.pos = (0.0, -1.0, 0.3)
+    robot_1.init_state.pos = (0.0, -1.0, 0.5)
 
     contact_sensor_0: ContactSensorCfg = ContactSensorCfg(
         prim_path="/World/envs/env_.*/Robot_0/.*", history_length=3, update_period=0.005, track_air_time=True,
@@ -125,7 +125,7 @@ class SumoStage1BlocksEnvCfg(DirectMARLEnvCfg):
     # time penalty
     time_penalty = -0.01
     box_velocity_scale = 0.01
-    reached_goal_reward = 10.0
+    reached_goal_reward = 20.0
     dist_to_goal_reward_scale = 2.0
     lin_vel_reward_scale = 1.0
     yaw_rate_reward_scale = 0.5
@@ -566,11 +566,15 @@ class SumoStage1BlocksEnv(DirectMARLEnv):
 
         # Apply robot positions
         for i, robot_id in enumerate(self.robots):
+            self.robots[robot_id].reset(env_ids)
             default_root_state = self.robots[robot_id].data.default_root_state[env_ids].clone()
             default_root_state[:, :2] = origins[:, :2]
             default_root_state[:, 0:2] += robot_slots[:, i, 0:2]
+            joint_pos = self.robots[robot_id].data.default_joint_pos[env_ids]
+            joint_vel = self.robots[robot_id].data.default_joint_vel[env_ids]
             self.robots[robot_id].write_root_pose_to_sim(default_root_state[:, :7], env_ids)
             self.robots[robot_id].write_root_velocity_to_sim(default_root_state[:, 7:], env_ids)
+            self.robots[robot_id].write_joint_state_to_sim(joint_pos, joint_vel, None, env_ids)
 
         # Apply block positions
         for j, (block_id, block) in enumerate(self.blocks.items()):

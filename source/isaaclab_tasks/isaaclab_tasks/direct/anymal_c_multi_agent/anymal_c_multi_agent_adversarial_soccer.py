@@ -210,11 +210,11 @@ class AnymalCAdversarialSoccerEnvCfg(DirectMARLEnvCfg):
         # Default: 2 robots per team for 2 teams
         if team_robot_counts is None:
             team_robot_counts = {
-                "team_0": 3, 
-                "team_1": 5, 
+                "team_0": 2, 
+                "team_1": 2, 
                 # "team_2": 1
                 }
-        self.max_neighbor_obs = 4  # Maximum number of other robots to include in observation (including teammates and adversaries)
+        self.max_neighbor_obs = 3  # Maximum number of other robots to include in observation (including teammates and adversaries)
         self.team_robot_counts = team_robot_counts
         self.num_teams = len(team_robot_counts)
         self.possible_agents = []

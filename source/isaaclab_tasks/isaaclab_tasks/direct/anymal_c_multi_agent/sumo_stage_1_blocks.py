@@ -117,10 +117,10 @@ class SumoStage1BlocksEnvCfg(DirectMARLEnvCfg):
     env_spacing = 10.0
     scene: InteractiveSceneCfg = InteractiveSceneCfg(num_envs=4096, env_spacing=env_spacing, replicate_physics=True)
 
-    goal_reach_radius: float = 0.75          # within this distance counts as "reached"
+    goal_reach_radius: float = 1.0         # within this distance counts as "reached"
     action_scale = 0.5
-    ring_radius_min = 5
-    ring_radius_max = 7
+    ring_radius_min = 6
+    ring_radius_max = 8
     reward_scale = 10
     # time penalty
     time_penalty = -0.01

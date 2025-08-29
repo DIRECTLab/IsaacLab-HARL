@@ -24,6 +24,8 @@ parser.add_argument("--exp_name", type=str, default="test", help="Name of the Ex
 parser.add_argument("--num_env_steps", type=int, default=None, help="RL Policy training iterations.")
 parser.add_argument("--dir", type=str, default=None, help="folder with trained models")
 parser.add_argument("--debug", action="store_true", help="whether to run in debug mode for visualization")
+parser.add_argument("--adversarial_training_mode", choices=["parallel", "ladder", "leapfrog"], help="the mode type for adversarial training")
+parser.add_argument("--adversarial_training_iterations", type=int,help="the number of iterations to swap training for adversarial modes like ladder and leapfrog")
 
 parser.add_argument(
     "--algorithm",
@@ -87,6 +89,8 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     algo_args["train"]["model_dir"] = args["dir"]
     algo_args["seed"]["specify_seed"] = True
     algo_args["seed"]["seed"] = args["seed"]
+    algo_args["seed"]["adversarial_training_mode"] = args["adversarial_training_mode"]
+    algo_args["seed"]["adversarial_training_iterations"] = args["adversarial_training_iterations"]
 
     env_args = {}
     env_cfg.scene.num_envs = args["num_envs"]

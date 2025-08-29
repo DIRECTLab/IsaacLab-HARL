@@ -89,10 +89,10 @@ class LeatherbackSumoMAStage2EnvCfg(DirectMARLEnvCfg):
 class LeatherbackSumoMAStage2Env(DirectMARLEnv):
     cfg: LeatherbackSumoMAStage2EnvCfg
 
-    def __init__(self, cfg: LeatherbackSumoMAStage2EnvCfg, render_mode: str | None = None, headless: bool | None = None, **kwargs):
+    def __init__(self, cfg: LeatherbackSumoMAStage2EnvCfg, render_mode: str | None = None, headless: bool | None = None, debug: bool | None = False, **kwargs):
         super().__init__(cfg, render_mode, **kwargs)
         self.headless = headless
-        
+        self.debug = debug
         self._throttle_dof_idx, _ = self.robots["robot_0"].find_joints(self.cfg.throttle_dof_name)
         self._steering_dof_idx, _ = self.robots["robot_0"].find_joints(self.cfg.steering_dof_name)
 
@@ -307,12 +307,15 @@ class LeatherbackSumoMAStage2Env(DirectMARLEnv):
         team0_out = torch.any(torch.stack([out["robot_0"], out["robot_1"]]), dim=0)
         team1_out = torch.any(torch.stack([out["robot_2"], out["robot_3"]]), dim=0)
 
-        team0_lost = team0_out.to(torch.float32)
-        team1_lost = team1_out.to(torch.float32)
+        tie = torch.logical_and(team0_out, team1_out)
+        tie = 1 - tie.to(torch.int8)
+
+        team0_lost = team0_out.to(torch.int8)
+        team1_lost = team1_out.to(torch.int8)
         time_out = (self.episode_length_buf >= self.max_episode_length - 1).to(torch.int8)
         
-        push_out_reward_0 = (team1_lost - team0_lost - time_out) * self.cfg.reward_scale
-        push_out_reward_1 = (team0_lost - team1_lost - time_out) * self.cfg.reward_scale
+        push_out_reward_0 =  tie * (team1_lost - team0_lost - time_out) * self.cfg.reward_scale 
+        push_out_reward_1 = tie * (team0_lost - team1_lost - time_out) * self.cfg.reward_scale
 
         self._episode_sums["team_0_push_out_reward"] += push_out_reward_0
         self._episode_sums["team_1_push_out_reward"] += push_out_reward_1
@@ -336,9 +339,6 @@ class LeatherbackSumoMAStage2Env(DirectMARLEnv):
         team0_out = torch.any(torch.stack([out_map["robot_0"], out_map["robot_1"]]), dim=0)
         team1_out = torch.any(torch.stack([out_map["robot_2"], out_map["robot_3"]]), dim=0)
 
-        self.team0_win = team1_out
-        self.team1_win = team0_out
-
         done = team0_out | team1_out
         dones = {team: done for team in self.cfg.teams.keys()}
 
@@ -347,15 +347,22 @@ class LeatherbackSumoMAStage2Env(DirectMARLEnv):
         return dones, timeouts
 
     def _reset_idx(self, env_ids: torch.Tensor | None):
-        avg_episode_length = torch.mean(self.episode_length_buf[env_ids].to(torch.float32) + 1)
+        episode_lengths = self.episode_length_buf[env_ids].to(torch.float32) + 1
+        out_map = self._robots_out_of_ring()
+        N = env_ids.shape[0]
+
+        team0_out = torch.any(torch.stack([out_map["robot_0"], out_map["robot_1"]]), dim=0)
+        team1_out = torch.any(torch.stack([out_map["robot_2"], out_map["robot_3"]]), dim=0)
+        tot = torch.count_nonzero(team1_out[env_ids]).item() + torch.count_nonzero(team0_out[env_ids]).item()
 
         if env_ids is None:
             env_ids = torch.arange(self.num_envs, device=self.device)
         super()._reset_idx(env_ids)
 
         # spread out the updates
-        if len(env_ids) == self.num_envs:
-            self.episode_length_buf[:] = torch.randint_like(self.episode_length_buf, high=int(self.max_episode_length))
+        if not self.debug:
+            if len(env_ids) == self.num_envs:
+                self.episode_length_buf[:] = torch.randint_like(self.episode_length_buf, high=int(self.max_episode_length))
 
         # Randomize ring radius per env
         low, high = self.cfg.ring_radius_min, self.cfg.ring_radius_max
@@ -364,7 +371,6 @@ class LeatherbackSumoMAStage2Env(DirectMARLEnv):
         )
 
         origins = self.scene.env_origins[env_ids]  # (N, 3)
-        N = env_ids.shape[0]
 
         grid_offsets = self._sample_positions_grid(N, self.ring_radius[env_ids], self.num_robots)
 
@@ -379,13 +385,12 @@ class LeatherbackSumoMAStage2Env(DirectMARLEnv):
         self._draw_team_dots()
         extras = dict()
         
-        if hasattr(self, "team0_win"):
-            extras["team0_win_percentage"] = (torch.count_nonzero(self.team0_win[env_ids]).item() / N) if N > 0 else 0
-            extras["team1_win_percentage"] = (torch.count_nonzero(self.team1_win[env_ids]).item() / N) if N > 0 else 0
+        extras["team0_win_percentage"] = (torch.count_nonzero(team1_out[env_ids]).item() / N) if N > 0 else 0
+        extras["team1_win_percentage"] = (torch.count_nonzero(team0_out[env_ids]).item() / N) if N > 0 else 0
 
         for key in self._episode_sums.keys():
-            episodic_sum_avg = torch.mean(self._episode_sums[key][env_ids])
-            extras["Episode_Reward/"+key] = episodic_sum_avg / avg_episode_length
+            episodic_sum_avg = torch.mean(self._episode_sums[key][env_ids] / episode_lengths)
+            extras["Episode_Reward/"+key] = episodic_sum_avg
             self._episode_sums[key][env_ids] = 0.0
 
         self.extras["log"] = dict()

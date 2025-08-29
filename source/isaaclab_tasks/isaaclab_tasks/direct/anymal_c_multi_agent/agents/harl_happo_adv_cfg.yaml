@@ -23,6 +23,10 @@ train:
   log_interval: 5
   # evaluation interval
   eval_interval: 25
+  # whether to save checkpoints
+  save_checkpoints: False
+  # episodes per checkpoint
+  checkpoint_interval: 200
   # whether to use ValueNorm
   use_valuenorm: True
   # whether to use linear learning rate decay
@@ -32,7 +36,7 @@ train:
   # if set, load models from this directory; otherwise, randomly initialise the models
   model_dir: #
   # whether or not to save the entire model, or just the state dict
-  save_entire_model: True
+  save_entire_model: False
 eval:
   # whether to use evaluation
   use_eval: True

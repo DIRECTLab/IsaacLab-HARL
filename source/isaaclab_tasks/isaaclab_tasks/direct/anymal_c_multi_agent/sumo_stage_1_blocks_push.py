@@ -16,7 +16,6 @@ from isaaclab_assets.robots.leatherback import LEATHERBACK_CFG  # isort: skip
 from isaaclab_assets.robots.anymal import ANYMAL_C_CFG  # isort: skip
 from isaaclab.sensors import ContactSensor, ContactSensorCfg
 from isaaclab.markers import VisualizationMarkers, VisualizationMarkersCfg
-from isaaclab.terrains import TerrainImporterCfg
 from isaaclab.utils.math import subtract_frame_transforms
 from isaaclab.utils.math import quat_from_angle_axis, quat_from_euler_xyz
 
@@ -73,7 +72,7 @@ class EventCfg:
     )
 
 @configclass
-class SumoStage1BlocksEnvCfg(DirectMARLEnvCfg):
+class SumoStage1BlocksPushEnvCfg(DirectMARLEnvCfg):
     decimation = 4
     episode_length_s = 20.0
 
@@ -82,7 +81,7 @@ class SumoStage1BlocksEnvCfg(DirectMARLEnvCfg):
 
     # Observation: teammate (3) + opp1 (3) + opp2 (3) + rcol(1) + dist_center(1) + velocity(3)
     # = 14 per robot
-    observation_spaces = {f"robot_{i}": 48 for i in range(2)}
+    observation_spaces = {f"robot_{i}": 56 for i in range(2)}
 
     state_space = 0
     state_spaces = {f"robot_{i}": 0 for i in range(2)}
@@ -101,11 +100,11 @@ class SumoStage1BlocksEnvCfg(DirectMARLEnvCfg):
 
     robot_0: ArticulationCfg = ANYMAL_C_CFG.replace(prim_path="/World/envs/env_.*/Robot_0")
     robot_0.init_state.rot = get_quaternion_tuple_from_xyz(0,0,torch.pi/2)
-    robot_0.init_state.pos = (0.0, 1.0, 0.5)
+    robot_0.init_state.pos = (0.0, 1.0, 0.3)
 
     robot_1: ArticulationCfg = ANYMAL_C_CFG.replace(prim_path="/World/envs/env_.*/Robot_1")
     robot_1.init_state.rot = get_quaternion_tuple_from_xyz(0,0,torch.pi/2)
-    robot_1.init_state.pos = (0.0, -1.0, 0.5)
+    robot_1.init_state.pos = (0.0, -1.0, 0.3)
 
     contact_sensor_0: ContactSensorCfg = ContactSensorCfg(
         prim_path="/World/envs/env_.*/Robot_0/.*", history_length=3, update_period=0.005, track_air_time=True,
@@ -117,16 +116,13 @@ class SumoStage1BlocksEnvCfg(DirectMARLEnvCfg):
     env_spacing = 10.0
     scene: InteractiveSceneCfg = InteractiveSceneCfg(num_envs=4096, env_spacing=env_spacing, replicate_physics=True)
 
-    goal_reach_radius: float = 1.0         # within this distance counts as "reached"
     action_scale = 0.5
-    ring_radius_min = 6
-    ring_radius_max = 8
+    ring_radius_min = 2
+    ring_radius_max = 5.5
     reward_scale = 10
     # time penalty
     time_penalty = -0.01
     box_velocity_scale = 0.01
-    reached_goal_reward = 40.0
-    dist_to_goal_reward_scale = 2.0
     lin_vel_reward_scale = 1.0
     yaw_rate_reward_scale = 0.5
     z_vel_reward_scale = -2.0
@@ -141,9 +137,9 @@ class SumoStage1BlocksEnvCfg(DirectMARLEnvCfg):
     block_0 = RigidObjectCfg(
         prim_path="/World/envs/env_.*/block_0",
         spawn=sim_utils.CuboidCfg(
-            size=(.25,.25,.25),
+            size=(.4,.4,.4),
             rigid_props=sim_utils.RigidBodyPropertiesCfg(),
-            mass_props=sim_utils.MassPropertiesCfg(mass=0.01),  # changed from 1.0 to 0.5
+            mass_props=sim_utils.MassPropertiesCfg(mass=10.0),
             collision_props=sim_utils.CollisionPropertiesCfg(),
             visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(0.0, 1.0, 0.0)),
         ),
@@ -156,9 +152,9 @@ class SumoStage1BlocksEnvCfg(DirectMARLEnvCfg):
     block_1 = RigidObjectCfg(
         prim_path="/World/envs/env_.*/block_1",
         spawn=sim_utils.CuboidCfg(
-            size=(.25,.25,.25),
+            size=(.4,.4,.4),
             rigid_props=sim_utils.RigidBodyPropertiesCfg(),
-            mass_props=sim_utils.MassPropertiesCfg(mass=0.01),  # changed from 1.0 to 0.5
+            mass_props=sim_utils.MassPropertiesCfg(mass=10.0),
             collision_props=sim_utils.CollisionPropertiesCfg(),
             visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(0.0, 1.0, 0.0)),
         ),
@@ -168,10 +164,10 @@ class SumoStage1BlocksEnvCfg(DirectMARLEnvCfg):
     )
 
 
-class SumoStage1BlocksEnv(DirectMARLEnv):
-    cfg: SumoStage1BlocksEnvCfg
+class SumoStage1BlocksPushEnv(DirectMARLEnv):
+    cfg: SumoStage1BlocksPushEnvCfg
 
-    def __init__(self, cfg: SumoStage1BlocksEnvCfg, render_mode: str | None = None, headless: bool | None = None, **kwargs):
+    def __init__(self, cfg: SumoStage1BlocksPushEnvCfg, render_mode: str | None = None, headless: bool | None = None, **kwargs):
         super().__init__(cfg, render_mode, **kwargs)
         self.headless = headless
         
@@ -200,8 +196,6 @@ class SumoStage1BlocksEnv(DirectMARLEnv):
             key: torch.zeros(self.num_envs, dtype=torch.float, device=self.device)
             for key in [
                 # Team 0
-                "team_0_goal_reached",
-                "team_0_distance_to_goal",
                 "team_0_lin_vel_z_l2",
                 "team_0_ang_vel_xy_l2",
                 "team_0_dof_torques_l2",
@@ -210,14 +204,12 @@ class SumoStage1BlocksEnv(DirectMARLEnv):
                 "team_0_feet_air_time",
                 "team_0_undesired_contacts",
                 "team_0_flat_orientation_l2",
-                # "team_0_block0_center_reward",
-                # "team_0_dist_r0_b0_reward",
+                "team_0_block0_center_reward",
+                "team_0_dist_r0_b0_reward",
                 # "team_0_time_penalty",
-                # "team_0_push_out_reward",
+                "team_0_push_out_reward",
 
                 # Team 1
-                "team_1_goal_reached",
-                "team_1_distance_to_goal",
                 "team_1_lin_vel_z_l2",
                 "team_1_ang_vel_xy_l2",
                 "team_1_dof_torques_l2",
@@ -226,10 +218,10 @@ class SumoStage1BlocksEnv(DirectMARLEnv):
                 "team_1_feet_air_time",
                 "team_1_undesired_contacts",
                 "team_1_flat_orientation_l2",
-                # "team_1_block1_center_reward",
-                # "team_1_dist_r1_b1_reward",
+                "team_1_block1_center_reward",
+                "team_1_dist_r1_b1_reward",
                 # "team_1_time_penalty",
-                # "team_1_push_out_reward",
+                "team_1_push_out_reward",
             ]
         }
 
@@ -380,11 +372,11 @@ class SumoStage1BlocksEnv(DirectMARLEnv):
                 self.robots["robot_0"].data.joint_pos - self.robots["robot_0"].data.default_joint_pos,
                 self.robots["robot_0"].data.joint_vel,
                 self.actions["robot_0"],
-                # robot_0_teammate_pos,
                 robot_0_desired_pos,
-                # robot_0_other_block_pos,
-                # robot_0_dist_center,
-                # rcol,
+                robot_0_teammate_pos,
+                robot_0_other_block_pos,
+                robot_0_dist_center,
+                rcol,
                 # time_remaining
             ],
             dim=-1,
@@ -414,11 +406,11 @@ class SumoStage1BlocksEnv(DirectMARLEnv):
                 self.robots["robot_1"].data.joint_pos - self.robots["robot_1"].data.default_joint_pos,
                 self.robots["robot_1"].data.joint_vel,
                 self.actions["robot_1"],
-                # robot_1_teammate_pos,
                 robot_1_desired_pos,
-                # robot_1_other_block_pos,
-                # robot_1_dist_center,
-                # rcol,
+                robot_1_teammate_pos,
+                robot_1_other_block_pos,
+                robot_1_dist_center,
+                rcol,
                 # time_remaining
             ],
             dim=-1,
@@ -431,16 +423,41 @@ class SumoStage1BlocksEnv(DirectMARLEnv):
     
     def _get_rewards(self) -> dict:
         circle_centers = self.scene.env_origins
-        reach_r = self.cfg.goal_reach_radius
+
+        # --- Distance of each block from center ---
+        block0_dist = torch.norm(self.blocks["block_0"].data.root_pos_w - circle_centers, dim=-1)
+        block1_dist = torch.norm(self.blocks["block_1"].data.root_pos_w - circle_centers, dim=-1)
+
+        block0_center_mapped = torch.tanh(block0_dist / self.cfg.ring_radius_max)
+        block1_center_mapped = torch.tanh(block1_dist / self.cfg.ring_radius_max)
+
+        # --- Distances robot<->its block ---
+        robot0_pos = self.robots["robot_0"].data.root_pos_w
+        robot1_pos = self.robots["robot_1"].data.root_pos_w
+        block0_pos = self.blocks["block_0"].data.root_pos_w
+        block1_pos = self.blocks["block_1"].data.root_pos_w
+
+        dist_r0_b0 = torch.norm(robot0_pos - block0_pos, dim=-1)
+        dist_r1_b1 = torch.norm(robot1_pos - block1_pos, dim=-1)
+
+        dist_r0_b0_mapped = 1 - torch.tanh(dist_r0_b0 / self.cfg.ring_radius_max)
+        dist_r1_b1_mapped = 1 - torch.tanh(dist_r1_b1 / self.cfg.ring_radius_max)
+
+        # --- Time penalty (shared) ---
+        time_penalty = self.cfg.time_penalty * torch.ones_like(block0_dist, device=self.device)
+
+        out = self._robots_out_of_ring()
+        block0_out = out["block_0"].to(torch.float32)
+        block1_out = out["block_1"].to(torch.float32)
+        robot0_out = out["robot_0"].to(torch.float32)
+        robot1_out = out["robot_1"].to(torch.float32)
+
+        push_out_reward_team0 = (block0_out - robot0_out) * self.cfg.reward_scale
+        push_out_reward_team1 = (block1_out - robot1_out) * self.cfg.reward_scale
 
         all_rewards = {}
 
-        for i, robot_id in enumerate(self.robots.keys()):
-            robot_pos = self.robots[f"robot_{i}"].data.root_pos_w
-            block_pos = self.blocks[f"block_{i}"].data.root_pos_w
-            distance_to_block = torch.norm(robot_pos - block_pos, dim=-1)
-            distance_reward = 1 - torch.tanh(distance_to_block / self.cfg.ring_radius_max)
-            hit = distance_to_block <= reach_r
+        for robot_id in self.robots.keys():
             # z velocity tracking
             z_vel_error = torch.square(self.robots[robot_id].data.root_lin_vel_b[:, 2])
             # angular velocity x/y
@@ -465,8 +482,6 @@ class SumoStage1BlocksEnv(DirectMARLEnv):
             flat_orientation = torch.sum(torch.square(self.robots[robot_id].data.projected_gravity_b[:, :2]), dim=1)
 
             rewards = {
-                "goal_reached": hit.float() * self.cfg.reached_goal_reward,
-                "distance_to_goal": distance_reward * self.cfg.dist_to_goal_reward_scale * self.step_dt,
                 "lin_vel_z_l2": z_vel_error * self.cfg.z_vel_reward_scale * self.step_dt,
                 "ang_vel_xy_l2": ang_vel_error * self.cfg.ang_vel_reward_scale * self.step_dt,
                 "dof_torques_l2": joint_torques * self.cfg.joint_torque_reward_scale * self.step_dt,
@@ -480,8 +495,22 @@ class SumoStage1BlocksEnv(DirectMARLEnv):
             all_rewards[robot_id] = rewards
 
         # --- Rewards per team ---
-        rewards_team0 = all_rewards["robot_0"]
-        rewards_team1 = all_rewards["robot_1"]
+        rewards_team0 = {
+            "block0_center_reward": block0_center_mapped * self.step_dt,
+            "dist_r0_b0_reward": dist_r0_b0_mapped * self.step_dt,
+            # "time_penalty": time_penalty,
+            "push_out_reward": push_out_reward_team0,
+        }
+        rewards_team0.update(all_rewards["robot_0"])
+
+        rewards_team1 = {
+            "block1_center_reward": block1_center_mapped * self.step_dt,
+            "dist_r1_b1_reward": dist_r1_b1_mapped * self.step_dt,
+            # "time_penalty": time_penalty,
+            "push_out_reward": push_out_reward_team1,
+        }
+        rewards_team1.update(all_rewards["robot_1"])
+
 
         # Sum per team
         reward_team0 = torch.sum(torch.stack(list(rewards_team0.values())), dim=0)
@@ -513,24 +542,18 @@ class SumoStage1BlocksEnv(DirectMARLEnv):
         return out
 
     def _get_dones(self) -> tuple[dict, dict]:
-        reach_r = self.cfg.goal_reach_radius
-        any_robot_reached = torch.zeros(self.num_envs, dtype=torch.bool, device=self.device)
-        any_robot_died = torch.zeros(self.num_envs, dtype=torch.bool, device=self.device)
-
-        for i, (robot_id, robot) in enumerate(self.robots.items()):
-            blocks_xy = self.blocks[f"block_{i}"].data.root_pos_w[:, :2]
+        out_map = self._robots_out_of_ring()
+        team0_out = torch.any(torch.stack([out_map["robot_0"], out_map["robot_1"]]), dim=0)
+        team1_out = torch.any(torch.stack([out_map["block_0"], out_map["block_1"]]), dim=0)
+        fallen = torch.zeros(self.num_envs, dtype=torch.bool, device=self.device)
+        for robot_id, robot in self.robots.items():
             net_contact_forces = self.contact_sensors[robot_id].data.net_forces_w_history
             died = torch.any(torch.max(torch.norm(net_contact_forces[:, :, self.base_ids[robot_id]], dim=-1), dim=1)[0] > 1.0, dim=1)
-            # robot base XY: (N, 2)
-            robot_xy = robot.data.root_pos_w[:, :2]
-            # pairwise dists to both goals: (N, 2)
-            dists = torch.norm(blocks_xy - robot_xy, dim=-1)
-            # did this robot hit any goal? (N,)
-            hit = (dists <= reach_r)
-            any_robot_reached |= hit
-            any_robot_died |= died
+            died = robot.data.root_com_pos_w[:, 2] < .17
+            fallen |= died
 
-        dones = {team: torch.logical_or(any_robot_died.clone(), any_robot_reached.clone()) for team in self.cfg.teams.keys()}
+        done = team0_out | team1_out | fallen
+        dones = {team: done for team in self.cfg.teams.keys()}
 
         time_out = self.episode_length_buf >= self.max_episode_length - 1
         timeouts = {team: time_out for team in self.cfg.teams.keys()}
@@ -567,12 +590,14 @@ class SumoStage1BlocksEnv(DirectMARLEnv):
 
         # Apply robot positions
         for i, robot_id in enumerate(self.robots):
+
+            # Reset robot state
             self.robots[robot_id].reset(env_ids)
+            joint_pos = self.robots[robot_id].data.default_joint_pos[env_ids]
+            joint_vel = self.robots[robot_id].data.default_joint_vel[env_ids]
             default_root_state = self.robots[robot_id].data.default_root_state[env_ids].clone()
             default_root_state[:, :2] = origins[:, :2]
             default_root_state[:, 0:2] += robot_slots[:, i, 0:2]
-            joint_pos = self.robots[robot_id].data.default_joint_pos[env_ids]
-            joint_vel = self.robots[robot_id].data.default_joint_vel[env_ids]
             self.robots[robot_id].write_root_pose_to_sim(default_root_state[:, :7], env_ids)
             self.robots[robot_id].write_root_velocity_to_sim(default_root_state[:, 7:], env_ids)
             self.robots[robot_id].write_joint_state_to_sim(joint_pos, joint_vel, None, env_ids)

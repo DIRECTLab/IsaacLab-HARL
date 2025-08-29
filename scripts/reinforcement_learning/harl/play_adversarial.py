@@ -10,8 +10,9 @@ import argparse
 # import numpy as np
 import sys
 import torch
-
+from tqdm import tqdm
 from isaaclab.app import AppLauncher
+import pprint
 
 parser = argparse.ArgumentParser(description="Train an RL agent with HARL.")
 parser.add_argument(
@@ -84,7 +85,7 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     env_args["video_settings"] = {}
     env_args["video_settings"]["video"] = False
     env_args["headless"] = args["headless"]
-    env_args["debug"] = args["debug"]
+    env_args["debug"] = True
 
     # create runner
     runner = RUNNER_REGISTRY[args["algo"]](args, algo_args, env_args)
@@ -116,7 +117,9 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
         (args["num_envs"], runner.num_agents, 1),
         dtype=torch.float32,
     )
-
+    log_infos = {}
+    envs_completed = 0
+    pbar = tqdm(total=args["num_env_steps"], desc="Playing")
     while simulation_app.is_running():
         with torch.inference_mode():
             for team, agents_obs in obs.items():
@@ -129,21 +132,38 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
                     actions[:, agent_num, :action_space] = action
                     rnn_states[:, agent_num, :] = rnn_state
 
-                obs, _, _, dones, _, _ = runner.env.step(actions)
+        # We don't want to randomize the reset buffer when evaluating
+        obs, _, _, dones, _, _ = runner.env.step(actions)
+        dones_env = torch.all(dones, dim=1)
+        curr_envs_completed = dones_env.sum().item()
+        envs_completed += curr_envs_completed
 
-                dones_env = torch.all(dones, dim=1)
-                masks = torch.ones((args["num_envs"], runner.num_agents, 1), dtype=torch.float32, device="cuda:0")
-                masks[dones_env] = 0.0
-                rnn_states[dones_env] = torch.zeros(
-                    ((dones_env).sum(), runner.num_agents, runner.recurrent_n, runner.rnn_hidden_size),
-                    dtype=torch.float32,
-                    device="cuda:0",
-                )
+        if curr_envs_completed > 0:
+            for k,v in runner.env.log_info.items():
+                if k not in log_infos:
+                    log_infos[k] = 0.0
+                log_infos[k] += (v * curr_envs_completed)
 
-                if runner.env.unwrapped.sim._number_of_steps >= args["num_env_steps"]:
-                    break
+        masks = torch.ones((args["num_envs"], runner.num_agents, 1), dtype=torch.float32, device="cuda:0")
+        masks[dones_env] = 0.0
+        rnn_states[dones_env] = torch.zeros(
+            ((dones_env).sum(), runner.num_agents, runner.recurrent_n, runner.rnn_hidden_size), # type: ignore
+            dtype=torch.float32,
+            device="cuda:0",
+        ) # type: ignore
 
+        num_steps = args["num_envs"] * runner.env.unwrapped.sim._number_of_steps 
+        pbar.update(num_steps - pbar.n)
+        if num_steps >= args["num_env_steps"]:
+            break
+        
     runner.env.close()
+
+    for k in log_infos.keys():
+        log_infos[k] /= envs_completed if envs_completed > 0 else 1
+
+    pbar.close()
+    pprint.pprint(log_infos)
 
 
 if __name__ == "__main__":

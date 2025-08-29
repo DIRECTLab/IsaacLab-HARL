@@ -282,9 +282,9 @@ class MinitankAdversarialEnv(DirectMARLEnv):
         x_vector = torch.zeros_like(desired_direction)
         x_vector[:, 0] = 1.0
 
-        r = torch.cross(x_vector, desired_direction)
+        r = torch.cross(x_vector, desired_direction, dim=1)
         r = r / torch.linalg.norm(r, dim=1, keepdim=True)
-        r_arm = torch.cross(x_vector, arm_direction)
+        r_arm = torch.cross(x_vector, arm_direction, dim=1)
         r_arm = r_arm / torch.linalg.norm(r_arm, dim=1, keepdim=True)
 
         dot_prod_angle = torch.sum(x_vector * desired_direction, dim=1)
@@ -473,7 +473,7 @@ class MinitankAdversarialEnv(DirectMARLEnv):
     
         self._episode_sums["tank_angle_reward"] = minitank_reward
 
-        return {"team_0": {"robot_0": minitank_reward.to(self.device)}, "team_1": {"robot_1": drone_reward.to(self.device)}}
+        return {"team_0": minitank_reward.to(self.device), "team_1": drone_reward.to(self.device)}
 
     def _get_dones(self) -> tuple[dict, dict]:
         time_out = (self.episode_length_buf >= self.max_episode_length - 1).to(self.device)
@@ -484,7 +484,7 @@ class MinitankAdversarialEnv(DirectMARLEnv):
         # dones["robot_1"] = died.to(self.device)
 
         # self.time_out_envs = torch.argwhere(time_out)
-        time_out = {robot_id:time_out for robot_id in self.robots.keys()}
+        time_out = {team:time_out for team in self.cfg.teams.keys()}
 
         # dones = {robot_id: torch.zeros(self.num_envs).to(torch.int8).to(self.device) for robot_id in self.robots.keys()}
 

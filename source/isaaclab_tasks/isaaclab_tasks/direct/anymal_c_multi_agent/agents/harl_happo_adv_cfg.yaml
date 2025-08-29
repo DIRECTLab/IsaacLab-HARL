@@ -32,7 +32,7 @@ train:
   # if set, load models from this directory; otherwise, randomly initialise the models
   model_dir: #
   # whether or not to save the entire model, or just the state dict
-  save_entire_model: True
+  save_entire_model: False
 eval:
   # whether to use evaluation
   use_eval: True

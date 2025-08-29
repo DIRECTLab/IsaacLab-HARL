@@ -125,7 +125,7 @@ class SumoStage1BlocksEnvCfg(DirectMARLEnvCfg):
     # time penalty
     time_penalty = -0.01
     box_velocity_scale = 0.01
-    reached_goal_reward = 20.0
+    reached_goal_reward = 40.0
     dist_to_goal_reward_scale = 2.0
     lin_vel_reward_scale = 1.0
     yaw_rate_reward_scale = 0.5
@@ -539,6 +539,7 @@ class SumoStage1BlocksEnv(DirectMARLEnv):
     def _reset_idx(self, env_ids: torch.Tensor | None):
         if env_ids is None:
             env_ids = torch.arange(self.num_envs, device=self.device)
+        episode_times = self.episode_length_buf[env_ids].to(torch.float32) + 1
         super()._reset_idx(env_ids)
 
         # spread out the updates
@@ -588,8 +589,8 @@ class SumoStage1BlocksEnv(DirectMARLEnv):
         self._draw_ring_markers()
         extras = dict()
         for key in self._episode_sums.keys():
-            episodic_sum_avg = torch.mean(self._episode_sums[key][env_ids])
-            extras["Episode_Reward/"+key] = episodic_sum_avg / self.max_episode_length_s
+            episodic_sum_avg = torch.mean(self._episode_sums[key][env_ids] / (episode_times))
+            extras["Episode_Reward/"+key] = episodic_sum_avg
             self._episode_sums[key][env_ids] = 0.0
 
         self.extras["log"] = dict()

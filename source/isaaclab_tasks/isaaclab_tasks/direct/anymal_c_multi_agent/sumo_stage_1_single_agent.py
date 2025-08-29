@@ -117,8 +117,8 @@ class SumoStage1EnvSingleAgentCfg(DirectMARLEnvCfg):
     action_scale = 0.5
     action_space = 12
     action_spaces = {f"robot_{i}": 12 for i in range(1)}
-    observation_space = 48
-    observation_spaces = {f"robot_{i}": 48 for i in range(1)}
+    observation_space = 56
+    observation_spaces = {f"robot_{i}": 56 for i in range(1)}
     state_space = 0
     state_spaces = {f"robot_{i}": 0 for i in range(1)}
     possible_agents = [f"robot_{i}" for i in range(1)]
@@ -346,8 +346,8 @@ class SumoStage1EnvSingleAgent(DirectMARLEnv):
                 dist_to_center = torch.zeros((self.num_envs, 1), device=self.device)
                 arena_radius = torch.zeros((self.num_envs, 1), device=self.device)
                 time_remaining = torch.zeros((self.num_envs, 1), device=self.device)
-                teammate_pos = torch.full((self.num_envs, 3), 50, device=self.device)
-                other_pos = torch.full((self.num_envs, 3), 50, device=self.device)
+                teammate_pos = torch.zeros((self.num_envs, 3), device=self.device)
+                other_pos = torch.zeros((self.num_envs, 3), device=self.device)
 
                 obs_vec = torch.cat(
                     [
@@ -358,10 +358,10 @@ class SumoStage1EnvSingleAgent(DirectMARLEnv):
                         self.robots[robot_id].data.joint_vel,
                         self.actions[robot_id],
                         goal_pos,
-                        # teammate_pos,
-                        # other_pos,
-                        # dist_to_center,
-                        # arena_radius,
+                        teammate_pos,
+                        other_pos,
+                        dist_to_center,
+                        arena_radius,
                         # time_remaining,
                     ],
                     dim=-1,

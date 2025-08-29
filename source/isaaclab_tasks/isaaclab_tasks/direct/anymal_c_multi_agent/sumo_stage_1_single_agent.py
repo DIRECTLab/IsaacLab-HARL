@@ -335,53 +335,35 @@ class SumoStage1EnvSingleAgent(DirectMARLEnv):
         for team_name, robots in self.cfg.teams.items():
             team_obs = {}
             for i, robot_id in enumerate(robots):
-                # teammate_id = robots[1-i]
-
-                # relative positions
-                # teammate_pos, _ = subtract_frame_transforms(
-                #     self.robots[robot_id].data.root_state_w[:, :3],
-                #     self.robots[robot_id].data.root_state_w[:, 3:7],
-                #     self.robots[teammate_id].data.root_pos_w,
-                # )
-
-                # enemy_pos = []
-                # for i in range(2):
-                #     epos, _ = subtract_frame_transforms(
-                #         self.robots[robot_id].data.root_state_w[:, :3],
-                #         self.robots[robot_id].data.root_state_w[:, 3:7],
-                #         self.goal_pos_w[:, i, :].squeeze(1),
-                #     )
-                #     enemy_pos.append(epos)
-
-                # teammate_pos = torch.zeros_like(enemy_pos[0], device=self.device)
                     
-                goal_pos = subtract_frame_transforms(
+                goal_pos, _ = subtract_frame_transforms(
                         self.robots[robot_id].data.root_state_w[:, :3],
                         self.robots[robot_id].data.root_state_w[:, 3:7],
                         self._desired_pos
                     )
 
-                dist_to_center = get_distance_to_center(self.scene.env_origins[:, :2].to(self.device), self.robots[robot_id])
+                # dist_to_center = get_distance_to_center(self.scene.env_origins[:, :2].to(self.device), self.robots[robot_id])
+                dist_to_center = torch.zeros((self.num_envs, 1), device=self.device)
                 arena_radius = torch.zeros((self.num_envs, 1), device=self.device)
-                # commands = torch.zeros((self.num_envs, 3), device=self.device)
-                # commands[:, 0] = 1
+                time_remaining = torch.zeros((self.num_envs, 1), device=self.device)
+                teammate_pos = torch.full((self.num_envs, 3), 50, device=self.device)
+                other_pos = torch.full((self.num_envs, 3), 50, device=self.device)
 
                 obs_vec = torch.cat(
                     [
                         self.robots[robot_id].data.root_lin_vel_b,
                         self.robots[robot_id].data.root_ang_vel_b,
                         self.robots[robot_id].data.projected_gravity_b,
-                        # commands,
                         self.robots[robot_id].data.joint_pos - self.robots[robot_id].data.default_joint_pos,
                         self.robots[robot_id].data.joint_vel,
                         self.actions[robot_id],
-                        goal_pos[0]
+                        goal_pos,
                         # teammate_pos,
-                        # time_remaining,
+                        # other_pos,
                         # dist_to_center,
                         # arena_radius,
+                        # time_remaining,
                     ],
-                    #+ [teammate_pos] + enemy_pos,
                     dim=-1,
                 )
                 team_obs[robot_id] = obs_vec
@@ -517,13 +499,14 @@ class SumoStage1EnvSingleAgent(DirectMARLEnv):
             joint_vel = robot.data.default_joint_vel[env_ids]
             default_root_state = robot.data.default_root_state[env_ids]
 
-            default_root_state[:, :3] += self._terrain.env_origins[env_ids]
+            default_root_state[:, :2] += self._terrain.env_origins[env_ids][:, :2]
             robot.write_root_pose_to_sim(default_root_state[:, :7], env_ids)
             robot.write_root_velocity_to_sim(default_root_state[:, 7:], env_ids)
             robot.write_joint_state_to_sim(joint_pos, joint_vel, None, env_ids)
 
         self._desired_pos[env_ids, :2] = self.robots["robot_0"].data.root_pos_w[env_ids, :2] + \
             torch.zeros_like(self._desired_pos[env_ids, :2]).uniform_(-10.0, 10.0)
+        self._desired_pos[env_ids, 2] = 0.25
 
         final_distance_to_goal = torch.linalg.norm(
             self._desired_pos[env_ids] - self.robots["robot_0"].data.root_pos_w[env_ids], dim=1

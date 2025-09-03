@@ -196,28 +196,28 @@ class SumoStage1BlocksPushEnv(DirectMARLEnv):
             key: torch.zeros(self.num_envs, dtype=torch.float, device=self.device)
             for key in [
                 # Team 0
-                "team_0_lin_vel_z_l2",
-                "team_0_ang_vel_xy_l2",
-                "team_0_dof_torques_l2",
-                "team_0_dof_acc_l2",
-                "team_0_action_rate_l2",
-                "team_0_feet_air_time",
-                "team_0_undesired_contacts",
-                "team_0_flat_orientation_l2",
+                # "team_0_lin_vel_z_l2",
+                # "team_0_ang_vel_xy_l2",
+                # "team_0_dof_torques_l2",
+                # "team_0_dof_acc_l2",
+                # "team_0_action_rate_l2",
+                # "team_0_feet_air_time",
+                # "team_0_undesired_contacts",
+                # "team_0_flat_orientation_l2",
                 "team_0_block0_center_reward",
                 "team_0_dist_r0_b0_reward",
                 # "team_0_time_penalty",
                 "team_0_push_out_reward",
 
                 # Team 1
-                "team_1_lin_vel_z_l2",
-                "team_1_ang_vel_xy_l2",
-                "team_1_dof_torques_l2",
-                "team_1_dof_acc_l2",
-                "team_1_action_rate_l2",
-                "team_1_feet_air_time",
-                "team_1_undesired_contacts",
-                "team_1_flat_orientation_l2",
+                # "team_1_lin_vel_z_l2",
+                # "team_1_ang_vel_xy_l2",
+                # "team_1_dof_torques_l2",
+                # "team_1_dof_acc_l2",
+                # "team_1_action_rate_l2",
+                # "team_1_feet_air_time",
+                # "team_1_undesired_contacts",
+                # "team_1_flat_orientation_l2",
                 "team_1_block1_center_reward",
                 "team_1_dist_r1_b1_reward",
                 # "team_1_time_penalty",
@@ -455,44 +455,44 @@ class SumoStage1BlocksPushEnv(DirectMARLEnv):
         push_out_reward_team0 = (block0_out - robot0_out) * self.cfg.reward_scale
         push_out_reward_team1 = (block1_out - robot1_out) * self.cfg.reward_scale
 
-        all_rewards = {}
+        # all_rewards = {}
 
-        for robot_id in self.robots.keys():
-            # z velocity tracking
-            z_vel_error = torch.square(self.robots[robot_id].data.root_lin_vel_b[:, 2])
-            # angular velocity x/y
-            ang_vel_error = torch.sum(torch.square(self.robots[robot_id].data.root_ang_vel_b[:, :2]), dim=1)
-            # joint torques
-            joint_torques = torch.sum(torch.square(self.robots[robot_id].data.applied_torque), dim=1)
-            # joint acceleration
-            joint_accel = torch.sum(torch.square(self.robots[robot_id].data.joint_acc), dim=1)
-            # action rate
-            action_rate = torch.sum(torch.square(self.actions[robot_id] - self.previous_actions[robot_id]), dim=1)
-            # feet air time
-            first_contact = self.contact_sensors[robot_id].compute_first_contact(self.step_dt)[:, self.feet_ids[robot_id]]
-            last_air_time = self.contact_sensors[robot_id].data.last_air_time[:, self.feet_ids[robot_id]]
-            air_time = torch.sum((last_air_time - 0.5) * first_contact, dim=1)
-            # undesired contacts
-            net_contact_forces = self.contact_sensors[robot_id].data.net_forces_w_history
-            is_contact = (
-                torch.max(torch.norm(net_contact_forces[:, :, self.undesired_body_contact_ids[robot_id]], dim=-1), dim=1)[0] > 1.0
-            )
-            contacts = torch.sum(is_contact, dim=1)
-            # flat orientation
-            flat_orientation = torch.sum(torch.square(self.robots[robot_id].data.projected_gravity_b[:, :2]), dim=1)
+        # for robot_id in self.robots.keys():
+        #     # z velocity tracking
+        #     z_vel_error = torch.square(self.robots[robot_id].data.root_lin_vel_b[:, 2])
+        #     # angular velocity x/y
+        #     ang_vel_error = torch.sum(torch.square(self.robots[robot_id].data.root_ang_vel_b[:, :2]), dim=1)
+        #     # joint torques
+        #     joint_torques = torch.sum(torch.square(self.robots[robot_id].data.applied_torque), dim=1)
+        #     # joint acceleration
+        #     joint_accel = torch.sum(torch.square(self.robots[robot_id].data.joint_acc), dim=1)
+        #     # action rate
+        #     action_rate = torch.sum(torch.square(self.actions[robot_id] - self.previous_actions[robot_id]), dim=1)
+        #     # feet air time
+        #     first_contact = self.contact_sensors[robot_id].compute_first_contact(self.step_dt)[:, self.feet_ids[robot_id]]
+        #     last_air_time = self.contact_sensors[robot_id].data.last_air_time[:, self.feet_ids[robot_id]]
+        #     air_time = torch.sum((last_air_time - 0.5) * first_contact, dim=1)
+        #     # undesired contacts
+        #     net_contact_forces = self.contact_sensors[robot_id].data.net_forces_w_history
+        #     is_contact = (
+        #         torch.max(torch.norm(net_contact_forces[:, :, self.undesired_body_contact_ids[robot_id]], dim=-1), dim=1)[0] > 1.0
+        #     )
+        #     contacts = torch.sum(is_contact, dim=1)
+        #     # flat orientation
+        #     flat_orientation = torch.sum(torch.square(self.robots[robot_id].data.projected_gravity_b[:, :2]), dim=1)
 
-            rewards = {
-                "lin_vel_z_l2": z_vel_error * self.cfg.z_vel_reward_scale * self.step_dt,
-                "ang_vel_xy_l2": ang_vel_error * self.cfg.ang_vel_reward_scale * self.step_dt,
-                "dof_torques_l2": joint_torques * self.cfg.joint_torque_reward_scale * self.step_dt,
-                "dof_acc_l2": joint_accel * self.cfg.joint_accel_reward_scale * self.step_dt,
-                "action_rate_l2": action_rate * self.cfg.action_rate_reward_scale * self.step_dt,
-                "feet_air_time": air_time * self.cfg.feet_air_time_reward_scale * self.step_dt,
-                "undesired_contacts": contacts * self.cfg.undesired_contact_reward_scale * self.step_dt,
-                "flat_orientation_l2": flat_orientation * self.cfg.flat_orientation_reward_scale * self.step_dt,
-            }
+        #     rewards = {
+        #         "lin_vel_z_l2": z_vel_error * self.cfg.z_vel_reward_scale * self.step_dt,
+        #         "ang_vel_xy_l2": ang_vel_error * self.cfg.ang_vel_reward_scale * self.step_dt,
+        #         "dof_torques_l2": joint_torques * self.cfg.joint_torque_reward_scale * self.step_dt,
+        #         "dof_acc_l2": joint_accel * self.cfg.joint_accel_reward_scale * self.step_dt,
+        #         "action_rate_l2": action_rate * self.cfg.action_rate_reward_scale * self.step_dt,
+        #         "feet_air_time": air_time * self.cfg.feet_air_time_reward_scale * self.step_dt,
+        #         "undesired_contacts": contacts * self.cfg.undesired_contact_reward_scale * self.step_dt,
+        #         "flat_orientation_l2": flat_orientation * self.cfg.flat_orientation_reward_scale * self.step_dt,
+        #     }
 
-            all_rewards[robot_id] = rewards
+        #     all_rewards[robot_id] = rewards
 
         # --- Rewards per team ---
         rewards_team0 = {
@@ -501,7 +501,7 @@ class SumoStage1BlocksPushEnv(DirectMARLEnv):
             # "time_penalty": time_penalty,
             "push_out_reward": push_out_reward_team0,
         }
-        rewards_team0.update(all_rewards["robot_0"])
+        # rewards_team0.update(all_rewards["robot_0"])
 
         rewards_team1 = {
             "block1_center_reward": block1_center_mapped * self.step_dt,
@@ -509,7 +509,7 @@ class SumoStage1BlocksPushEnv(DirectMARLEnv):
             # "time_penalty": time_penalty,
             "push_out_reward": push_out_reward_team1,
         }
-        rewards_team1.update(all_rewards["robot_1"])
+        # rewards_team1.update(all_rewards["robot_1"])
 
 
         # Sum per team

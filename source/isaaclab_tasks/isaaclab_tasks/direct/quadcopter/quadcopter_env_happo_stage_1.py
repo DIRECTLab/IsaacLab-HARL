@@ -133,6 +133,23 @@ class QuadcopterMARLEnvTeamCfg(DirectMARLEnvCfg):
 
 
 class QuadcopterMARLEnvTeam(DirectMARLEnv):
+    def _draw_drone_color_markers(self):
+        # Draw a colored marker above each drone, matching its goal color
+        if not hasattr(self, "drone_pos_visualizer"):
+            return
+        num_envs = self.num_envs
+        num_robots = self.cfg.num_robots_per_team
+        marker_positions = []
+        marker_indices = []
+        for env_i in range(num_envs):
+            for robot_i, agent in enumerate(self.cfg.action_spaces):
+                pos = self.robots[agent].data.root_pos_w[env_i].clone()
+                pos[2] += 0.1  # raise marker above drone
+                marker_positions.append(pos)
+                marker_indices.append(robot_i)
+        marker_positions = torch.stack(marker_positions, dim=0)
+        marker_indices = torch.tensor(marker_indices, device=marker_positions.device, dtype=torch.long)
+        self.drone_pos_visualizer.visualize(marker_positions, marker_indices=marker_indices)
     cfg: QuadcopterMARLEnvTeamCfg
 
     def __init__(self, cfg: QuadcopterMARLEnvTeamCfg, render_mode: str | None = None, **kwargs):
@@ -322,7 +339,6 @@ class QuadcopterMARLEnvTeam(DirectMARLEnv):
         # create markers if necessary for the first time (original logic)
         if debug_vis:
             if not hasattr(self, "goal_pos_visualizer"):
-                # Define a unique cuboid marker for each robot's goal, each with a different color
                 palette = [
                     (1.0, 0.0, 0.0),  # red
                     (0.0, 1.0, 0.0),  # green
@@ -334,36 +350,55 @@ class QuadcopterMARLEnvTeam(DirectMARLEnv):
                     (0.5, 0.0, 1.0),  # purple
                 ]
                 num_robots = self.cfg.num_robots_per_team
-                # Build marker dict: one cuboid per robot, each with a unique color
-                marker_dict = {}
+                # Goal markers
+                goal_marker_dict = {}
                 for i in range(num_robots):
-                    marker_dict[f"goal_cuboid_{i}"] = CUBOID_MARKER_CFG.markers["cuboid"].copy()
-                    marker_dict[f"goal_cuboid_{i}"].size = (0.05, 0.05, 0.05)
-                    marker_dict[f"goal_cuboid_{i}"].visual_material = marker_dict[f"goal_cuboid_{i}"].visual_material.copy()
-                    marker_dict[f"goal_cuboid_{i}"].visual_material.diffuse_color = palette[i % len(palette)]
+                    marker = CUBOID_MARKER_CFG.markers["cuboid"].copy()
+                    marker.size = (0.05, 0.05, 0.05)
+                    marker.visual_material = marker.visual_material.copy()
+                    marker.visual_material.diffuse_color = palette[i % len(palette)]
+                    marker.prim_path = f"/Visuals/Command/goal_position/goal_cuboid_{i}"
+                    goal_marker_dict[f"goal_cuboid_{i}"] = marker
                 from isaaclab.markers import VisualizationMarkersCfg
-                marker_cfg = VisualizationMarkersCfg(
+                goal_marker_cfg = VisualizationMarkersCfg(
                     prim_path="/Visuals/Command/goal_position",
-                    markers=marker_dict,
+                    markers=goal_marker_dict,
                 )
-                self.goal_pos_visualizer = VisualizationMarkers(marker_cfg)
+                self.goal_pos_visualizer = VisualizationMarkers(goal_marker_cfg)
+                # Drone markers
+                drone_marker_dict = {}
+                for i in range(num_robots):
+                    marker = CUBOID_MARKER_CFG.markers["cuboid"].copy()
+                    marker.size = (0.02, 0.02, 0.02)
+                    marker.visual_material = marker.visual_material.copy()
+                    marker.visual_material.diffuse_color = palette[i % len(palette)]
+                    marker.prim_path = f"/Visuals/Command/drone_position/drone_cuboid_{i}"
+                    drone_marker_dict[f"drone_cuboid_{i}"] = marker
+                drone_marker_cfg = VisualizationMarkersCfg(
+                    prim_path="/Visuals/Command/drone_position",
+                    markers=drone_marker_dict,
+                )
+                self.drone_pos_visualizer = VisualizationMarkers(drone_marker_cfg)
                 self._num_goal_markers = num_robots
             # set their visibility to true
             self.goal_pos_visualizer.set_visibility(True)
+            self.drone_pos_visualizer.set_visibility(True)
         else:
             if hasattr(self, "goal_pos_visualizer"):
                 self.goal_pos_visualizer.set_visibility(False)
+            if hasattr(self, "drone_pos_visualizer"):
+                self.drone_pos_visualizer.set_visibility(False)
 
     def _debug_vis_callback(self, event):
         # update the goal markers for all robots in all envs
         # flatten to [num_envs * num_robots, 3]
         goal_positions = self._desired_pos_w.reshape(-1, 3)
-        # Use marker_indices to select the color/marker for each robot's goal
         num_envs = self.num_envs
         num_robots = self.cfg.num_robots_per_team
-        # For each env, assign marker indices 0..num_robots-1 for each robot
         marker_indices = []
         for _ in range(num_envs):
             marker_indices.extend(list(range(num_robots)))
         marker_indices = torch.tensor(marker_indices, device=goal_positions.device if hasattr(goal_positions, 'device') else 'cpu', dtype=torch.long)
         self.goal_pos_visualizer.visualize(goal_positions, marker_indices=marker_indices)
+        # Draw color markers above each drone (using the drone_cuboid markers)
+        self._draw_drone_color_markers()

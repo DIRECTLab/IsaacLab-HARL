@@ -322,11 +322,32 @@ class QuadcopterMARLEnvTeam(DirectMARLEnv):
         # create markers if necessary for the first time (original logic)
         if debug_vis:
             if not hasattr(self, "goal_pos_visualizer"):
-                marker_cfg = CUBOID_MARKER_CFG.copy()
-                marker_cfg.markers["cuboid"].size = (0.05, 0.05, 0.05)
-                # -- goal pose
-                marker_cfg.prim_path = "/Visuals/Command/goal_position"
+                # Define a unique cuboid marker for each robot's goal, each with a different color
+                palette = [
+                    (1.0, 0.0, 0.0),  # red
+                    (0.0, 1.0, 0.0),  # green
+                    (0.0, 0.5, 1.0),  # blue
+                    (1.0, 1.0, 0.0),  # yellow
+                    (1.0, 0.0, 1.0),  # magenta
+                    (0.0, 1.0, 1.0),  # cyan
+                    (1.0, 0.5, 0.0),  # orange
+                    (0.5, 0.0, 1.0),  # purple
+                ]
+                num_robots = self.cfg.num_robots_per_team
+                # Build marker dict: one cuboid per robot, each with a unique color
+                marker_dict = {}
+                for i in range(num_robots):
+                    marker_dict[f"goal_cuboid_{i}"] = CUBOID_MARKER_CFG.markers["cuboid"].copy()
+                    marker_dict[f"goal_cuboid_{i}"].size = (0.05, 0.05, 0.05)
+                    marker_dict[f"goal_cuboid_{i}"].visual_material = marker_dict[f"goal_cuboid_{i}"].visual_material.copy()
+                    marker_dict[f"goal_cuboid_{i}"].visual_material.diffuse_color = palette[i % len(palette)]
+                from isaaclab.markers import VisualizationMarkersCfg
+                marker_cfg = VisualizationMarkersCfg(
+                    prim_path="/Visuals/Command/goal_position",
+                    markers=marker_dict,
+                )
                 self.goal_pos_visualizer = VisualizationMarkers(marker_cfg)
+                self._num_goal_markers = num_robots
             # set their visibility to true
             self.goal_pos_visualizer.set_visibility(True)
         else:
@@ -337,4 +358,12 @@ class QuadcopterMARLEnvTeam(DirectMARLEnv):
         # update the goal markers for all robots in all envs
         # flatten to [num_envs * num_robots, 3]
         goal_positions = self._desired_pos_w.reshape(-1, 3)
-        self.goal_pos_visualizer.visualize(goal_positions)
+        # Use marker_indices to select the color/marker for each robot's goal
+        num_envs = self.num_envs
+        num_robots = self.cfg.num_robots_per_team
+        # For each env, assign marker indices 0..num_robots-1 for each robot
+        marker_indices = []
+        for _ in range(num_envs):
+            marker_indices.extend(list(range(num_robots)))
+        marker_indices = torch.tensor(marker_indices, device=goal_positions.device if hasattr(goal_positions, 'device') else 'cpu', dtype=torch.long)
+        self.goal_pos_visualizer.visualize(goal_positions, marker_indices=marker_indices)

@@ -137,6 +137,12 @@ class QuadcopterMARLEnvTeamCfg(DirectMARLEnvCfg):
 
 
 class QuadcopterMARLEnvTeam(DirectMARLEnv):
+    @property
+    def agent_active_masks(self):
+        """
+        Returns a dict of agent active masks (1.0 if agent is active, 0.0 if knocked out), shape [num_envs, 1] per agent.
+        """
+        return {agent: (~self.knocked_out[agent]).float().unsqueeze(-1) for agent in self.cfg.action_spaces}
     def _update_knocked_out(self):
         # Knock out agents if they are below 0.2m from the ground
         for agent in self.cfg.action_spaces:

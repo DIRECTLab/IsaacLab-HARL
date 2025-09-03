@@ -26,6 +26,32 @@
             }
         },
         {
+            "label": "Drone_team_stage_1_train",
+            "type": "shell",
+            "command": "${command:python.interpreterPath}",
+            "args": [
+                "${workspaceFolder}/scripts/reinforcement_learning/harl/train.py",
+                "--num_envs", "7_000",
+                "--task", "Isaac-Quadcopter-Direct-Team-HAPPO-v0",
+                "--seed", "1",
+                "--exp_name", "drone_adv_teams_stage_1_v0",
+                "--num_env_steps", "10_000_000_000",
+                "--algorithm", "happo_adv",
+                "--adversarial_training_iterations", "100_000_000",
+                "--adversarial_training_mode", "parallel",//"leapfrog",
+                "--headless",
+                "--log_interval", "1",
+                "--save_interval", "10000",
+                // "--video",
+                // "--video_length", "600",
+                // "--video_interval", "30_000",
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "problemMatcher": []
+        },
+        {
             "label": "Run AnymalC Adversarial",
             "type": "shell",
             "command": "${command:python.interpreterPath}",

@@ -57,7 +57,11 @@ class QuadcopterMARLEnvTeamCfg(DirectMARLEnvCfg):
     # Number of robots per team
     num_robots_per_team = 3  # You can change this number as needed
     action_spaces = {f"robot_{i}": 4 for i in range(num_robots_per_team)}
-    observation_spaces = {f"robot_{i}": 12 for i in range(num_robots_per_team)}
+    
+    base_obs_size = 3 + 3 + 3 + 3
+    _other_pos_size = 3 * (num_robots_per_team - 1)
+    _total_obs_size = base_obs_size + _other_pos_size
+    observation_spaces = {f"robot_{i}": 18 for i in range(num_robots_per_team)}
     state_space = 0
     state_spaces = {f"robot_{i}": 0 for i in range(num_robots_per_team)}
     possible_agents = [f"robot_{i}" for i in range(num_robots_per_team)]
@@ -226,17 +230,25 @@ class QuadcopterMARLEnvTeam(DirectMARLEnv):
 
     def _get_observations(self) -> dict:
         obs = {}
+        # Collect all robot positions for all envs: shape [num_envs, num_robots, 3]
+        all_positions = torch.stack([
+            self.robots[agent].data.root_state_w[:, :3] for agent in self.cfg.action_spaces
+        ], dim=1)  # [num_envs, num_robots, 3]
         for i, agent in enumerate(self.cfg.action_spaces):
             desired_pos_b, _ = subtract_frame_transforms(
                 self.robots[agent].data.root_state_w[:, :3],
                 self.robots[agent].data.root_state_w[:, 3:7],
                 self._desired_pos_w[:, i, :]
             )
+            # Get positions of other robots (exclude self)
+            other_indices = [j for j in range(len(self.cfg.action_spaces)) if j != i]
+            other_pos = all_positions[:, other_indices, :].reshape(self.num_envs, -1)  # [num_envs, (num_robots-1)*3]
             obs[agent] = torch.cat([
                 self.robots[agent].data.root_lin_vel_b,
                 self.robots[agent].data.root_ang_vel_b,
                 self.robots[agent].data.projected_gravity_b,
-                desired_pos_b
+                desired_pos_b,
+                other_pos,
             ], dim=-1)
         return {"team_0": obs}
 

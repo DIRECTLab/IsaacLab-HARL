@@ -53,18 +53,16 @@ class QuadcopterMARLEnvTeamCfg(DirectMARLEnvCfg):
     decimation = 4
     anymal_action_scale = 0.5
     action_space = 4
-    action_spaces = {"robot_0": 4}
 
-    # with camera = 12 + output dim of cnn = 32 = 44
-    # observation_spaces = {"robot_0": 44}
-    observation_spaces = {"robot_0": 12}
+    # Number of robots per team
+    num_robots_per_team = 3  # You can change this number as needed
+    action_spaces = {f"robot_{i}": 4 for i in range(num_robots_per_team)}
+    observation_spaces = {f"robot_{i}": 12 for i in range(num_robots_per_team)}
     state_space = 0
-    state_spaces = {f"robot_{i}": 0 for i in range(1)}
-    possible_agents = ["robot_0"]
-
-    # Add teams (single team for now, but structure allows for more)
+    state_spaces = {f"robot_{i}": 0 for i in range(num_robots_per_team)}
+    possible_agents = [f"robot_{i}" for i in range(num_robots_per_team)]
     teams = {
-        "team_0": ["robot_0"],
+        "team_0": [f"robot_{i}" for i in range(num_robots_per_team)],
     }
 
     # simulation
@@ -100,8 +98,12 @@ class QuadcopterMARLEnvTeamCfg(DirectMARLEnvCfg):
     # events: EventCfg = EventCfg()
 
     ### CRAZYFLIE CONFIGURATION ###
-    robot_0: ArticulationCfg = CRAZYFLIE_CFG.replace(prim_path="/World/envs/env_.*/Robot_0")
-    robot_0.init_state.pos = (0.0, 0.0, 2.0)
+
+    # Dynamically add robot configs
+    for i in range(num_robots_per_team):
+        cfg = CRAZYFLIE_CFG.replace(prim_path=f"/World/envs/env_.*/Robot_{i}")
+        cfg.init_state.pos = (float(i), 0.0, 2.0)
+        locals()[f"robot_{i}"] = cfg
 
     # camera_0 = TiledCameraCfg(
     #     prim_path="/World/envs/env_.*/Robot_0/body/front_cam",
@@ -136,19 +138,26 @@ class QuadcopterMARLEnvTeam(DirectMARLEnv):
     def __init__(self, cfg: QuadcopterMARLEnvTeamCfg, render_mode: str | None = None, **kwargs):
         super().__init__(cfg, render_mode, **kwargs)
 
-        # Total thrust and moment applied to the base of the quadcopter
+        # Total thrust and moment applied to the base of each quadcopter
         self.actions = {
             agent: torch.zeros(self.num_envs, action_space, device=self.device)
             for agent, action_space in self.cfg.action_spaces.items()
         }
-        self._thrust = torch.zeros(self.num_envs, 1, 3, device=self.device)
-        self._moment = torch.zeros(self.num_envs, 1, 3, device=self.device)
-        self._desired_pos_w = torch.zeros(self.num_envs, 3, device=self.device)
+        self._thrust = {agent: torch.zeros(self.num_envs, 1, 3, device=self.device) for agent in self.cfg.action_spaces}
+        self._moment = {agent: torch.zeros(self.num_envs, 1, 3, device=self.device) for agent in self.cfg.action_spaces}
+        self._desired_pos_w = torch.zeros(self.num_envs, self.cfg.num_robots_per_team, 3, device=self.device)  # [env, robot, xyz]
 
-        crazyflie_mass = self.robots["robot_0"].root_physx_view.get_masses()[0].sum()
-        self._crazyflie_body_ids = self.robots["robot_0"].find_bodies("body")[0]
-        self._gravity_magnitude = torch.tensor(self.sim.cfg.gravity, device=self.device).norm()
-        self._crazyflie_weight = (crazyflie_mass * self._gravity_magnitude).item()
+        # Store per-robot body ids, mass, etc.
+        self._body_id = {}
+        self._robot_mass = {}
+        self._robot_weight = {}
+        self.robots = getattr(self, 'robots', {})
+        for agent in self.cfg.action_spaces:
+            self._body_id[agent] = self.robots[agent].find_bodies("body")[0]
+            self._robot_mass[agent] = self.robots[agent].root_physx_view.get_masses()[0].sum()
+            gravity_mag = torch.tensor(self.sim.cfg.gravity, device=self.device).norm()
+            self._robot_weight[agent] = (self._robot_mass[agent] * gravity_mag).item()
+
         self._episode_sums = {
             key: torch.zeros(self.num_envs, dtype=torch.float, device=self.device)
             for key in [
@@ -159,25 +168,18 @@ class QuadcopterMARLEnvTeam(DirectMARLEnv):
                 "tank_angle_reward",
             ]
         }
-        # Get specific body indices
-        self._body_id = self.robots["robot_0"].find_bodies("body")[0]
-        self._robot_mass = self.robots["robot_0"].root_physx_view.get_masses()[0].sum()
-        self._gravity_magnitude = torch.tensor(self.sim.cfg.gravity, device=self.device).norm()
-        self._robot_weight = (self._robot_mass * self._gravity_magnitude).item()
 
         # add handle for debug visualization (this is set to a valid handle inside set_debug_vis)
         self.set_debug_vis(self.cfg.debug_vis)
 
     def _setup_scene(self):
-        self.num_robots = sum(1 for key in self.cfg.__dict__.keys() if "robot_" in key)
+        self.num_robots = self.cfg.num_robots_per_team
         self.robots = {}
-        # self.cameras = {}
-
         for i in range(self.num_robots):
             robot_id = f"robot_{i}"
             if robot_id in self.cfg.__dict__:
-                self.robots[f"robot_{i}"] = Articulation(self.cfg.__dict__["robot_" + str(i)])
-                self.scene.articulations[f"robot_{i}"] = self.robots[f"robot_{i}"]
+                self.robots[robot_id] = Articulation(self.cfg.__dict__[robot_id])
+                self.scene.articulations[robot_id] = self.robots[robot_id]
 
         ### SETUP CAMERAS ###
         # self.cameras["robot_0"] = TiledCamera(self.cfg.camera_0)
@@ -194,61 +196,70 @@ class QuadcopterMARLEnvTeam(DirectMARLEnv):
         light_cfg = sim_utils.DomeLightCfg(intensity=2000.0, color=(0.75, 0.75, 0.75))
         light_cfg.func("/World/Light", light_cfg)
 
-    def _pre_physics_step(self, actions: torch.Tensor):
-        self.actions["robot_0"] = actions["robot_0"].clone().clamp(-1.0, 1.0)
-        self._thrust[:, 0, 2] = self.cfg.thrust_to_weight * self._robot_weight * (self.actions["robot_0"][:, 0] + 1.0) / 2.0
-        self._moment[:, 0, :] = self.cfg.moment_scale * self.actions["robot_0"][:, 1:]
+    def _pre_physics_step(self, actions: dict):
+        # Apply actions for each robot
+        for agent in self.cfg.action_spaces:
+            self.actions[agent] = actions[agent].clone().clamp(-1.0, 1.0)
+            self._thrust[agent][:, 0, 2] = self.cfg.thrust_to_weight * self._robot_weight[agent] * (self.actions[agent][:, 0] + 1.0) / 2.0
+            self._moment[agent][:, 0, :] = self.cfg.moment_scale * self.actions[agent][:, 1:]
 
     def _apply_action(self):
-        self.robots["robot_0"].set_external_force_and_torque(self._thrust, self._moment, body_ids=self._body_id)
+        for agent in self.cfg.action_spaces:
+            self.robots[agent].set_external_force_and_torque(self._thrust[agent], self._moment[agent], body_ids=self._body_id[agent])
 
     def _get_observations(self) -> dict:
-        desired_pos_b, _ = subtract_frame_transforms(
-            self.robots["robot_0"].data.root_state_w[:, :3],
-            self.robots["robot_0"].data.root_state_w[:, 3:7],
-            self._desired_pos_w
-        )
-        # Compose observation vector: 3 lin vel, 3 ang vel, 3 gravity, 3 desired_pos_b = 12
-        obs0 = torch.cat([
-            self.robots["robot_0"].data.root_lin_vel_b,
-            self.robots["robot_0"].data.root_ang_vel_b,
-            self.robots["robot_0"].data.projected_gravity_b,
-            desired_pos_b
-        ], dim=-1)
-        return {"team_0": {"robot_0": obs0}}
+        obs = {}
+        for i, agent in enumerate(self.cfg.action_spaces):
+            desired_pos_b, _ = subtract_frame_transforms(
+                self.robots[agent].data.root_state_w[:, :3],
+                self.robots[agent].data.root_state_w[:, 3:7],
+                self._desired_pos_w[:, i, :]
+            )
+            obs[agent] = torch.cat([
+                self.robots[agent].data.root_lin_vel_b,
+                self.robots[agent].data.root_ang_vel_b,
+                self.robots[agent].data.projected_gravity_b,
+                desired_pos_b
+            ], dim=-1)
+        return {"team_0": obs}
 
     def _get_rewards(self) -> dict:
-        lin_vel = torch.sum(torch.square(self.robots["robot_0"].data.root_lin_vel_b), dim=1)
-        ang_vel = torch.sum(torch.square(self.robots["robot_0"].data.root_ang_vel_b), dim=1)
-        distance_to_goal = torch.linalg.norm(self._desired_pos_w - self.robots["robot_0"].data.root_pos_w, dim=1)
-        distance_to_goal_mapped = 1 - torch.tanh(distance_to_goal / 0.8)
-        rewards = {
-            "lin_vel": lin_vel * self.cfg.lin_vel_reward_scale * self.step_dt,
-            "ang_vel": ang_vel * self.cfg.ang_vel_reward_scale * self.step_dt,
-            "distance_to_goal": distance_to_goal_mapped * self.cfg.distance_to_goal_reward_scale * self.step_dt,
-        }
-        reward = torch.sum(torch.stack(list(rewards.values())), dim=0)
-        # Logging
-        for key, value in rewards.items():
-            self._episode_sums[key] += value
+        rewards = {}
+        for i, agent in enumerate(self.cfg.action_spaces):
+            lin_vel = torch.sum(torch.square(self.robots[agent].data.root_lin_vel_b), dim=1)
+            ang_vel = torch.sum(torch.square(self.robots[agent].data.root_ang_vel_b), dim=1)
+            distance_to_goal = torch.linalg.norm(self._desired_pos_w[:, i, :] - self.robots[agent].data.root_pos_w, dim=1)
+            distance_to_goal_mapped = 1 - torch.tanh(distance_to_goal / 0.8)
+            rewards[agent] = (
+                lin_vel * self.cfg.lin_vel_reward_scale * self.step_dt
+                + ang_vel * self.cfg.ang_vel_reward_scale * self.step_dt
+                + distance_to_goal_mapped * self.cfg.distance_to_goal_reward_scale * self.step_dt
+            )
+            # Logging
+            self._episode_sums["lin_vel"] += lin_vel * self.cfg.lin_vel_reward_scale * self.step_dt
+            self._episode_sums["ang_vel"] += ang_vel * self.cfg.ang_vel_reward_scale * self.step_dt
+            self._episode_sums["distance_to_goal"] += distance_to_goal_mapped * self.cfg.distance_to_goal_reward_scale * self.step_dt
         # Return rewards in team structure
-        return {"team_0": reward}
+        return {"team_0": torch.stack(list(rewards.values()), dim=1).sum(dim=1)}
 
     def _get_dones(self) -> tuple[dict, dict]:
         time_out = (self.episode_length_buf >= self.max_episode_length - 1).to(self.device)
-        died = self.robots["robot_0"].data.root_pos_w[:, 2] < 0.1
+        died = torch.zeros(self.num_envs, dtype=torch.bool, device=self.device)
+        for agent in self.cfg.action_spaces:
+            died |= self.robots[agent].data.root_pos_w[:, 2] < 0.1
         # Team-based done: if any agent in the team is done, the team is done
-        dones = {"team_0": died.to(self.device)}
+        dones = {"team_0": died}
         time_outs = {"team_0": time_out}
         return dones, time_outs
 
     def _reset_idx(self, env_ids: torch.Tensor | None):
-        if env_ids is None or len(env_ids) == self.num_envs:
-            env_ids = self.robots["robot_0"]._ALL_INDICES
+        if env_ids is None or (hasattr(env_ids, 'numel') and env_ids is not None and env_ids.numel() == self.num_envs):
+            env_ids = self.robots[next(iter(self.robots))]._ALL_INDICES
 
         # Logging
+        # Use robot_0 for logging, or average over all robots
         final_distance_to_goal = torch.linalg.norm(
-            self._desired_pos_w[env_ids] - self.robots["robot_0"].data.root_pos_w[env_ids], dim=1
+            self._desired_pos_w[env_ids, 0, :] - self.robots[next(iter(self.robots))].data.root_pos_w[env_ids], dim=1
         ).mean()
         extras = dict()
         for key in self._episode_sums.keys():
@@ -263,28 +274,52 @@ class QuadcopterMARLEnvTeam(DirectMARLEnv):
         extras["Metrics/final_distance_to_goal"] = final_distance_to_goal.item()
         self.extras["log"].update(extras)
 
-        self.robots["robot_0"].reset(env_ids)
+        for agent in self.cfg.action_spaces:
+            self.robots[agent].reset(env_ids)
         super()._reset_idx(env_ids)
-        if len(env_ids) == self.num_envs:
+        if hasattr(env_ids, 'numel') and env_ids.numel() == self.num_envs:
             # Spread out the resets to avoid spikes in training when many environments reset at a similar time
             self.episode_length_buf = torch.randint_like(self.episode_length_buf, high=int(self.max_episode_length))
 
-        self.actions["robot_0"][env_ids] = 0.0
-        # Sample new commands
-        self._desired_pos_w[env_ids, :2] = torch.zeros_like(self._desired_pos_w[env_ids, :2]).uniform_(-2.0, 2.0)
-        self._desired_pos_w[env_ids, :2] += self._terrain.env_origins[env_ids, :2]
-        self._desired_pos_w[env_ids, 2] = torch.zeros_like(self._desired_pos_w[env_ids, 2]).uniform_(0.5, 1.5)
+        for agent in self.cfg.action_spaces:
+            self.actions[agent][env_ids] = 0.0
+
+        # Sample new unique goals for each robot in each env
+        # Ensure goals are at least 0.5 apart in L2 norm
+        min_dist = 0.5
+        num_robots = self.cfg.num_robots_per_team
+        # Ensure env_ids is a tensor
+        if env_ids is None:
+            env_ids = torch.arange(self.num_envs, device=self.device)
+        for env_i in env_ids.tolist():
+            # Try up to 100 times to find unique goals
+            for _ in range(100):
+                candidate_goals = torch.zeros(num_robots, 3, device=self.device)
+                candidate_goals[:, :2] = torch.empty(num_robots, 2, device=self.device).uniform_(-2.0, 2.0)
+                candidate_goals[:, 2] = torch.empty(num_robots, device=self.device).uniform_(0.5, 1.5)
+                # Add env origin offset
+                candidate_goals[:, :2] += self._terrain.env_origins[env_i, :2]
+                # Check pairwise distances
+                dists = torch.cdist(candidate_goals[:, :2], candidate_goals[:, :2], p=2)
+                if (dists + torch.eye(num_robots, device=self.device) * 9999).min() >= min_dist:
+                    self._desired_pos_w[env_i, :, :] = candidate_goals
+                    break
+            else:
+                # fallback: just assign, even if not unique
+                self._desired_pos_w[env_i, :, :] = candidate_goals
+
         # Reset robot state
-        joint_pos = self.robots["robot_0"].data.default_joint_pos[env_ids]
-        joint_vel = self.robots["robot_0"].data.default_joint_vel[env_ids]
-        default_root_state = self.robots["robot_0"].data.default_root_state[env_ids]
-        default_root_state[:, :3] += self._terrain.env_origins[env_ids]
-        self.robots["robot_0"].write_root_pose_to_sim(default_root_state[:, :7], env_ids)
-        self.robots["robot_0"].write_root_velocity_to_sim(default_root_state[:, 7:], env_ids)
-        self.robots["robot_0"].write_joint_state_to_sim(joint_pos, joint_vel, None, env_ids)
+        for i, agent in enumerate(self.cfg.action_spaces):
+            joint_pos = self.robots[agent].data.default_joint_pos[env_ids]
+            joint_vel = self.robots[agent].data.default_joint_vel[env_ids]
+            default_root_state = self.robots[agent].data.default_root_state[env_ids]
+            default_root_state[:, :3] += self._terrain.env_origins[env_ids]
+            self.robots[agent].write_root_pose_to_sim(default_root_state[:, :7], env_ids)
+            self.robots[agent].write_root_velocity_to_sim(default_root_state[:, 7:], env_ids)
+            self.robots[agent].write_joint_state_to_sim(joint_pos, joint_vel, None, env_ids)
 
     def _set_debug_vis_impl(self, debug_vis: bool):
-        # create markers if necessary for the first tome
+        # create markers if necessary for the first time (original logic)
         if debug_vis:
             if not hasattr(self, "goal_pos_visualizer"):
                 marker_cfg = CUBOID_MARKER_CFG.copy()
@@ -299,5 +334,7 @@ class QuadcopterMARLEnvTeam(DirectMARLEnv):
                 self.goal_pos_visualizer.set_visibility(False)
 
     def _debug_vis_callback(self, event):
-        # update the markers
-        self.goal_pos_visualizer.visualize(self._desired_pos_w)
+        # update the goal markers for all robots in all envs
+        # flatten to [num_envs * num_robots, 3]
+        goal_positions = self._desired_pos_w.reshape(-1, 3)
+        self.goal_pos_visualizer.visualize(goal_positions)

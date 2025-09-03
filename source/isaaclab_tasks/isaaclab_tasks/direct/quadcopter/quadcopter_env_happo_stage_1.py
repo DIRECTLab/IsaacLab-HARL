@@ -341,7 +341,7 @@ class QuadcopterMARLEnvTeam(DirectMARLEnv):
             if not hasattr(self, "goal_pos_visualizer"):
                 palette = [
                     (1.0, 0.0, 0.0),  # red
-                    (0.0, 1.0, 0.0),  # green
+                    # (0.0, 1.0, 0.0),  # green
                     (0.0, 0.5, 1.0),  # blue
                     (1.0, 1.0, 0.0),  # yellow
                     (1.0, 0.0, 1.0),  # magenta

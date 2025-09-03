@@ -29,6 +29,12 @@ from .minitank_adversarial import (
     MinitankAdversarialEnvCfg,
     MinitankAdversarialEnv
 )
+
+from .minitank_adversarial_teams_stage_1 import (
+    MinitankAdversarialTeamsEnv,
+    MinitankAdversarialTeamsEnvCfg
+)
+
 ##
 # Register Gym environments.
 ##
@@ -79,5 +85,17 @@ gym.register(
         "env_cfg_entry_point": ThreeDimGalCamerasEnvCfg,
         "harl_happo_cfg_entry_point": f"{agents.__name__}:harl_happo_cfg.yaml",
         "harl_happo_adv_cfg_entry_point": f"{agents.__name__}:harl_happo_adv_cfg.yaml",
+    },
+)
+
+
+# Register the new minitank adversarial teams stage 1 environment
+gym.register(
+    id="Isaac-Minitank-Adversarial-Teams-Stage-1-v0",
+    entry_point=MinitankAdversarialTeamsEnv,
+    disable_env_checker=True,
+    kwargs={
+        "env_cfg_entry_point": MinitankAdversarialTeamsEnvCfg,
+        "harl_happo_adv_cfg_entry_point": f"{agents.__name__}:harl_happo_cfg.yaml",
     },
 )

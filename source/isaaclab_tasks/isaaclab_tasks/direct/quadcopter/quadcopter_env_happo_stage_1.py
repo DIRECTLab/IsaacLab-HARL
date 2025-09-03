@@ -137,6 +137,18 @@ class QuadcopterMARLEnvTeamCfg(DirectMARLEnvCfg):
 
 
 class QuadcopterMARLEnvTeam(DirectMARLEnv):
+    def _update_knocked_out(self):
+        # Knock out agents if they are below 0.2m from the ground
+        for agent in self.cfg.action_spaces:
+            below_ground = self.robots[agent].data.root_pos_w[:, 2] < 0.2
+            self.knocked_out[agent] |= below_ground
+
+    def _init_knocked_out(self):
+        # Initialize knocked_out attribute for each agent
+        self.knocked_out = {}
+        for agent in self.cfg.action_spaces:
+            self.knocked_out[agent] = torch.zeros(self.num_envs, dtype=torch.bool, device=self.device)
+
     def _draw_drone_color_markers(self):
         # Draw a colored marker above each drone, matching its goal color
         if not hasattr(self, "drone_pos_visualizer"):
@@ -193,6 +205,9 @@ class QuadcopterMARLEnvTeam(DirectMARLEnv):
         # add handle for debug visualization (this is set to a valid handle inside set_debug_vis)
         self.set_debug_vis(self.cfg.debug_vis)
 
+        # Initialize knocked_out attribute after all relevant attributes are set
+        self._init_knocked_out()
+
     def _setup_scene(self):
         self.num_robots = self.cfg.num_robots_per_team
         self.robots = {}
@@ -218,9 +233,15 @@ class QuadcopterMARLEnvTeam(DirectMARLEnv):
         light_cfg.func("/World/Light", light_cfg)
 
     def _pre_physics_step(self, actions: dict):
+        # Update knocked_out status before each physics step
+        self._update_knocked_out()
         # Apply actions for each robot
         for agent in self.cfg.action_spaces:
-            self.actions[agent] = actions[agent].clone().clamp(-1.0, 1.0)
+            # If agent is knocked out, set all actions to zero
+            agent_actions = actions[agent].clone().clamp(-1.0, 1.0)
+            mask = self.knocked_out[agent].unsqueeze(1)  # [num_envs, 1]
+            agent_actions = torch.where(mask, torch.zeros_like(agent_actions), agent_actions)
+            self.actions[agent] = agent_actions
             self._thrust[agent][:, 0, 2] = self.cfg.thrust_to_weight * self._robot_weight[agent] * (self.actions[agent][:, 0] + 1.0) / 2.0
             self._moment[agent][:, 0, :] = self.cfg.moment_scale * self.actions[agent][:, 1:]
 
@@ -273,28 +294,38 @@ class QuadcopterMARLEnvTeam(DirectMARLEnv):
 
     def _get_dones(self) -> tuple[dict, dict]:
         time_out = (self.episode_length_buf >= self.max_episode_length - 1).to(self.device)
-        died = torch.zeros(self.num_envs, dtype=torch.bool, device=self.device)
+        # Team is done if all team members are knocked out (knockout logic to be set later)
+        all_knocked_out = torch.ones(self.num_envs, dtype=torch.bool, device=self.device)
         for agent in self.cfg.action_spaces:
-            died |= self.robots[agent].data.root_pos_w[:, 2] < 0.1
-        # Team-based done: if any agent in the team is done, the team is done
-        dones = {"team_0": died}
+            all_knocked_out &= self.knocked_out[agent]
+        dones = {"team_0": all_knocked_out}
         time_outs = {"team_0": time_out}
         return dones, time_outs
 
     def _reset_idx(self, env_ids: torch.Tensor | None):
+        # Reset knockout status for all agents
+        self._init_knocked_out()
         if env_ids is None or (hasattr(env_ids, 'numel') and env_ids is not None and env_ids.numel() == self.num_envs):
             env_ids = self.robots[next(iter(self.robots))]._ALL_INDICES
 
         # Logging
-        # Use robot_0 for logging, or average over all robots
-        final_distance_to_goal = torch.linalg.norm(
-            self._desired_pos_w[env_ids, 0, :] - self.robots[next(iter(self.robots))].data.root_pos_w[env_ids], dim=1
-        ).mean()
+        # Compute average final distance to goal over all agents (absolute 3D distance)
+        num_robots = self.cfg.num_robots_per_team
+        all_robot_pos = torch.stack([
+            self.robots[f"robot_{i}"].data.root_pos_w[env_ids] for i in range(num_robots)
+        ], dim=1)  # [num_envs, num_robots, 3]
+        final_distances = torch.linalg.norm(self._desired_pos_w[env_ids, :, :] - all_robot_pos, dim=2)  # [num_envs, num_robots]
+        final_distance_to_goal = final_distances.mean()
         extras = dict()
         for key in self._episode_sums.keys():
             episodic_sum_avg = torch.mean(self._episode_sums[key][env_ids])
             extras["Episode_Reward/" + key] = episodic_sum_avg / self.max_episode_length_s
             self._episode_sums[key][env_ids] = 0.0
+        # Log per-agent final distance to goal
+        num_robots = self.cfg.num_robots_per_team
+        per_agent_final_dist = final_distances.mean(dim=0)  # [num_robots]
+        for i in range(num_robots):
+            extras[f"Metrics/final_distance_to_goal/robot_{i}"] = per_agent_final_dist[i].item()
         self.extras["log"] = dict()
         self.extras["log"].update(extras)
         extras = dict()

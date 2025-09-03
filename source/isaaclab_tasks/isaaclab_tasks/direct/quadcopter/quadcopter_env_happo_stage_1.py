@@ -62,6 +62,11 @@ class QuadcopterMARLEnvTeamCfg(DirectMARLEnvCfg):
     state_spaces = {f"robot_{i}": 0 for i in range(1)}
     possible_agents = ["robot_0"]
 
+    # Add teams (single team for now, but structure allows for more)
+    teams = {
+        "team_0": ["robot_0"],
+    }
+
     # simulation
     sim: SimulationCfg = SimulationCfg(
         dt=1 / 200,
@@ -199,21 +204,18 @@ class QuadcopterMARLEnvTeam(DirectMARLEnv):
 
     def _get_observations(self) -> dict:
         desired_pos_b, _ = subtract_frame_transforms(
-            self.robots["robot_0"].data.root_state_w[:, :3], self.robots["robot_0"].data.root_state_w[:, 3:7], self._desired_pos_w
+            self.robots["robot_0"].data.root_state_w[:, :3],
+            self.robots["robot_0"].data.root_state_w[:, 3:7],
+            self._desired_pos_w
         )
-        obs = torch.cat(
-            [
-                self.robots["robot_0"].data.root_lin_vel_b,
-                self.robots["robot_0"].data.root_ang_vel_b,
-                self.robots["robot_0"].data.projected_gravity_b,
-                desired_pos_b,
-                # TODO add space for other drone locations 
-                torch.zeros((self.num_envs, 3), device=self.device),
-            ],
-            dim=-1,
-        )
-        observations = {"robot_0": obs}
-        return observations
+        # Compose observation vector: 3 lin vel, 3 ang vel, 3 gravity, 3 desired_pos_b = 12
+        obs0 = torch.cat([
+            self.robots["robot_0"].data.root_lin_vel_b,
+            self.robots["robot_0"].data.root_ang_vel_b,
+            self.robots["robot_0"].data.projected_gravity_b,
+            desired_pos_b
+        ], dim=-1)
+        return {"team_0": {"robot_0": obs0}}
 
     def _get_rewards(self) -> dict:
         lin_vel = torch.sum(torch.square(self.robots["robot_0"].data.root_lin_vel_b), dim=1)
@@ -229,19 +231,16 @@ class QuadcopterMARLEnvTeam(DirectMARLEnv):
         # Logging
         for key, value in rewards.items():
             self._episode_sums[key] += value
-        return {"robot_0": reward}
+        # Return rewards in team structure
+        return {"team_0": reward}
 
     def _get_dones(self) -> tuple[dict, dict]:
         time_out = (self.episode_length_buf >= self.max_episode_length - 1).to(self.device)
         died = self.robots["robot_0"].data.root_pos_w[:, 2] < 0.1
-        dones = {}
-        dones["robot_0"] = died.to(self.device)
-        time_out = {robot_id:time_out for robot_id in self.robots.keys()}
-
-        # dones = {robot_id: torch.zeros(self.num_envs).to(torch.int8).to(self.device) for robot_id in self.robots.keys()}
-
-        return dones, time_out
-        # return dones, dones
+        # Team-based done: if any agent in the team is done, the team is done
+        dones = {"team_0": died.to(self.device)}
+        time_outs = {"team_0": time_out}
+        return dones, time_outs
 
     def _reset_idx(self, env_ids: torch.Tensor | None):
         if env_ids is None or len(env_ids) == self.num_envs:

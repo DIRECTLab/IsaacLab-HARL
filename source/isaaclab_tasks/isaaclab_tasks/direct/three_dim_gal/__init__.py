@@ -30,9 +30,14 @@ from .minitank_adversarial import (
     MinitankAdversarialEnv
 )
 
-from .minitank_adversarial_teams_stage_1 import (
-    MinitankAdversarialTeamsEnv,
-    MinitankAdversarialTeamsEnvCfg
+# from .minitank_adversarial_teams_stage_1 import (
+#     MinitankAdversarialTeamsEnv,
+#     MinitankAdversarialTeamsEnvCfg
+# )
+
+from .minitank_stage_1 import (
+    MinitankStage1Env,
+    MinitankStage1EnvCfg
 )
 
 ##
@@ -90,12 +95,22 @@ gym.register(
 
 
 # Register the new minitank adversarial teams stage 1 environment
+# gym.register(
+#     id="Isaac-Minitank-Adversarial-Teams-Stage-1-v0",
+#     entry_point=MinitankAdversarialTeamsEnv,
+#     disable_env_checker=True,
+#     kwargs={
+#         "env_cfg_entry_point": MinitankAdversarialTeamsEnvCfg,
+#         "harl_happo_adv_cfg_entry_point": f"{agents.__name__}:harl_happo_cfg.yaml",
+#     },
+# )
+
 gym.register(
-    id="Isaac-Minitank-Adversarial-Teams-Stage-1-v0",
-    entry_point=MinitankAdversarialTeamsEnv,
+    id="Minitank-Stage-1-Direct-v0",
+    entry_point=MinitankStage1Env,
     disable_env_checker=True,
     kwargs={
-        "env_cfg_entry_point": MinitankAdversarialTeamsEnvCfg,
-        "harl_happo_adv_cfg_entry_point": f"{agents.__name__}:harl_happo_cfg.yaml",
+        "env_cfg_entry_point": MinitankStage1EnvCfg,
+        "harl_happo_cfg_entry_point": f"{agents.__name__}:harl_happo_cfg.yaml",
     },
 )

@@ -13,6 +13,7 @@ from isaaclab.markers import VisualizationMarkers, VisualizationMarkersCfg
 from isaaclab.utils.math import subtract_frame_transforms
 from isaaclab.utils.math import quat_from_angle_axis, quat_from_euler_xyz, quat_rotate_inverse
 from isaaclab_assets.custom.soccer_ball import SOCCERBALL_CFG  # isort: skip
+import random
 
 def get_quaternion_tuple_from_xyz(x, y, z):
     quat_tensor = quat_from_euler_xyz(torch.tensor([x]), torch.tensor([y]), torch.tensor([z])).flatten()
@@ -21,7 +22,7 @@ def get_quaternion_tuple_from_xyz(x, y, z):
 @configclass
 class LeatherbackStage1SoccerEnvCfg(DirectMARLEnvCfg):
     decimation = 4
-    episode_length_s = 30.0
+    episode_length_s = 10.0
     action_spaces = {f"robot_{i}": 2 for i in range(1)}
     observation_spaces = {f"robot_{i}": 24 for i in range(1)}
     state_space = 0
@@ -102,7 +103,7 @@ class LeatherbackStage1SoccerEnvCfg(DirectMARLEnvCfg):
         "Knuckle__Upright__Front_Left",
     ]
 
-    env_spacing = 10.0
+    env_spacing = 50.0
     scene: InteractiveSceneCfg = InteractiveSceneCfg(num_envs=4096, env_spacing=env_spacing, replicate_physics=True)
 
     throttle_scale = 10
@@ -150,11 +151,16 @@ class LeatherbackStage1SoccerEnv(DirectMARLEnv):
                         size=(1, 3, 0.1),
                         visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(1.0, 0.0, 0.0)),
                     ),
+                    "goal_to_score": sim_utils.CuboidCfg(
+                        size=(.5, .5, .5),
+                        visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(0.0, 1.0, 0.0)),
+                    ),
+
                 },
         )
         self.goal_area = VisualizationMarkers(marker_cfg)
         self.goal1_pos, self.goal2_pos, self.goal1_area, self.goal2_area = self._get_goal_areas()
-        self.target_goal = None  # Will be set in reset
+        self.target_goal = torch.zeros(self.num_envs, dtype=torch.int32, device=self.device)
 
 
     def _setup_scene(self):
@@ -192,9 +198,17 @@ class LeatherbackStage1SoccerEnv(DirectMARLEnv):
         light_cfg.func("/World/Light", light_cfg)
 
     def _draw_goal_areas(self):
-        marker_locations = torch.concat([self.goal1_pos, self.goal2_pos], dim=0)
+        marker_ids0 = torch.zeros(self.num_envs, dtype=torch.int32, device=self.device)
+        marker_ids1 = torch.ones(self.num_envs, dtype=torch.int32, device=self.device)
+        marker_ids2 = 2 * torch.ones(self.num_envs, dtype=torch.int32, device=self.device)
 
-        self.goal_area.visualize(marker_locations)
+        marker_ids = torch.concat([marker_ids0, marker_ids1, marker_ids2], dim=0)
+
+        goal_to_score_pos = torch.where(self.target_goal.unsqueeze(1) == 0, self.goal1_pos, self.goal2_pos)
+
+        marker_locations = torch.concat([self.goal1_pos, self.goal2_pos, goal_to_score_pos], dim=0)
+
+        self.goal_area.visualize(marker_locations, marker_indices=marker_ids)
 
     def _pre_physics_step(self, actions: dict) -> None:
         self._throttle_action = actions["robot_0"][:, 0].repeat_interleave(4).reshape((-1, 4)) * self.cfg.throttle_scale
@@ -240,14 +254,16 @@ class LeatherbackStage1SoccerEnv(DirectMARLEnv):
             self.ball.data.root_vel_w[:, :3] - self.robots["robot_0"].data.root_vel_w[:, :3]
         )
 
-        goal1_pos, _ = subtract_frame_transforms(
-            self.robots["robot_0"].data.root_state_w[:, :3], self.robots["robot_0"].data.root_state_w[:, 3:7],
-            self.goal1_pos
+        target_goal_pos, _ = subtract_frame_transforms(
+            self.robots["robot_0"].data.root_state_w[:, :3],
+            self.robots["robot_0"].data.root_state_w[:, 3:7],
+            torch.where(self.target_goal.unsqueeze(1) == 0, self.goal1_pos, self.goal2_pos)
         )
 
-        goal2_pos, _ = subtract_frame_transforms(
-            self.robots["robot_0"].data.root_state_w[:, :3], self.robots["robot_0"].data.root_state_w[:, 3:7],
-            self.goal2_pos
+        other_goal_pos, _ = subtract_frame_transforms(
+            self.robots["robot_0"].data.root_state_w[:, :3],
+            self.robots["robot_0"].data.root_state_w[:, 3:7],
+            torch.where(self.target_goal.unsqueeze(1) == 0, self.goal2_pos, self.goal1_pos)
         )
 
         teammate_buffer = torch.zeros((self.num_envs, 3), device=self.device, dtype=torch.float32)
@@ -258,8 +274,8 @@ class LeatherbackStage1SoccerEnv(DirectMARLEnv):
             robot_vel, # Robot velocity in world frame (3)
             ball_pos,  # Ball position in robot frame (3)
             ball_vel, # Ball velocity in robot frame (3)
-            goal1_pos if self.target_goal == 0 else goal2_pos,
-            goal2_pos if self.target_goal == 0 else goal1_pos,  # Target goal position in robot frame (3)
+            target_goal_pos, # Target goal position in robot frame (3)
+            other_goal_pos,  # other goal position in robot frame (3)
             teammate_buffer,  # Teammate position in robot frame (3)
             enemy_0_buffer,  # Enemy 0 position in robot frame (3)
             enemy_1_buffer,  # Enemy 1 position in robot frame (3)
@@ -272,7 +288,7 @@ class LeatherbackStage1SoccerEnv(DirectMARLEnv):
     def _get_rewards(self) -> dict:
         ball_in_goal1, ball_in_goal2 = self._ball_in_goal_area()
 
-        goal_pos = self.goal1_pos if self.target_goal == 0 else self.goal2_pos
+        goal_pos = torch.where(self.target_goal.unsqueeze(1) == 0, self.goal1_pos, self.goal2_pos)
 
         ball_distance_to_goal = torch.linalg.norm(self.ball.data.root_pos_w - goal_pos, dim=1)
         ball_distance_to_goal_mapped = 1 - torch.tanh(ball_distance_to_goal / 10)
@@ -282,10 +298,10 @@ class LeatherbackStage1SoccerEnv(DirectMARLEnv):
         
         goal_reward = torch.zeros(self.num_envs, device=self.device)
         # Reward is 1 if ball is in target goal area, if in other goal area, reward is -1
-        if self.target_goal == 0:
-            goal_reward += (ball_in_goal1.float() - ball_in_goal2.float())
-        else:
-            goal_reward += (ball_in_goal2.float() - ball_in_goal1.float())
+        goal_reward[ball_in_goal1 & (self.target_goal == 0)] = 1.0
+        goal_reward[ball_in_goal2 & (self.target_goal == 1)] = 1.0
+        goal_reward[ball_in_goal1 & (self.target_goal == 1)] = -1.0
+        goal_reward[ball_in_goal2 & (self.target_goal == 0)] = -1.0
 
         rewards = {
             "dist_to_ball_reward": robot_distance_to_ball_mapped * self.step_dt,
@@ -333,6 +349,11 @@ class LeatherbackStage1SoccerEnv(DirectMARLEnv):
         return {"robot_0": ball_in_any_goal}, {"robot_0": time_out}
 
     def _reset_idx(self, env_ids: torch.Tensor | None):
+        if env_ids is None:
+            env_ids = torch.arange(self.num_envs, device=self.device)
+            
+        super()._reset_idx(env_ids)
+
         if len(env_ids) == self.num_envs:
             # Spread out the resets to avoid spikes in training when many environments reset at a similar time
             self.episode_length_buf[:] = torch.randint_like(
@@ -340,20 +361,24 @@ class LeatherbackStage1SoccerEnv(DirectMARLEnv):
             )
 
         ball_in_goal1, ball_in_goal2 = self._ball_in_goal_area()
-        num_scored = torch.count_nonzero(ball_in_goal1[env_ids]) if self.target_goal == 0 else torch.count_nonzero(ball_in_goal2[env_ids])
-        percent_scored = num_scored / len(env_ids) if len(env_ids) > 0 else 0
 
-        episode_lengths = self.episode_length_buf[env_ids].to(torch.float32) + 1
+        target_goals = self.target_goal[env_ids]
+
+        goals_scored = (ball_in_goal1[env_ids] & (target_goals == 0)) + (ball_in_goal2[env_ids] & (target_goals == 1))
+        percent_scored = goals_scored / len(env_ids) if len(env_ids) > 0 else 0
+
+        self.target_goal[env_ids] = 0 if random.random() < 0.5 else 1
+
+        episode_lengths = self.episode_length_buf[env_ids].to(torch.float32).clone() + 1
         self._draw_goal_areas()
 
-        super()._reset_idx(env_ids)
+        
 
         # Cache for convenience
         origins = self.scene.env_origins[env_ids]  # (N, 3)
 
         # We’ll assign robots sequentially
         robot_ids = list(self.robots.keys())
-        self.target_goal = 0 if torch.rand(1).item() < 0.5 else 1
 
         ball_default_state = self.ball.data.default_root_state.clone()[env_ids]
         ball_default_state[:, 0:3] = ball_default_state[:, 0:3] + self.scene.env_origins[env_ids] +\

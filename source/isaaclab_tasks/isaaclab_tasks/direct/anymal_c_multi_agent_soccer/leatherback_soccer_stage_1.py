@@ -90,7 +90,7 @@ class LeatherbackStage1SoccerEnvCfg(DirectMARLEnvCfg):
     )
 
     ball = SOCCERBALL_CFG.replace(prim_path="/World/envs/env_.*/Object4")
-    ball.init_state.pos = (0.0, 0.0, 5)
+    ball.init_state.pos = (0.0, 0.0, 0.1)
 
     throttle_dof_name = [
         "Wheel__Knuckle__Front_Left",
@@ -103,7 +103,7 @@ class LeatherbackStage1SoccerEnvCfg(DirectMARLEnvCfg):
         "Knuckle__Upright__Front_Left",
     ]
 
-    env_spacing = 50.0
+    env_spacing = 20.0
     scene: InteractiveSceneCfg = InteractiveSceneCfg(num_envs=4096, env_spacing=env_spacing, replicate_physics=True)
 
     throttle_scale = 10
@@ -111,9 +111,7 @@ class LeatherbackStage1SoccerEnvCfg(DirectMARLEnvCfg):
     steering_scale = 0.1
     steering_max = 0.75
 
-    reward_scale = 10
-    # time penalty
-    time_penalty = -0.01
+    goal_reward_scale = 20
 
 class LeatherbackStage1SoccerEnv(DirectMARLEnv):
     cfg: LeatherbackStage1SoccerEnvCfg
@@ -219,8 +217,6 @@ class LeatherbackStage1SoccerEnv(DirectMARLEnv):
         self._steering_action = torch.clamp(self._steering_action, -self.cfg.steering_max, self.cfg.steering_max)
         self._steering_state["robot_0"] = self._steering_action
 
-        self.ball.update(self.step_dt)
-
     def _apply_action(self) -> None:
         for robot_id in self.robots.keys():
             # self._throttle_state[robot_id] = -5*torch.ones_like(self._throttle_state[robot_id], device=self.device)
@@ -288,7 +284,10 @@ class LeatherbackStage1SoccerEnv(DirectMARLEnv):
     def _get_rewards(self) -> dict:
         ball_in_goal1, ball_in_goal2 = self._ball_in_goal_area()
 
-        goal_pos = torch.where(self.target_goal.unsqueeze(1) == 0, self.goal1_pos, self.goal2_pos)
+        goal_pos = torch.zeros_like(self.goal1_pos)
+
+        goal_pos[self.target_goal == 0] = self.goal1_pos[self.target_goal == 0]
+        goal_pos[self.target_goal == 1] = self.goal2_pos[self.target_goal == 1]
 
         ball_distance_to_goal = torch.linalg.norm(self.ball.data.root_pos_w - goal_pos, dim=1)
         ball_distance_to_goal_mapped = 1 - torch.tanh(ball_distance_to_goal / 10)
@@ -306,7 +305,7 @@ class LeatherbackStage1SoccerEnv(DirectMARLEnv):
         rewards = {
             "dist_to_ball_reward": robot_distance_to_ball_mapped * self.step_dt,
             "ball_to_goal_reward": ball_distance_to_goal_mapped  * self.step_dt,
-            "goal_reward": goal_reward * self.cfg.reward_scale,
+            "goal_reward": goal_reward * self.cfg.goal_reward_scale,
         }
 
         rewards = {k: torch.nan_to_num(v, nan=0.0, posinf=1e6, neginf=-1e6)
@@ -370,7 +369,7 @@ class LeatherbackStage1SoccerEnv(DirectMARLEnv):
         
         percent_scored = goals_scored / len(env_ids) if len(env_ids) > 0 else 0
 
-        self.target_goal[env_ids] = 0 if random.random() < 0.5 else 1
+        self.target_goal[env_ids] = torch.randint(0, 2, (len(env_ids),), device=self.device).to(torch.int32)
 
         self._draw_goal_areas()
 
@@ -383,8 +382,8 @@ class LeatherbackStage1SoccerEnv(DirectMARLEnv):
         robot_ids = list(self.robots.keys())
 
         ball_default_state = self.ball.data.default_root_state.clone()[env_ids]
-        ball_default_state[:, 0:3] = ball_default_state[:, 0:3] + self.scene.env_origins[env_ids] +\
-        torch.zeros_like(ball_default_state[:, 0:3], device=self.device).uniform_(-3, 3)
+        ball_default_state[:, :2] = ball_default_state[:, :2] + self.scene.env_origins[env_ids][:,:2] +\
+        torch.zeros_like(ball_default_state[:, :2], device=self.device).uniform_(-3, 3)
         self.ball.write_root_state_to_sim(ball_default_state, env_ids)
         self.ball.reset(env_ids)
 

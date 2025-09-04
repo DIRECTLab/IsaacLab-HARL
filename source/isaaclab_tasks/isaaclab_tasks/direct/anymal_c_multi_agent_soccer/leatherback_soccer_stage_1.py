@@ -351,7 +351,8 @@ class LeatherbackStage1SoccerEnv(DirectMARLEnv):
     def _reset_idx(self, env_ids: torch.Tensor | None):
         if env_ids is None:
             env_ids = torch.arange(self.num_envs, device=self.device)
-            
+
+        episode_lengths = self.episode_length_buf[env_ids].to(torch.float32).clone() + 1
         super()._reset_idx(env_ids)
 
         if len(env_ids) == self.num_envs:
@@ -364,12 +365,13 @@ class LeatherbackStage1SoccerEnv(DirectMARLEnv):
 
         target_goals = self.target_goal[env_ids]
 
-        goals_scored = (ball_in_goal1[env_ids] & (target_goals == 0)) + (ball_in_goal2[env_ids] & (target_goals == 1))
+        goals_scored = ((ball_in_goal1[env_ids] & (target_goals == 0))
+              | (ball_in_goal2[env_ids] & (target_goals == 1))).to(torch.float32).sum().item()
+        
         percent_scored = goals_scored / len(env_ids) if len(env_ids) > 0 else 0
 
         self.target_goal[env_ids] = 0 if random.random() < 0.5 else 1
 
-        episode_lengths = self.episode_length_buf[env_ids].to(torch.float32).clone() + 1
         self._draw_goal_areas()
 
         

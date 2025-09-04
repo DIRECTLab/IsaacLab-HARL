@@ -132,6 +132,8 @@ class QuadcopterMARLEnvTeamCfg(DirectMARLEnvCfg):
     ang_vel_reward_scale = -0.01
     distance_to_goal_reward_scale = 15.0
     debug_vis = True
+    # Knockout negative reward scale
+    knockout_negative_reward = -50.0
 
     ### CRAZYFLIE CONFIGURATION ###
 
@@ -211,6 +213,7 @@ class QuadcopterMARLEnvTeam(DirectMARLEnv):
                 "distance_to_goal",
                 "crazyflie_cosine_reward",
                 "tank_angle_reward",
+                "knockout",  # Added initialization for knockout
             ]
         }
 
@@ -292,15 +295,19 @@ class QuadcopterMARLEnvTeam(DirectMARLEnv):
             ang_vel = torch.sum(torch.square(self.robots[agent].data.root_ang_vel_b), dim=1)
             distance_to_goal = torch.linalg.norm(self._desired_pos_w[:, i, :] - self.robots[agent].data.root_pos_w, dim=1)
             distance_to_goal_mapped = 1 - torch.tanh(distance_to_goal / 0.8)
+            # Knockout negative reward
+            knockout_penalty = self.knocked_out[agent].float() 
             rewards[agent] = (
                 lin_vel * self.cfg.lin_vel_reward_scale * self.step_dt
                 + ang_vel * self.cfg.ang_vel_reward_scale * self.step_dt
                 + distance_to_goal_mapped * self.cfg.distance_to_goal_reward_scale * self.step_dt
+                    + knockout_penalty * self.cfg.knockout_negative_reward * self.step_dt
             )
             # Logging
             self._episode_sums["lin_vel"] += lin_vel * self.cfg.lin_vel_reward_scale * self.step_dt
             self._episode_sums["ang_vel"] += ang_vel * self.cfg.ang_vel_reward_scale * self.step_dt
             self._episode_sums["distance_to_goal"] += distance_to_goal_mapped * self.cfg.distance_to_goal_reward_scale * self.step_dt
+            self._episode_sums["knockout"] += knockout_penalty * self.cfg.knockout_negative_reward * self.step_dt
         # Return rewards in team structure
         return {"team_0": torch.stack(list(rewards.values()), dim=1).sum(dim=1)}
 
@@ -317,7 +324,7 @@ class QuadcopterMARLEnvTeam(DirectMARLEnv):
     def _reset_idx(self, env_ids: torch.Tensor | None):
         # Reset knockout status for all agents
         self._init_knocked_out()
-        if env_ids is None or (hasattr(env_ids, 'numel') and env_ids is not None and env_ids.numel() == self.num_envs):
+        if env_ids is None or (env_ids is not None and hasattr(env_ids, 'numel') and env_ids.numel() == self.num_envs):
             env_ids = self.robots[next(iter(self.robots))]._ALL_INDICES
 
         # Logging
@@ -333,6 +340,16 @@ class QuadcopterMARLEnvTeam(DirectMARLEnv):
             episodic_sum_avg = torch.mean(self._episode_sums[key][env_ids])
             extras["Episode_Reward/" + key] = episodic_sum_avg / self.max_episode_length_s
             self._episode_sums[key][env_ids] = 0.0
+
+            # NEW: log knockout counts
+            knockout_counts = {}
+            total_knockouts = 0
+            for agent in self.cfg.action_spaces:
+                agent_knockouts = self.knocked_out[agent][env_ids].sum().item()
+                knockout_counts[f"Metrics/knockouts/{agent}"] = agent_knockouts
+                total_knockouts += agent_knockouts
+            knockout_counts["Metrics/knockouts/total"] = total_knockouts
+            extras.update(knockout_counts)
         # Log per-agent final distance to goal
         num_robots = self.cfg.num_robots_per_team
         per_agent_final_dist = final_distances.mean(dim=0)  # [num_robots]

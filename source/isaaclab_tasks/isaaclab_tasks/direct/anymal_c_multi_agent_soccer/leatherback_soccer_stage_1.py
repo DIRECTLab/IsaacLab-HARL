@@ -89,7 +89,7 @@ class LeatherbackStage1SoccerEnvCfg(DirectMARLEnvCfg):
     )
 
     ball = SOCCERBALL_CFG.replace(prim_path="/World/envs/env_.*/Object4")
-    ball.init_state.pos = (-0.3, 0.0, 5)
+    ball.init_state.pos = (0.0, 0.0, 5)
 
     throttle_dof_name = [
         "Wheel__Knuckle__Front_Left",
@@ -265,6 +265,8 @@ class LeatherbackStage1SoccerEnv(DirectMARLEnv):
             enemy_1_buffer,  # Enemy 1 position in robot frame (3)
         ), dim=-1)
 
+        obs = torch.nan_to_num(obs, nan=0.0, posinf=1e6, neginf=-1e6)
+
         return {"robot_0": obs}
     
     def _get_rewards(self) -> dict:
@@ -290,6 +292,9 @@ class LeatherbackStage1SoccerEnv(DirectMARLEnv):
             "ball_to_goal_reward": ball_distance_to_goal_mapped  * self.step_dt,
             "goal_reward": goal_reward * self.cfg.reward_scale,
         }
+
+        rewards = {k: torch.nan_to_num(v, nan=0.0, posinf=1e6, neginf=-1e6)
+                for k, v in rewards.items()}
 
         reward = torch.sum(torch.stack([rewards[key] for key in rewards.keys()]), dim=0)
 
@@ -328,6 +333,12 @@ class LeatherbackStage1SoccerEnv(DirectMARLEnv):
         return {"robot_0": ball_in_any_goal}, {"robot_0": time_out}
 
     def _reset_idx(self, env_ids: torch.Tensor | None):
+        if len(env_ids) == self.num_envs:
+            # Spread out the resets to avoid spikes in training when many environments reset at a similar time
+            self.episode_length_buf[:] = torch.randint_like(
+                self.episode_length_buf, high=int(self.max_episode_length)
+            )
+
         ball_in_goal1, ball_in_goal2 = self._ball_in_goal_area()
         num_scored = torch.count_nonzero(ball_in_goal1[env_ids]) if self.target_goal == 0 else torch.count_nonzero(ball_in_goal2[env_ids])
         percent_scored = num_scored / len(env_ids) if len(env_ids) > 0 else 0
@@ -361,7 +372,7 @@ class LeatherbackStage1SoccerEnv(DirectMARLEnv):
             default_root_state = self.robots[robot_id].data.default_root_state[env_ids].clone()
 
             # Place robot
-            default_root_state[:, :3] = origins
+            default_root_state[:, :2] = origins[:, :2]
             default_root_state[:, 2] += self.robots[robot_id].data.default_root_state[env_ids][:, 2]
 
             # Write to sim

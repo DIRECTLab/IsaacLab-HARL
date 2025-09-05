@@ -122,8 +122,7 @@ class AnymalCAdversarialEnvCfg(DirectMARLEnvCfg):
     possible_agents = ["robot_0", "robot_1"]
 
     teams = {
-        "team_0": ["robot_0"],
-        "team_1": ["robot_1"]
+        "team_0": ["robot_0", "robot_1"]
     }
 
     # simulation

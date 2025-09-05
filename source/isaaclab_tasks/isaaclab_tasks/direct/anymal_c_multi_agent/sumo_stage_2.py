@@ -71,27 +71,76 @@ class EventCfg:
         },
     )
 
-@configclass
-class SumoStage1BlocksPushEnvCfg(DirectMARLEnvCfg):
-    decimation = 4
-    episode_length_s = 20.0
+    physics_material_2 = EventTerm(
+        func=mdp.randomize_rigid_body_material,
+        mode="startup",
+        params={
+            "asset_cfg": SceneEntityCfg("robot_2", body_names=".*"),
+            "static_friction_range": (0.8, 0.8),
+            "dynamic_friction_range": (0.6, 0.6),
+            "restitution_range": (0.0, 0.2),
+            "num_buckets": 64,
+        },
+    )
 
-    action_spaces = {f"robot_{i}": 12 for i in range(2)}
-    observation_spaces = {f"robot_{i}": 56 for i in range(2)}
+    add_base_mass_2 = EventTerm(
+        func=mdp.randomize_rigid_body_mass,
+        mode="startup",
+        params={
+            "asset_cfg": SceneEntityCfg("robot_2", body_names="base"),
+            "mass_distribution_params": (-5.0, 5.0),
+            "operation": "add",
+        },
+    )
+
+    physics_material_3 = EventTerm(
+        func=mdp.randomize_rigid_body_material,
+        mode="startup",
+        params={
+            "asset_cfg": SceneEntityCfg("robot_3", body_names=".*"),
+            "static_friction_range": (0.8, 0.8),
+            "dynamic_friction_range": (0.6, 0.6),
+            "restitution_range": (0.0, 0.2),
+            "num_buckets": 64,
+        },
+    )
+
+    add_base_mass_3 = EventTerm(
+        func=mdp.randomize_rigid_body_mass,
+        mode="startup",
+        params={
+            "asset_cfg": SceneEntityCfg("robot_3", body_names="base"),
+            "mass_distribution_params": (-5.0, 5.0),
+            "operation": "add",
+        },
+    )
+
+@configclass
+class SumoStage2EnvCfg(DirectMARLEnvCfg):
+    decimation = 4
+    episode_length_s = 30.0
+
+    # 4 robots, each with throttle + steering (2 actions)
+    action_spaces = {f"robot_{i}": 12 for i in range(4)}
+
+    # Observation: teammate (3) + opp1 (3) + opp2 (3) + rcol(1) + dist_center(1) + velocity(3)
+    # = 14 per robot
+    observation_spaces = {f"robot_{i}": 56 for i in range(4)}
 
     state_space = 0
-    state_spaces = {f"robot_{i}": 0 for i in range(2)}
+    state_spaces = {f"robot_{i}": 0 for i in range(4)}
 
-    possible_agents = [f"robot_{i}" for i in range(2)]
+    possible_agents = [f"robot_{i}" for i in range(4)]
+
+    # Teams
     teams = {
-        "team_0": ["robot_0"],
-        "team_1": ["robot_1"]
+        "team_0": ["robot_0", "robot_1"],
+        "team_1": ["robot_2", "robot_3"],
     }
 
     sim: SimulationCfg = SimulationCfg(dt=1 / 200, render_interval=decimation)
 
-    events: EventCfg = EventCfg()
-
+    # Robot configs (prim paths unique per robot)
     robot_0: ArticulationCfg = ANYMAL_C_CFG.replace(prim_path="/World/envs/env_.*/Robot_0")
     robot_0.init_state.rot = get_quaternion_tuple_from_xyz(0,0,torch.pi/2)
     robot_0.init_state.pos = (0.0, 1.0, 0.3)
@@ -100,75 +149,59 @@ class SumoStage1BlocksPushEnvCfg(DirectMARLEnvCfg):
     robot_1.init_state.rot = get_quaternion_tuple_from_xyz(0,0,torch.pi/2)
     robot_1.init_state.pos = (0.0, -1.0, 0.3)
 
+    robot_2: ArticulationCfg = ANYMAL_C_CFG.replace(prim_path="/World/envs/env_.*/Robot_2")
+    robot_2.init_state.rot = get_quaternion_tuple_from_xyz(0,0,torch.pi/2)
+    robot_2.init_state.pos = (0.0, -1.0, 0.3)
+
+    robot_3: ArticulationCfg = ANYMAL_C_CFG.replace(prim_path="/World/envs/env_.*/Robot_3")
+    robot_3.init_state.rot = get_quaternion_tuple_from_xyz(0,0,torch.pi/2)
+    robot_3.init_state.pos = (0.0, -1.0, 0.3)
+
     contact_sensor_0: ContactSensorCfg = ContactSensorCfg(
-        prim_path="/World/envs/env_.*/Robot_0/.*", history_length=3, update_period=0.005, track_air_time=True,
+        prim_path="/World/envs/env_.*/Robot_0/base", history_length=3, update_period=0.005, track_air_time=True,
+        # filter_prim_paths_expr=["/World/ground"]
     )
     contact_sensor_1: ContactSensorCfg = ContactSensorCfg(
-        prim_path="/World/envs/env_.*/Robot_1/.*", history_length=3, update_period=0.005, track_air_time=True,
+        prim_path="/World/envs/env_.*/Robot_1/base", history_length=3, update_period=0.005, track_air_time=True,
+        # filter_prim_paths_expr=["/World/ground"]
+    )
+    contact_sensor_2: ContactSensorCfg = ContactSensorCfg(
+        prim_path="/World/envs/env_.*/Robot_2/base", history_length=3, update_period=0.005, track_air_time=True,
+        # filter_prim_paths_expr=["/World/ground"]
+    )
+    contact_sensor_3: ContactSensorCfg = ContactSensorCfg(
+        prim_path="/World/envs/env_.*/Robot_3/base", history_length=3, update_period=0.005, track_air_time=True,
+        # filter_prim_paths_expr=["/World/ground"]
     )
 
-    env_spacing = 10.0
-    scene: InteractiveSceneCfg = InteractiveSceneCfg(num_envs=4096, env_spacing=env_spacing, replicate_physics=True)
+    throttle_scale = 10
+    throttle_max = 50
+    steering_scale = 0.1
+    steering_max = 0.75
 
     action_scale = 0.5
-    ring_radius_min = 2
-    ring_radius_max = 5.5
+    ring_radius_min = 3
+    ring_radius_max = 6
     reward_scale = 10
     # time penalty
     time_penalty = -0.01
-    box_velocity_scale = 0.01
-    lin_vel_reward_scale = 1.0
-    yaw_rate_reward_scale = 0.5
-    z_vel_reward_scale = -2.0
-    ang_vel_reward_scale = -0.05
-    joint_torque_reward_scale = -2.5e-5
-    joint_accel_reward_scale = -2.5e-7
-    action_rate_reward_scale = -0.01
-    feet_air_time_reward_scale = 0.5
-    undesired_contact_reward_scale = -1.0
-    flat_orientation_reward_scale = -5.0
 
-    block_0 = RigidObjectCfg(
-        prim_path="/World/envs/env_.*/block_0",
-        spawn=sim_utils.CuboidCfg(
-            size=(.4,.4,.4),
-            rigid_props=sim_utils.RigidBodyPropertiesCfg(),
-            mass_props=sim_utils.MassPropertiesCfg(mass=10.0),
-            collision_props=sim_utils.CollisionPropertiesCfg(),
-            visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(0.0, 1.0, 0.0)),
-        ),
-        init_state=RigidObjectCfg.InitialStateCfg(
-            pos=(1.0, .5, 0.1), rot=(1.0, 0.0, 0.0, 0.0)
-        ),
-    )
+    env_spacing = 10.0
+    scene: InteractiveSceneCfg = InteractiveSceneCfg(num_envs=4096, env_spacing=ring_radius_max * 2, replicate_physics=True)
 
+class SumoStage2Env(DirectMARLEnv):
+    cfg: SumoStage2EnvCfg
 
-    block_1 = RigidObjectCfg(
-        prim_path="/World/envs/env_.*/block_1",
-        spawn=sim_utils.CuboidCfg(
-            size=(.4,.4,.4),
-            rigid_props=sim_utils.RigidBodyPropertiesCfg(),
-            mass_props=sim_utils.MassPropertiesCfg(mass=10.0),
-            collision_props=sim_utils.CollisionPropertiesCfg(),
-            visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(0.0, 1.0, 0.0)),
-        ),
-        init_state=RigidObjectCfg.InitialStateCfg(
-            pos=(1.0, -.5, 0.1), rot=(1.0, 0.0, 0.0, 0.0)
-        ),
-    )
-
-
-class SumoStage1BlocksPushEnv(DirectMARLEnv):
-    cfg: SumoStage1BlocksPushEnvCfg
-
-    def __init__(self, cfg: SumoStage1BlocksPushEnvCfg, render_mode: str | None = None, headless: bool | None = None, **kwargs):
+    def __init__(self, cfg: SumoStage2EnvCfg, render_mode: str | None = None, headless: bool | None = None, debug: bool | None = False, **kwargs):
         super().__init__(cfg, render_mode, **kwargs)
         self.headless = headless
-        
+        self.debug = debug
+
         self.actions = {
             agent: torch.zeros(self.num_envs, action_space, device=self.device)
             for agent, action_space in self.cfg.action_spaces.items()
         }
+
         self.env_spacing = self.cfg.env_spacing
 
         self.ring_radius = torch.full((self.num_envs,), (self.cfg.ring_radius_min + self.cfg.ring_radius_max) * 0.5,
@@ -186,34 +219,53 @@ class SumoStage1BlocksPushEnv(DirectMARLEnv):
         )
         self.ring_markers = VisualizationMarkers(ring_marker_cfg)
 
+        team_dot_markers = {
+            "blue": sim_utils.SphereCfg(
+                radius=0.08,
+                visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(0.0, 0.0, 0.8)),
+            ),
+            "red": sim_utils.SphereCfg(
+                radius=0.08,
+                visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(0.8, 0.0, 0.0)),
+            ),
+        }
+        self.team_markers = VisualizationMarkers(
+            VisualizationMarkersCfg(prim_path="/World/TeamDots", markers=team_dot_markers)
+        )
+
+
         self._episode_sums = {
             key: torch.zeros(self.num_envs, dtype=torch.float, device=self.device)
             for key in [
-                # Team 0
-                "team_0_block0_center_reward",
-                "team_0_dist_r0_b0_reward",
-                # "team_0_time_penalty",
                 "team_0_push_out_reward",
-
-                # Team 1
-                "team_1_block1_center_reward",
-                "team_1_dist_r1_b1_reward",
-                # "team_1_time_penalty",
-                "team_1_push_out_reward",
+                "team_1_push_out_reward"
             ]
         }
 
         self.base_ids = {}
-        self.feet_ids = {}
-        self.undesired_body_contact_ids = {}
 
         for robot_id, contact_sensor in self.contact_sensors.items():
             _base_id, _ = contact_sensor.find_bodies("base")
-            _feet_ids, _ = contact_sensor.find_bodies(".*FOOT")
-            _undesired_contact_body_ids, _ = contact_sensor.find_bodies([".*THIGH"])
             self.base_ids[robot_id] = _base_id
-            self.feet_ids[robot_id] = _feet_ids
-            self.undesired_body_contact_ids[robot_id] = _undesired_contact_body_ids
+
+
+    @torch.no_grad()
+    def _draw_team_dots(self):
+        positions, indices, orientations, scales = [], [], [], []
+        for robot_id, robot in self.robots.items():
+            pos = robot.data.root_pos_w.clone()
+            pos[:, 2] += 0.5  # hover above robot
+            positions.append(pos)
+
+            team = "blue" if "0" in robot_id or "1" in robot_id else "red"
+            indices.append(torch.full((self.num_envs,), 0 if team=="blue" else 1, device=self.device))
+
+        marker_positions = torch.cat(positions, dim=0)
+        marker_indices = torch.cat(indices, dim=0)
+        marker_orientations = torch.zeros((marker_positions.shape[0], 4), device=self.device); marker_orientations[:,0]=1.0
+        marker_scales = torch.ones((marker_positions.shape[0], 3), device=self.device)
+
+        self.team_markers.visualize(marker_positions, marker_orientations, scales=marker_scales, marker_indices=marker_indices)
 
     @torch.no_grad()
     def _draw_ring_markers(self):
@@ -287,11 +339,6 @@ class SumoStage1BlocksPushEnv(DirectMARLEnv):
             ),
         )
         # Setup rest of the scene
-        self.blocks = {}
-
-        for i in range(2):
-            self.blocks[f"block_{i}"] = RigidObject(self.cfg.__dict__[f"block_{i}"])
-
         self.robots = {}
         self.num_robots = sum(1 for key in self.cfg.__dict__.keys() if "robot_" in key)
         self.contact_sensors = {}
@@ -315,155 +362,97 @@ class SumoStage1BlocksPushEnv(DirectMARLEnv):
                 self.cfg.action_scale * actions[robot_id] + robot.data.default_joint_pos
             )
 
-        for block in self.blocks.values():
-            block.update(self.step_dt)
-
     def _apply_action(self) -> None:
         for robot_id, robot in self.robots.items():
             robot.set_joint_position_target(self.processed_actions[robot_id])
 
     def _get_observations(self) -> dict:
-        self.previous_actions = copy.deepcopy(self.actions)
-        time_remaining = (self.max_episode_length - self.episode_length_buf).unsqueeze(-1)
+        obs = {}
         rcol = self.ring_radius.view(-1, 1)
 
-        robot_0_desired_pos, _ = subtract_frame_transforms(
-            self.robots["robot_0"].data.root_state_w[:, :3], self.robots["robot_0"].data.root_state_w[:, 3:7],
-            self.blocks["block_0"].data.root_pos_w
-        )
-        robot_0_teammate_pos, _ = subtract_frame_transforms(
-            self.robots["robot_0"].data.root_state_w[:, :3], self.robots["robot_0"].data.root_state_w[:, 3:7],
-            self.robots["robot_1"].data.root_pos_w
-        )
-        robot_0_other_block_pos, _ = subtract_frame_transforms(
-            self.robots["robot_0"].data.root_state_w[:, :3], self.robots["robot_0"].data.root_state_w[:, 3:7],
-            self.blocks["block_1"].data.root_pos_w
-        )
-        robot_0_dist_center = torch.norm(
-            self.robots["robot_0"].data.root_pos_w - self.scene.env_origins, dim=-1, keepdim=True
-        )
-        robot_0_obs = torch.cat(
-            [
-                self.robots["robot_0"].data.root_lin_vel_b,
-                self.robots["robot_0"].data.root_ang_vel_b,
-                self.robots["robot_0"].data.projected_gravity_b,
-                self.robots["robot_0"].data.joint_pos - self.robots["robot_0"].data.default_joint_pos,
-                self.robots["robot_0"].data.joint_vel,
-                self.actions["robot_0"],
-                robot_0_desired_pos,
-                robot_0_teammate_pos,
-                robot_0_other_block_pos,
-                robot_0_dist_center,
-                rcol,
-                # time_remaining
-            ],
-            dim=-1,
-        )
+        for i, (team, agents) in enumerate(self.cfg.teams.items()):
+            obs[team] = {}
+            for robot_id in agents:
+                teammate_id = [a for a in agents if a != robot_id][0]
+                enemy_team = [a for a in self.cfg.teams.keys() if a != team][0]
+                enemies = self.cfg.teams[enemy_team]
 
+                enemy_0_id = enemies[0]
+                enemy_1_id = enemies[1]
 
-        robot_1_desired_pos, _ = subtract_frame_transforms(
-            self.robots["robot_1"].data.root_state_w[:, :3], self.robots["robot_1"].data.root_state_w[:, 3:7],
-            self.blocks["block_1"].data.root_pos_w
-        )
-        robot_1_teammate_pos, _ = subtract_frame_transforms(
-            self.robots["robot_1"].data.root_state_w[:, :3], self.robots["robot_1"].data.root_state_w[:, 3:7],
-            self.robots["robot_0"].data.root_pos_w
-        )
-        robot_1_other_block_pos, _ = subtract_frame_transforms(
-            self.robots["robot_1"].data.root_state_w[:, :3], self.robots["robot_1"].data.root_state_w[:, 3:7],
-            self.blocks["block_0"].data.root_pos_w
-        )
-        robot_1_dist_center = torch.norm(
-            self.robots["robot_1"].data.root_pos_w - self.scene.env_origins, dim=-1, keepdim=True
-        )
-        robot_1_obs = torch.cat(
-            [
-                self.robots["robot_1"].data.root_lin_vel_b,
-                self.robots["robot_1"].data.root_ang_vel_b,
-                self.robots["robot_1"].data.projected_gravity_b,
-                self.robots["robot_1"].data.joint_pos - self.robots["robot_1"].data.default_joint_pos,
-                self.robots["robot_1"].data.joint_vel,
-                self.actions["robot_1"],
-                robot_1_desired_pos,
-                robot_1_teammate_pos,
-                robot_1_other_block_pos,
-                robot_1_dist_center,
-                rcol,
-                # time_remaining
-            ],
-            dim=-1,
-        )
+                enemy_0_pos, _ = subtract_frame_transforms(
+                    self.robots[robot_id].data.root_state_w[:, :3], self.robots[robot_id].data.root_state_w[:, 3:7],
+                    self.robots[enemy_0_id].data.root_pos_w
+                )
 
-        robot_0_obs = torch.nan_to_num(robot_0_obs, nan=0.0, posinf=1e6, neginf=-1e6)
-        robot_1_obs = torch.nan_to_num(robot_1_obs, nan=0.0, posinf=1e6, neginf=-1e6)
+                teammate_pos, _ = subtract_frame_transforms(
+                    self.robots[robot_id].data.root_state_w[:, :3], self.robots[robot_id].data.root_state_w[:, 3:7],
+                    self.robots[teammate_id].data.root_pos_w
+                )
 
-        return {"team_0":{"robot_0":robot_0_obs}, "team_1":{"robot_1":robot_1_obs}}
+                enemy_1_pos, _ = subtract_frame_transforms(
+                    self.robots[robot_id].data.root_state_w[:, :3], self.robots[robot_id].data.root_state_w[:, 3:7],
+                    self.robots[enemy_1_id].data.root_pos_w
+                )
+
+                dist_center = torch.norm(
+                    self.robots[robot_id].data.root_pos_w - self.scene.env_origins, dim=-1, keepdim=True
+                )
+
+                robot_obs = torch.cat(
+                    [
+                        self.robots[robot_id].data.root_lin_vel_b,
+                        self.robots[robot_id].data.root_ang_vel_b,
+                        self.robots[robot_id].data.projected_gravity_b,
+                        self.robots[robot_id].data.joint_pos - self.robots[robot_id].data.default_joint_pos,
+                        self.robots[robot_id].data.joint_vel,
+                        self.actions[robot_id],
+                        enemy_0_pos,
+                        teammate_pos,
+                        enemy_1_pos,
+                        dist_center,
+                        rcol,
+                    ],
+                    dim=-1,
+                )
+                robot_obs = torch.nan_to_num(robot_obs, nan=0.0, posinf=1e6, neginf=-1e6)
+
+                obs[team][robot_id] = robot_obs
+
+        return obs
     
     def _get_rewards(self) -> dict:
-        circle_centers = self.scene.env_origins
+        self._draw_team_dots()
 
-        # --- Distance of each block from center ---
-        block0_dist = torch.norm(self.blocks["block_0"].data.root_pos_w - circle_centers, dim=-1)
-        block1_dist = torch.norm(self.blocks["block_1"].data.root_pos_w - circle_centers, dim=-1)
+        fallen = {}
 
-        block0_center_mapped = torch.tanh(block0_dist / self.cfg.ring_radius_max)
-        block1_center_mapped = torch.tanh(block1_dist / self.cfg.ring_radius_max)
-
-        # --- Distances robot<->its block ---
-        robot0_pos = self.robots["robot_0"].data.root_pos_w
-        robot1_pos = self.robots["robot_1"].data.root_pos_w
-        block0_pos = self.blocks["block_0"].data.root_pos_w
-        block1_pos = self.blocks["block_1"].data.root_pos_w
-
-        dist_r0_b0 = torch.norm(robot0_pos - block0_pos, dim=-1)
-        dist_r1_b1 = torch.norm(robot1_pos - block1_pos, dim=-1)
-
-        dist_r0_b0_mapped = 1 - torch.tanh(dist_r0_b0 / self.cfg.ring_radius_max)
-        dist_r1_b1_mapped = 1 - torch.tanh(dist_r1_b1 / self.cfg.ring_radius_max)
-
-        # --- Time penalty (shared) ---
-        time_penalty = self.cfg.time_penalty * torch.ones_like(block0_dist, device=self.device)
+        for team, agents in self.cfg.teams.items():
+            if not team in fallen.keys():
+                fallen[team] = torch.zeros(self.num_envs, dtype=torch.bool, device=self.device)
+            for robot_id in agents:
+                died = self.robots[robot_id].data.root_com_pos_w[:, 2] < .1
+                fallen[team] |= died
 
         out = self._robots_out_of_ring()
-        block0_out = out["block_0"].to(torch.float32)
-        block1_out = out["block_1"].to(torch.float32)
-        robot0_out = out["robot_0"].to(torch.float32)
-        robot1_out = out["robot_1"].to(torch.float32)
+        team0_out = torch.any(torch.stack([out["robot_0"], out["robot_1"]]), dim=0)
+        team1_out = torch.any(torch.stack([out["robot_2"], out["robot_3"]]), dim=0)
 
-        push_out_reward_team0 = (block0_out - robot0_out) * self.cfg.reward_scale
-        push_out_reward_team1 = (block1_out - robot1_out) * self.cfg.reward_scale
+        tie = torch.logical_and(team0_out, team1_out)
+        tie = 1 - tie.to(torch.int8)
 
-        # --- Rewards per team ---
-        rewards_team0 = {
-            "block0_center_reward": block0_center_mapped * self.step_dt,
-            "dist_r0_b0_reward": dist_r0_b0_mapped * self.step_dt,
-            # "time_penalty": time_penalty,
-            "push_out_reward": push_out_reward_team0,
-        }
-        # rewards_team0.update(all_rewards["robot_0"])
+        team0_lost = team0_out.to(torch.int8) | fallen["team_0"].to(torch.int8)
+        team1_lost = team1_out.to(torch.int8) | fallen["team_1"].to(torch.int8)
+        time_out = (self.episode_length_buf >= self.max_episode_length - 1).to(torch.int8)
+        
+        push_out_reward_0 =  tie * (team1_lost - team0_lost - time_out) * self.cfg.reward_scale 
+        push_out_reward_1 = tie * (team0_lost - team1_lost - time_out) * self.cfg.reward_scale
 
-        rewards_team1 = {
-            "block1_center_reward": block1_center_mapped * self.step_dt,
-            "dist_r1_b1_reward": dist_r1_b1_mapped * self.step_dt,
-            # "time_penalty": time_penalty,
-            "push_out_reward": push_out_reward_team1,
-        }
-        # rewards_team1.update(all_rewards["robot_1"])
-
-
-        # Sum per team
-        reward_team0 = torch.sum(torch.stack(list(rewards_team0.values())), dim=0)
-        reward_team1 = torch.sum(torch.stack(list(rewards_team1.values())), dim=0)
-
-        # Log episode sums
-        for key, val in rewards_team0.items():
-            self._episode_sums[f"team_0_{key}"] += val
-        for key, val in rewards_team1.items():
-            self._episode_sums[f"team_1_{key}"] += val
+        self._episode_sums["team_0_push_out_reward"] += push_out_reward_0
+        self._episode_sums["team_1_push_out_reward"] += push_out_reward_1
 
         return {
-            "team_0": reward_team0,
-            "team_1": reward_team1,
+            "team_0": push_out_reward_0,
+            "team_1": push_out_reward_1,
         }
 
     def _robots_out_of_ring(self) -> dict[str, torch.Tensor]:
@@ -473,22 +462,17 @@ class SumoStage1BlocksPushEnv(DirectMARLEnv):
             pos_xy = self.robots[robot_id].data.root_pos_w[:, :2]  
             dist = torch.linalg.norm(pos_xy - env_xy, dim=1)
             out[robot_id] = dist > self.ring_radius
-        for block_id in self.blocks.keys():
-            pos_xy = self.blocks[block_id].data.root_com_pos_w[:, :2]  
-            dist = torch.linalg.norm(pos_xy - env_xy, dim=1)
-            out[block_id] = dist > self.ring_radius
-
         return out
 
     def _get_dones(self) -> tuple[dict, dict]:
         out_map = self._robots_out_of_ring()
         team0_out = torch.any(torch.stack([out_map["robot_0"], out_map["robot_1"]]), dim=0)
-        team1_out = torch.any(torch.stack([out_map["block_0"], out_map["block_1"]]), dim=0)
+        team1_out = torch.any(torch.stack([out_map["robot_2"], out_map["robot_3"]]), dim=0)
         fallen = torch.zeros(self.num_envs, dtype=torch.bool, device=self.device)
         for robot_id, robot in self.robots.items():
-            net_contact_forces = self.contact_sensors[robot_id].data.net_forces_w_history
-            died = torch.any(torch.max(torch.norm(net_contact_forces[:, :, self.base_ids[robot_id]], dim=-1), dim=1)[0] > 1.0, dim=1)
-            died = robot.data.root_com_pos_w[:, 2] < .17
+            # net_contact_forces = self.contact_sensors[robot_id].data.net_forces_w_history
+            # died = torch.any(torch.max(torch.norm(net_contact_forces[:, :, self.base_ids[robot_id]], dim=-1), dim=1)[0] > 1.0, dim=1)
+            died = robot.data.root_com_pos_w[:, 2] < .1
             fallen |= died
 
         done = team0_out | team1_out | fallen
@@ -499,66 +483,59 @@ class SumoStage1BlocksPushEnv(DirectMARLEnv):
         return dones, timeouts
 
     def _reset_idx(self, env_ids: torch.Tensor | None):
+        episode_lengths = self.episode_length_buf[env_ids].to(torch.float32) + 1
+        out_map = self._robots_out_of_ring()
+        N = env_ids.shape[0] # type: ignore
+
+        team0_out = torch.any(torch.stack([out_map["robot_0"], out_map["robot_1"]]), dim=0)
+        team1_out = torch.any(torch.stack([out_map["robot_2"], out_map["robot_3"]]), dim=0)
+        tot = torch.count_nonzero(team1_out[env_ids]).item() + torch.count_nonzero(team0_out[env_ids]).item()
+
         if env_ids is None:
             env_ids = torch.arange(self.num_envs, device=self.device)
-        episode_times = self.episode_length_buf[env_ids].to(torch.float32) + 1
         super()._reset_idx(env_ids)
 
         # spread out the updates
-        if len(env_ids) == self.num_envs: #type:ignore
-            self.episode_length_buf[:] = torch.randint_like(
-                self.episode_length_buf, high=int(self.max_episode_length)
-            )
+        if not self.debug:
+            if len(env_ids) == self.num_envs: # type: ignore
+                self.episode_length_buf[:] = torch.randint_like(self.episode_length_buf, high=int(self.max_episode_length))
 
         # Randomize ring radius per env
         low, high = self.cfg.ring_radius_min, self.cfg.ring_radius_max
         self.ring_radius[env_ids] = (
-            torch.empty(env_ids.shape[0], device=self.device).uniform_(low, high) #type:ignore
+            torch.empty(env_ids.shape[0], device=self.device).uniform_(low, high) # type: ignore
         )
 
         origins = self.scene.env_origins[env_ids]  # (N, 3)
-        N = env_ids.shape[0] #type:ignore
 
-        # Example: need 3 positions per env (2 robots + 1 block)
-        num_samples = len(self.robots) + len(self.blocks)
-        grid_offsets = self._sample_positions_grid(N, self.ring_radius[env_ids], num_samples)
+        grid_offsets = self._sample_positions_grid(N, self.ring_radius[env_ids], self.num_robots)
 
-        # Assign slots
-        robot_slots = grid_offsets[:, :len(self.robots), :]
-        block_slots = grid_offsets[:, len(self.robots):, :]
-
-        # Apply robot positions
         for i, robot_id in enumerate(self.robots):
-
-            # Reset robot state
             self.robots[robot_id].reset(env_ids)
             joint_pos = self.robots[robot_id].data.default_joint_pos[env_ids]
             joint_vel = self.robots[robot_id].data.default_joint_vel[env_ids]
             default_root_state = self.robots[robot_id].data.default_root_state[env_ids].clone()
             default_root_state[:, :2] = origins[:, :2]
-            default_root_state[:, 0:2] += robot_slots[:, i, 0:2]
+            default_root_state[:, 0:2] += grid_offsets[:, i, 0:2]
             self.robots[robot_id].write_root_pose_to_sim(default_root_state[:, :7], env_ids)
             self.robots[robot_id].write_root_velocity_to_sim(default_root_state[:, 7:], env_ids)
             self.robots[robot_id].write_joint_state_to_sim(joint_pos, joint_vel, None, env_ids)
 
-        # Apply block positions
-        for j, (block_id, block) in enumerate(self.blocks.items()):
-            default_root_state = block.data.default_root_state[env_ids].clone()
-            default_root_state[:, :2] = origins[:, :2]
-            default_root_state[:, 0:2] += block_slots[:, j, 0:2]
-            block.write_root_pose_to_sim(default_root_state[:, :7], env_ids)
-            block.write_root_velocity_to_sim(default_root_state[:, 7:], env_ids)
-
-        # Draw markers & reset episode logs
         self._draw_ring_markers()
+        self._draw_team_dots()
         extras = dict()
+        
+        extras["team0_win_percentage"] = (torch.count_nonzero(team1_out[env_ids]).item() / N) if N > 0 else 0
+        extras["team1_win_percentage"] = (torch.count_nonzero(team0_out[env_ids]).item() / N) if N > 0 else 0
+
         for key in self._episode_sums.keys():
-            episodic_sum_avg = torch.mean(self._episode_sums[key][env_ids] / (episode_times))
+            episodic_sum_avg = torch.mean(self._episode_sums[key][env_ids] / episode_lengths)
             extras["Episode_Reward/"+key] = episodic_sum_avg
             self._episode_sums[key][env_ids] = 0.0
 
         self.extras["log"] = dict()
         self.extras["log"].update(extras)
+
 
     def _sample_positions_grid(self, N, radii, num_samples, min_dist=0.6, grid_spacing=0.5):
         """
@@ -577,7 +554,7 @@ class SumoStage1BlocksPushEnv(DirectMARLEnv):
         offsets = torch.zeros((N, num_samples, 3), device=device)
 
         for i in range(N):
-            r = radii[i].item() * 0.9
+            r = radii[i].item()
 
             # Build grid within bounding square [-r, r]
             xs = torch.arange(-r, r + grid_spacing, grid_spacing, device=device)
@@ -606,4 +583,3 @@ class SumoStage1BlocksPushEnv(DirectMARLEnv):
             offsets[i, :, 0:2] = torch.stack(chosen, dim=0)
 
         return offsets
-

@@ -11,7 +11,7 @@ import gymnasium as gym
 
 from . import agents
 from .anymal_c_soccer_find_ball_teacher import AnymalCFindBallHappoEnv, AnymalCHappoFindBallEnvCfg
-from .anymal_c_soccer_play_soccer import AnymalCPlaySoccer, AnymalCSoccerCfg
+from .leatherback_anymal_soccer_stage_2 import AnymalCPlaySoccer, AnymalCSoccerCfg
 ##
 # Register Gym environments.
 ##
@@ -41,3 +41,4 @@ gym.register(
         "harl_happo_cfg_entry_point": f"{agents.__name__}:harl_happo_cfg.yaml",
     },
 )
+

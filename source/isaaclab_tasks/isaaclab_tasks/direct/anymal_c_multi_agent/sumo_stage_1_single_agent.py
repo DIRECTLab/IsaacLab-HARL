@@ -45,17 +45,6 @@ class EventCfg:
         },
     )
 
-    # mass_scale_0 = EventTerm(
-    #     func=mdp.randomize_rigid_body_mass,
-    #     mode="reset",
-    #     params={
-    #         "asset_cfg": SceneEntityCfg("robot_0", body_names=".*"),
-    #         # scale each link's mass by a factor in this range
-    #         "mass_distribution_params": (0.90, 1.30),  # widen if you want more asymmetry
-    #         "operation": "scale",                      # use multiplicative scaling
-    #     },
-    # )
-
     add_base_mass_0 = EventTerm(
         func=mdp.randomize_rigid_body_mass,
         mode="startup",
@@ -65,40 +54,6 @@ class EventCfg:
             "operation": "add",
         },
     )
-
-    # physics_material_1 = EventTerm(
-    #     func=mdp.randomize_rigid_body_material,
-    #     mode="startup",
-    #     params={
-    #         "asset_cfg": SceneEntityCfg("robot_1", body_names=".*"),
-    #         "static_friction_range": (0.8, 0.8),
-    #         "dynamic_friction_range": (0.6, 0.6),
-    #         "restitution_range": (0.0, 0.2),
-    #         "num_buckets": 64,
-    #     },
-    # )
-
-    # mass_scale_1 = EventTerm(
-    #     func=mdp.randomize_rigid_body_mass,
-    #     mode="reset",
-    #     params={
-    #         "asset_cfg": SceneEntityCfg("robot_1", body_names=".*"),
-    #         # scale each link's mass by a factor in this range
-    #         "mass_distribution_params": (0.90, 1.30),  # widen if you want more asymmetry
-    #         "operation": "scale",                      # use multiplicative scaling
-    #         # "scale_inertia": True,  # if your Isaac Lab version supports this flag
-    #     },
-    # )
-
-    # add_base_mass_1 = EventTerm(
-    #     func=mdp.randomize_rigid_body_mass,
-    #     mode="startup",
-    #     params={
-    #         "asset_cfg": SceneEntityCfg("robot_1", body_names="base"),
-    #         "mass_distribution_params": (-5.0, 5.0),
-    #         "operation": "add",
-    #     },
-    # )
 
 def get_distance_to_center(arena_center: torch.tensor, robot: Articulation):
     robot_pos_w = robot.data.root_state_w[:, :3]                # (num_envs, 3)
@@ -168,19 +123,8 @@ class SumoStage1EnvSingleAgentCfg(DirectMARLEnvCfg):
     robot_0.init_state.rot = get_quaternion_tuple_from_xyz(0,0,torch.pi/2)
     robot_0.init_state.pos = (0.0, 1.0, 0.3)
 
-    # robot_1: ArticulationCfg = ANYMAL_C_CFG.replace(prim_path="/World/envs/env_.*/Robot_1")
-    # contact_sensor_1: ContactSensorCfg = ContactSensorCfg(
-    #     prim_path="/World/envs/env_.*/Robot_1/.*", history_length=3, update_period=0.005, track_air_time=True,
-    # )
-    # robot_1.init_state.rot = get_quaternion_tuple_from_xyz(0,0,torch.pi/2)
-    # robot_1.init_state.pos = (0.0, -1.0, 0.3)
-
     # --- NEW: goal params (visual + sampling) ---
     goal_reach_radius: float = 0.35          # within this distance counts as "reached"
-    goal_height_z: float = 0.05              # small lift so the marker is visible
-    goal_marker_radius: float = 0.08
-    goal_a_color: tuple[float, float, float] = (0.2, 0.6, 1.0)  # light blue
-    goal_b_color: tuple[float, float, float] = (1.0, 0.3, 0.8)  # pink
     goal_spawn_radius_min: float = 3
     goal_spawn_radius_max: float = 5
     goal_min_separation: float = 1.0    
@@ -275,9 +219,6 @@ class SumoStage1EnvSingleAgent(DirectMARLEnv):
     def _draw_markers(self):
 
         marker_ids = torch.zeros(self.num_envs, dtype=torch.int32).to(self.device)
-
-
-
         self.my_visualizer.visualize(self._desired_pos, None, marker_indices=marker_ids)
 
     def _setup_scene(self):
@@ -285,7 +226,6 @@ class SumoStage1EnvSingleAgent(DirectMARLEnv):
         self.num_robots = sum(1 for key in self.cfg.__dict__.keys() if "robot_" in key)
         self.robots = {}
         self.contact_sensors = {}
-        self.height_scanners = {}
 
         for i in range(self.num_robots):
             self.robots[f"robot_{i}"] = Articulation(self.cfg.__dict__["robot_" + str(i)])
@@ -342,7 +282,6 @@ class SumoStage1EnvSingleAgent(DirectMARLEnv):
                         self._desired_pos
                     )
 
-                # dist_to_center = get_distance_to_center(self.scene.env_origins[:, :2].to(self.device), self.robots[robot_id])
                 dist_to_center = torch.zeros((self.num_envs, 1), device=self.device)
                 arena_radius = torch.zeros((self.num_envs, 1), device=self.device)
                 time_remaining = torch.zeros((self.num_envs, 1), device=self.device)
@@ -375,18 +314,8 @@ class SumoStage1EnvSingleAgent(DirectMARLEnv):
         self._draw_markers()
         all_rewards = {}
         reach_r = self.cfg.goal_reach_radius
-        # any_robot_reached = torch.zeros(self.num_envs, dtype=torch.bool, device=self.device)
         goals_xy = self._desired_pos[:, :2]
         
-        # for robot_id, robot in self.robots.items():
-        #     # robot base XY: (N, 2)
-        #     robot_xy = robot.data.root_pos_w[:, :2]
-        #     # pairwise dists to both goals: (N, 2)
-        #     dists = torch.norm(goals_xy - robot_xy.unsqueeze(1), dim=-1)
-        #     # did this robot hit any goal? (N,)
-        #     hit = (dists <= reach_r).any(dim=1)
-        #     any_robot_reached |= hit
-
         for robot_id in self.robots.keys():
             # goal reached reward
             robot_xy = self.robots[robot_id].data.root_pos_w[:, :2]
@@ -477,7 +406,7 @@ class SumoStage1EnvSingleAgent(DirectMARLEnv):
 
         # --- Reset robots & states ---
         origins = self.scene.env_origins[env_ids]  # (N, 3)
-        N = env_ids.shape[0]
+        N = env_ids.shape[0] # type:ignore
 
         min_separation = 1            
         spawn_radius_max = 2

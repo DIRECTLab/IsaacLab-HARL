@@ -26,24 +26,6 @@ from isaaclab_assets import CRAZYFLIE_CFG  # isort: skip
 from isaaclab.markers import CUBOID_MARKER_CFG  # isort: skip
 
 
-class QuadcopterEnvWindow(BaseEnvWindow):
-    """Window manager for the Quadcopter environment."""
-
-    def __init__(self, env: DroneStage1EnvSingleAgentMARLEnv, window_name: str = "IsaacLab"):
-        """Initialize the window.
-
-        Args:
-            env: The environment object.
-            window_name: The name of the window. Defaults to "IsaacLab".
-        """
-        # initialize base window
-        super().__init__(env, window_name)
-        # add custom UI elements
-        with self.ui_window_elements["main_vstack"]:
-            with self.ui_window_elements["debug_frame"]:
-                with self.ui_window_elements["debug_vstack"]:
-                    # add command manager visualization
-                    self._create_debug_vis_ui_element("targets", self.env)
 
 
 @configclass
@@ -55,12 +37,15 @@ class DroneStage1EnvSingleAgentCfg(DirectMARLEnvCfg):
     action_space = 4
     action_spaces = {"robot_0": 4}
 
-    # with camera = 12 + output dim of cnn = 32 = 44
-    # observation_spaces = {"robot_0": 44}
-    observation_spaces = {"robot_0": 12}
+    # Padded observation: 12 (original) + 3 (teammate_pos) + 3 (other_pos) + 1 (dist_to_center) + 1 (arena_radius) = 20
+    observation_space = 20
+    observation_spaces = {"robot_0": 20 for i in range(1)}
     state_space = 0
     state_spaces = {f"robot_{i}": 0 for i in range(1)}
-    possible_agents = ["robot_0"]
+    possible_agents = ["robot_0" for i in range(1)]
+
+    # Teams for single agent
+    teams = {"team_0": ["robot_0"]}
 
     # simulation
     sim: SimulationCfg = SimulationCfg(
@@ -201,16 +186,26 @@ class DroneStage1EnvSingleAgentMARLEnv(DirectMARLEnv):
         desired_pos_b, _ = subtract_frame_transforms(
             self.robots["robot_0"].data.root_state_w[:, :3], self.robots["robot_0"].data.root_state_w[:, 3:7], self._desired_pos_w
         )
+        # Padding: teammate_pos (3), other_pos (3), dist_to_center (1), arena_radius (1)
+        teammate_pos = torch.zeros((self.num_envs, 3), device=self.device)
+        other_pos = torch.zeros((self.num_envs, 3), device=self.device)
+        dist_to_center = torch.zeros((self.num_envs, 1), device=self.device)
+        arena_radius = torch.zeros((self.num_envs, 1), device=self.device)
         obs = torch.cat(
             [
                 self.robots["robot_0"].data.root_lin_vel_b,
                 self.robots["robot_0"].data.root_ang_vel_b,
                 self.robots["robot_0"].data.projected_gravity_b,
                 desired_pos_b,
+                teammate_pos,
+                other_pos,
+                dist_to_center,
+                arena_radius,
             ],
             dim=-1,
         )
-        observations = {"robot_0": obs}
+        # Return as team dict for compatibility
+        observations = {"team_0": {"robot_0": obs}}
         return observations
 
     def _get_rewards(self) -> dict:
@@ -227,19 +222,16 @@ class DroneStage1EnvSingleAgentMARLEnv(DirectMARLEnv):
         # Logging
         for key, value in rewards.items():
             self._episode_sums[key] += value
-        return {"robot_0": reward}
+        # Flatten for single-agent team
+        return {"team_0": reward}
 
     def _get_dones(self) -> tuple[dict, dict]:
-        time_out = (self.episode_length_buf >= self.max_episode_length - 1).to(self.device)
-        died = self.robots["robot_0"].data.root_pos_w[:, 2] < 0.1
-        dones = {}
-        dones["robot_0"] = died.to(self.device)
-        time_out = {robot_id:time_out for robot_id in self.robots.keys()}
-
-        # dones = {robot_id: torch.zeros(self.num_envs).to(torch.int8).to(self.device) for robot_id in self.robots.keys()}
-
+        time_out_tensor = (self.episode_length_buf >= self.max_episode_length - 1).to(self.device)
+        died_tensor = self.robots["robot_0"].data.root_pos_w[:, 2] < 0.1
+        # Flatten for single-agent team
+        dones = {"team_0": died_tensor}
+        time_out = {"team_0": time_out_tensor}
         return dones, time_out
-        # return dones, dones
 
     def _reset_idx(self, env_ids: torch.Tensor | None):
         if env_ids is None or len(env_ids) == self.num_envs:

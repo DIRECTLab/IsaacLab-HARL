@@ -112,6 +112,8 @@ class LeatherbackStage1SoccerEnvCfg(DirectMARLEnvCfg):
     steering_max = 0.75
 
     goal_reward_scale = 20
+    ball_to_goal_reward_scale = 1.0
+    dist_to_ball_reward_scale = 1.0
 
 class LeatherbackStage1SoccerEnv(DirectMARLEnv):
     cfg: LeatherbackStage1SoccerEnvCfg
@@ -216,6 +218,7 @@ class LeatherbackStage1SoccerEnv(DirectMARLEnv):
         self._steering_action = actions["robot_0"][:, 1].repeat_interleave(2).reshape((-1, 2)) * self.cfg.steering_scale
         self._steering_action = torch.clamp(self._steering_action, -self.cfg.steering_max, self.cfg.steering_max)
         self._steering_state["robot_0"] = self._steering_action
+        self.ball.update(self.step_dt)
 
     def _apply_action(self) -> None:
         for robot_id in self.robots.keys():
@@ -303,8 +306,8 @@ class LeatherbackStage1SoccerEnv(DirectMARLEnv):
         goal_reward[ball_in_goal2 & (self.target_goal == 0)] = -1.0
 
         rewards = {
-            "dist_to_ball_reward": robot_distance_to_ball_mapped * self.step_dt,
-            "ball_to_goal_reward": ball_distance_to_goal_mapped  * self.step_dt,
+            "dist_to_ball_reward": robot_distance_to_ball_mapped * self.cfg.dist_to_ball_reward_scale * self.step_dt,
+            "ball_to_goal_reward": ball_distance_to_goal_mapped  * self.cfg.ball_to_goal_reward_scale * self.step_dt,
             "goal_reward": goal_reward * self.cfg.goal_reward_scale,
         }
 

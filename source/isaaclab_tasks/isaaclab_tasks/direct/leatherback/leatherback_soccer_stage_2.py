@@ -13,6 +13,8 @@ from isaaclab.markers import VisualizationMarkers, VisualizationMarkersCfg
 from isaaclab.utils.math import subtract_frame_transforms
 from isaaclab.utils.math import quat_from_angle_axis, quat_from_euler_xyz, quat_rotate_inverse
 from isaaclab_assets.custom.soccer_ball import SOCCERBALL_CFG  # isort: skip
+from isaaclab.envs.common import ViewerCfg
+
 import random
 
 def get_quaternion_tuple_from_xyz(x, y, z):
@@ -116,6 +118,7 @@ class LeatherbackStage2AdversarialSoccerEnvCfg(DirectMARLEnvCfg):
 
     env_spacing = 20.0
     scene: InteractiveSceneCfg = InteractiveSceneCfg(num_envs=4096, env_spacing=env_spacing, replicate_physics=True)
+    viewer = ViewerCfg(eye=(10.0, 10.0, 10.0), env_index=0, origin_type="env")
 
     throttle_scale = 10
     throttle_max = 50
@@ -145,9 +148,8 @@ class LeatherbackStage2AdversarialSoccerEnv(DirectMARLEnv):
         self._episode_sums = {
             key: torch.zeros(self.num_envs, dtype=torch.float, device=self.device)
             for key in [
-                "dist_to_ball_reward",
-                "ball_to_goal_reward",
-                "goal_reward",
+                "goal_reward_team0",
+                "goal_reward_team1",
             ]
         }
 
@@ -348,12 +350,15 @@ class LeatherbackStage2AdversarialSoccerEnv(DirectMARLEnv):
         team_1_reward = ball_in_goal1.to(torch.int8) - ball_in_goal2.to(torch.int8) * (time_out.to(torch.int8) ^ 1)
 
         rewards = {
-            "team_0_reward": team_0_reward * self.cfg.goal_reward_scale,
-            "team_1_reward": team_1_reward * self.cfg.goal_reward_scale,
+            "team_0": team_0_reward * self.cfg.goal_reward_scale,
+            "team_1": team_1_reward * self.cfg.goal_reward_scale,
         }
 
         rewards = {k: torch.nan_to_num(v, nan=0.0, posinf=1e6, neginf=-1e6)
                 for k, v in rewards.items()}
+        
+        self._episode_sums["goal_reward_team0"] += rewards["team_0"]
+        self._episode_sums["goal_reward_team1"] += rewards["team_1"]
 
         return rewards
     

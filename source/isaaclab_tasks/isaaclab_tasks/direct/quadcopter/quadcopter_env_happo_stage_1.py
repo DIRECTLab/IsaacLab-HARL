@@ -55,7 +55,8 @@ class QuadcopterMARLEnvTeamCfg(DirectMARLEnvCfg):
     action_space = 4
 
     # Number of robots per team
-    num_robots_per_team = 3  # You can change this number as needed
+    num_robots_per_team = 1  # You can change this number as needed
+    num_padded_agents = 3  # for padding to fixed size, if needed
     action_spaces = {f"robot_{i}": 4 for i in range(num_robots_per_team)}
     
     base_obs_size = 3 + 3 + 3 + 3
@@ -287,7 +288,19 @@ class QuadcopterMARLEnvTeam(DirectMARLEnv):
                 desired_pos_b,
                 other_pos,
             ], dim=-1)
-        return {"team_0": obs}
+
+        # Pad missing agents with zeros of correct shape
+        padded_obs = {}
+        # Use the observation size of the first real agent for all padded agents
+        default_obs_size = next(iter(self.cfg.observation_spaces.values())) if self.cfg.observation_spaces else 0
+        for i in range(self.cfg.num_padded_agents):
+            agent = f"robot_{i}"
+            if agent in obs:
+                padded_obs[agent] = obs[agent]
+            else:
+                padded_obs[agent] = torch.zeros(self.num_envs, default_obs_size, device=self.device)
+
+        return {"team_0": padded_obs}
 
     def _get_rewards(self) -> dict:
         rewards = {}

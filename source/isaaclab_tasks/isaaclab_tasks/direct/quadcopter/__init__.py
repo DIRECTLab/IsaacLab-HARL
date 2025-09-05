@@ -58,6 +58,7 @@ gym.register(
     disable_env_checker=True,
     kwargs={
         "env_cfg_entry_point": f"{__name__}.quadcopter_env_happo_v2_state_1:DroneStage1EnvSingleAgentCfg",
-        "harl_happo_cfg_entry_point": f"{agents.__name__}:harl_happo_cfg.yaml",
+        # "harl_happo_cfg_entry_point": f"{agents.__name__}:harl_happo_cfg.yaml",
+        "harl_happo_adv_cfg_entry_point": f"{agents.__name__}:harl_happo_adv_cfg.yaml",
     },
 )

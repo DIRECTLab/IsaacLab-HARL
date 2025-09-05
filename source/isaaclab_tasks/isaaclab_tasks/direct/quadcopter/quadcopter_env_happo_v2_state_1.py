@@ -209,6 +209,8 @@ class DroneStage1EnvSingleAgentMARLEnv(DirectMARLEnv):
         return observations
 
     def _get_rewards(self) -> dict:
+        all_rewards = {}
+        # Compute reward for each agent (here, just robot_0)
         lin_vel = torch.sum(torch.square(self.robots["robot_0"].data.root_lin_vel_b), dim=1)
         ang_vel = torch.sum(torch.square(self.robots["robot_0"].data.root_ang_vel_b), dim=1)
         distance_to_goal = torch.linalg.norm(self._desired_pos_w - self.robots["robot_0"].data.root_pos_w, dim=1)
@@ -219,11 +221,10 @@ class DroneStage1EnvSingleAgentMARLEnv(DirectMARLEnv):
             "distance_to_goal": distance_to_goal_mapped * self.cfg.distance_to_goal_reward_scale * self.step_dt,
         }
         reward = torch.sum(torch.stack(list(rewards.values())), dim=0)
-        # Logging
         for key, value in rewards.items():
             self._episode_sums[key] += value
-        # Flatten for single-agent team
-        return {"team_0": reward}
+        all_rewards["robot_0"] = reward
+        return {"team_0": all_rewards["robot_0"]}
 
     def _get_dones(self) -> tuple[dict, dict]:
         time_out_tensor = (self.episode_length_buf >= self.max_episode_length - 1).to(self.device)

@@ -62,3 +62,14 @@ gym.register(
         "harl_happo_adv_cfg_entry_point": f"{agents.__name__}:harl_happo_adv_cfg.yaml",
     },
 )
+
+gym.register(
+    id="Isaac-Quadcopter-Direct-Stage2-MultiAgent-v0",
+    entry_point=f"{__name__}.quadcopter_env_happo_v2_state_2:DroneStage2EnvMultiAgentMARLEnv",
+    disable_env_checker=True,
+    kwargs={
+        "env_cfg_entry_point": f"{__name__}.quadcopter_env_happo_v2_state_2:DroneStage2EnvMultiAgentCfg",
+        # "harl_happo_cfg_entry_point": f"{agents.__name__}:harl_happo_cfg.yaml",
+        "harl_happo_adv_cfg_entry_point": f"{agents.__name__}:harl_happo_adv_cfg.yaml",
+    },
+)

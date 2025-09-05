@@ -42,6 +42,8 @@
                 "--headless",
                 "--log_interval", "1",
                 "--save_interval", "10000",
+                "--save_checkpoints"
+                "--dir", "results/isaaclab/Isaac-Quadcopter-Direct-Stage1-SingleAgent-v0/happo_adv/NEW_drone_Stage1-SingleAgent-v0/seed-00001-2025-09-05-15-55-25/best_model"
                 "--video",
                 "--video_length", "600",
                 "--video_interval", "30_000",

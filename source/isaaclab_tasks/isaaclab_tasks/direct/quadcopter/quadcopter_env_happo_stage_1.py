@@ -142,26 +142,27 @@ class QuadcopterMARLEnvTeam(DirectMARLEnv):
     @property
     def agent_active_masks(self):
         """
-        Returns a dict of agent active masks (1.0 if agent is active, 0.0 if knocked out), shape [num_envs, 1] per agent.
+        Returns a dict of agent active masks (1.0 if agent is alive, 0.0 if dead), shape [num_envs, 1] per agent.
         """
         agent_active_masks = {}
         for team, agents in self.cfg.teams.items():
             agent_active_masks[team] = {}
             for agent in agents:
-                agent_active_masks[team][agent] = (~self.knocked_out[agent]).float().unsqueeze(-1)
+                agent_active_masks[team][agent] = self.alive[agent].float().unsqueeze(-1)
         return agent_active_masks
     
-    def _update_knocked_out(self):
-        # Knock out agents if they are below 0.2m from the ground
+    def _update_alive(self):
+        # Mark agents as dead (alive=False) if they are below 0.2m from the ground
         for agent in self.cfg.action_spaces:
+            # active_masks use 0 to mask out agents that have died
             below_ground = self.robots[agent].data.root_pos_w[:, 2] < 0.2
-            self.knocked_out[agent] |= below_ground
+            self.alive[agent] = ~below_ground
 
-    def _init_knocked_out(self):
-        # Initialize knocked_out attribute for each agent
-        self.knocked_out = {}
+    def _init_alive(self):
+        # Initialize alive attribute for each agent (True=alive, False=dead)
+        self.alive = {}
         for agent in self.cfg.action_spaces:
-            self.knocked_out[agent] = torch.zeros(self.num_envs, dtype=torch.bool, device=self.device)
+            self.alive[agent] = torch.ones(self.num_envs, dtype=torch.bool, device=self.device)
 
     def _draw_drone_color_markers(self):
         # Draw a colored marker above each drone, matching its goal color
@@ -213,15 +214,15 @@ class QuadcopterMARLEnvTeam(DirectMARLEnv):
                 "distance_to_goal",
                 "crazyflie_cosine_reward",
                 "tank_angle_reward",
-                "knockout",  # Added initialization for knockout
+                "knockout",  # This now tracks deaths (alive=False)
             ]
         }
 
         # add handle for debug visualization (this is set to a valid handle inside set_debug_vis)
         self.set_debug_vis(self.cfg.debug_vis)
 
-        # Initialize knocked_out attribute after all relevant attributes are set
-        self._init_knocked_out()
+        # Initialize alive attribute after all relevant attributes are set
+        self._init_alive()
 
     def _setup_scene(self):
         self.num_robots = self.cfg.num_robots_per_team
@@ -248,13 +249,13 @@ class QuadcopterMARLEnvTeam(DirectMARLEnv):
         light_cfg.func("/World/Light", light_cfg)
 
     def _pre_physics_step(self, actions: dict):
-        # Update knocked_out status before each physics step
-        self._update_knocked_out()
+        # Update alive status before each physics step
+        self._update_alive()
         # Apply actions for each robot
         for agent in self.cfg.action_spaces:
-            # If agent is knocked out, set all actions to zero
+            # If agent is dead, set all actions to zero
             agent_actions = actions[agent].clone().clamp(-1.0, 1.0)
-            mask = self.knocked_out[agent].unsqueeze(1)  # [num_envs, 1]
+            mask = (~self.alive[agent]).unsqueeze(1)  # [num_envs, 1]
             agent_actions = torch.where(mask, torch.zeros_like(agent_actions), agent_actions)
             self.actions[agent] = agent_actions
             self._thrust[agent][:, 0, 2] = self.cfg.thrust_to_weight * self._robot_weight[agent] * (self.actions[agent][:, 0] + 1.0) / 2.0
@@ -295,35 +296,33 @@ class QuadcopterMARLEnvTeam(DirectMARLEnv):
             ang_vel = torch.sum(torch.square(self.robots[agent].data.root_ang_vel_b), dim=1)
             distance_to_goal = torch.linalg.norm(self._desired_pos_w[:, i, :] - self.robots[agent].data.root_pos_w, dim=1)
             distance_to_goal_mapped = 1 - torch.tanh(distance_to_goal / 0.8)
-            # Knockout negative reward
-            knockout_penalty = self.knocked_out[agent].float() 
+            # Death negative reward
+            death_penalty = (~self.alive[agent]).float()
             rewards[agent] = (
                 lin_vel * self.cfg.lin_vel_reward_scale * self.step_dt
                 + ang_vel * self.cfg.ang_vel_reward_scale * self.step_dt
                 + distance_to_goal_mapped * self.cfg.distance_to_goal_reward_scale * self.step_dt
-                    + knockout_penalty * self.cfg.knockout_negative_reward * self.step_dt
+                + death_penalty * self.cfg.knockout_negative_reward * self.step_dt
             )
             # Logging
             self._episode_sums["lin_vel"] += lin_vel * self.cfg.lin_vel_reward_scale * self.step_dt
             self._episode_sums["ang_vel"] += ang_vel * self.cfg.ang_vel_reward_scale * self.step_dt
             self._episode_sums["distance_to_goal"] += distance_to_goal_mapped * self.cfg.distance_to_goal_reward_scale * self.step_dt
-            self._episode_sums["knockout"] += knockout_penalty * self.cfg.knockout_negative_reward * self.step_dt
+            self._episode_sums["knockout"] += death_penalty * self.cfg.knockout_negative_reward * self.step_dt
         # Return rewards in team structure
         return {"team_0": torch.stack(list(rewards.values()), dim=1).sum(dim=1)}
 
     def _get_dones(self) -> tuple[dict, dict]:
         time_out = (self.episode_length_buf >= self.max_episode_length - 1).to(self.device)
-        # Team is done if all team members are knocked out (knockout logic to be set later)
-        all_knocked_out = torch.ones(self.num_envs, dtype=torch.bool, device=self.device)
+        # Team is done if all team members are dead (alive=False)
+        all_dead = torch.ones(self.num_envs, dtype=torch.bool, device=self.device)
         for agent in self.cfg.action_spaces:
-            all_knocked_out &= self.knocked_out[agent]
-        dones = {"team_0": all_knocked_out}
+            all_dead &= ~self.alive[agent]
+        dones = {"team_0": all_dead}
         time_outs = {"team_0": time_out}
         return dones, time_outs
 
     def _reset_idx(self, env_ids: torch.Tensor | None):
-        # Reset knockout status for all agents
-        self._init_knocked_out()
         if env_ids is None or (env_ids is not None and hasattr(env_ids, 'numel') and env_ids.numel() == self.num_envs):
             env_ids = self.robots[next(iter(self.robots))]._ALL_INDICES
 
@@ -341,15 +340,18 @@ class QuadcopterMARLEnvTeam(DirectMARLEnv):
             extras["Episode_Reward/" + key] = episodic_sum_avg / self.max_episode_length_s
             self._episode_sums[key][env_ids] = 0.0
 
-            # NEW: log knockout counts
-            knockout_counts = {}
-            total_knockouts = 0
+            # NEW: log death counts
+            death_counts = {}
+            total_deaths = 0
             for agent in self.cfg.action_spaces:
-                agent_knockouts = self.knocked_out[agent][env_ids].sum().item()
-                knockout_counts[f"Metrics/knockouts/{agent}"] = agent_knockouts
-                total_knockouts += agent_knockouts
-            knockout_counts["Metrics/knockouts/total"] = total_knockouts
-            extras.update(knockout_counts)
+                agent_deaths = (~self.alive[agent][env_ids]).sum().item()
+                death_counts[f"Metrics/deaths/{agent}"] = agent_deaths
+                total_deaths += agent_deaths
+            death_counts["Metrics/deaths/total"] = total_deaths
+            extras.update(death_counts)
+        
+        # Reset alive status for all agents
+        self._init_alive()
         # Log per-agent final distance to goal
         num_robots = self.cfg.num_robots_per_team
         per_agent_final_dist = final_distances.mean(dim=0)  # [num_robots]

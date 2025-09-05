@@ -290,10 +290,10 @@ class LeatherbackStage1SoccerEnv(DirectMARLEnv):
         goal_pos[self.target_goal == 1] = self.goal2_pos[self.target_goal == 1]
 
         ball_distance_to_goal = torch.linalg.norm(self.ball.data.root_pos_w - goal_pos, dim=1)
-        ball_distance_to_goal_mapped = 1 - torch.tanh(ball_distance_to_goal / 10)
+        ball_distance_to_goal_mapped = 1 - torch.tanh(ball_distance_to_goal / .8)
 
         robot_distance_to_ball = torch.linalg.norm(self.robots["robot_0"].data.root_pos_w[:, :3] - self.ball.data.root_pos_w, dim=1)
-        robot_distance_to_ball_mapped = 1 - torch.tanh(robot_distance_to_ball / 10)
+        robot_distance_to_ball_mapped = 1 - torch.tanh(robot_distance_to_ball / .8)
         
         goal_reward = torch.zeros(self.num_envs, device=self.device)
         # Reward is 1 if ball is in target goal area, if in other goal area, reward is -1

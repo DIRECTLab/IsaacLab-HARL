@@ -152,10 +152,10 @@ def define_markers() -> VisualizationMarkers:
                 scale=(.1, .1, 1),
                 visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(0.8, 0.0, 0.0)),
             ),
-            "arrow2": sim_utils.UsdFileCfg(
-                usd_path=f"{ISAAC_NUCLEUS_DIR}/Props/UIElements/arrow_x.usd",
-                scale=(.1, .1, 1),
-                visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(0.0, 0.8, 0.0)),
+            "arrow2": sim_utils.CylinderCfg(
+                radius=0.01,
+                height=10,
+                visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(0.0, 1.0, 1.0)),
             ),
             "sphere1": sim_utils.SphereCfg(
                 radius=0.1,
@@ -207,12 +207,14 @@ class MinitankStage1Env(DirectMARLEnv):
 
     def _draw_markers(self):
 
+        # Create marker IDs for each marker type (arrow1, arrow2, sphere1)
         marker_ids = torch.concat([
-            torch.zeros(self.num_envs, dtype=torch.int32).to(self.device),
-            torch.ones(self.num_envs, dtype=torch.int32).to(self.device),
-            2 * torch.ones(self.num_envs, dtype=torch.int32).to(self.device)
+            torch.zeros(self.num_envs, dtype=torch.int32).to(self.device),      # arrow1
+            torch.ones(self.num_envs, dtype=torch.int32).to(self.device),       # arrow2
+            2 * torch.ones(self.num_envs, dtype=torch.int32).to(self.device)    # sphere1
         ], dim=0)
 
+        # Get positions for desired, arm, and base
         desired_pos = self._desired_pos_w
         arm_pos = self.robots['robot_0'].data.body_com_pos_w[:, 1, :]
         base_pos = self.robots['robot_0'].data.body_com_pos_w[:, 0, :]
@@ -220,35 +222,39 @@ class MinitankStage1Env(DirectMARLEnv):
         base_pos_offset[:, 2] = 0.06
         base_pos = base_pos + base_pos_offset
 
-
+        # Compute direction vectors
         diff = desired_pos - arm_pos
         arm_diff = arm_pos - base_pos
         arm_direction = arm_diff / torch.linalg.norm(arm_diff, dim=1, keepdim=True)
-
         desired_direction = diff / torch.linalg.norm(diff, dim=1, keepdim=True)
+
+        # X axis reference vector
         x_vector = torch.zeros_like(desired_direction)
         x_vector[:, 0] = 1.0
 
+        # Compute rotation axes for desired and arm directions
         r = torch.cross(x_vector, desired_direction)
         r = r / torch.linalg.norm(r, dim=1, keepdim=True)
         r_arm = torch.cross(x_vector, arm_direction)
         r_arm = r_arm / torch.linalg.norm(r_arm, dim=1, keepdim=True)
 
+        # Compute angles for desired and arm directions
         dot_prod_angle = torch.sum(x_vector * desired_direction, dim=1)
         angle = dot_prod_angle / (x_vector.norm(dim=1) * desired_direction.norm(dim=1))
         angle = torch.acos(angle)
-
 
         dot_prod_angle_arm = torch.sum(x_vector * arm_direction, dim=1)
         angle_arm = dot_prod_angle_arm / (x_vector.norm(dim=1) * arm_direction.norm(dim=1))
         angle_arm = torch.acos(angle_arm)
 
+        # Compute quaternions for marker orientations
         orientation = quat_from_angle_axis(angle, r)
         arm_orientation = quat_from_angle_axis(angle_arm, r_arm)
         sphere_orientation = torch.zeros_like(arm_orientation)
         positions = torch.concat([arm_pos, arm_pos, self._desired_pos_w], dim=0)
         orientations = torch.concat([orientation, arm_orientation, sphere_orientation], dim=0)
 
+        # Visualize markers in the scene
         self.my_visualizer.visualize(positions, orientations, marker_indices=marker_ids)
 
 

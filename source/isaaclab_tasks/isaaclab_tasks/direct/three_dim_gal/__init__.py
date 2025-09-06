@@ -111,6 +111,7 @@ gym.register(
     disable_env_checker=True,
     kwargs={
         "env_cfg_entry_point": MinitankStage1EnvCfg,
-        "harl_happo_cfg_entry_point": f"{agents.__name__}:harl_happo_cfg.yaml",
+        # "harl_happo_cfg_entry_point": f"{agents.__name__}:harl_happo_cfg.yaml",
+        "harl_happo_adv_cfg_entry_point": f"{agents.__name__}:harl_happo_adv_cfg.yaml",
     },
 )

@@ -152,9 +152,11 @@ def define_markers() -> VisualizationMarkers:
                 scale=(.1, .1, 1),
                 visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(0.8, 0.0, 0.0)),
             ),
+            # Cylinder aligned along x-axis (principal axis)
             "arrow2": sim_utils.CylinderCfg(
                 radius=0.01,
                 height=10,
+                axis="x",  # align cylinder along x-axis
                 visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(0.0, 1.0, 1.0)),
             ),
             "sphere1": sim_utils.SphereCfg(
@@ -166,6 +168,21 @@ def define_markers() -> VisualizationMarkers:
     return VisualizationMarkers(marker_cfg)
 
 
+def angle_between_vectors(v1: torch.Tensor, v2: torch.Tensor) -> torch.Tensor:
+    """
+    Computes the angle (in radians) between two vectors v1 and v2 along the last dimension.
+    Args:
+        v1 (torch.Tensor): shape (..., 3)
+        v2 (torch.Tensor): shape (..., 3)
+    Returns:
+        torch.Tensor: angle in radians, shape (...,)
+    """
+    v1_norm = v1 / torch.linalg.norm(v1, dim=-1, keepdim=True)
+    v2_norm = v2 / torch.linalg.norm(v2, dim=-1, keepdim=True)
+    dot_prod = torch.sum(v1_norm * v2_norm, dim=-1)
+    dot_prod = torch.clamp(dot_prod, -1.0, 1.0)  # Clamp for numerical stability
+    angle = torch.acos(dot_prod)
+    return angle
 
 class MinitankStage1Env(DirectMARLEnv):
     cfg: MinitankStage1EnvCfg
@@ -238,20 +255,19 @@ class MinitankStage1Env(DirectMARLEnv):
         r_arm = torch.cross(x_vector, arm_direction)
         r_arm = r_arm / torch.linalg.norm(r_arm, dim=1, keepdim=True)
 
-        # Compute angles for desired and arm directions
-        dot_prod_angle = torch.sum(x_vector * desired_direction, dim=1)
-        angle = dot_prod_angle / (x_vector.norm(dim=1) * desired_direction.norm(dim=1))
-        angle = torch.acos(angle)
-
-        dot_prod_angle_arm = torch.sum(x_vector * arm_direction, dim=1)
-        angle_arm = dot_prod_angle_arm / (x_vector.norm(dim=1) * arm_direction.norm(dim=1))
-        angle_arm = torch.acos(angle_arm)
+        # Compute angles for desired and arm directions using angle_between_vectors
+        angle = angle_between_vectors(x_vector, desired_direction)
+        angle_arm = angle_between_vectors(x_vector, arm_direction)
 
         # Compute quaternions for marker orientations
         orientation = quat_from_angle_axis(angle, r)
+        arm_length = -0.25 #1 × 0.25 = 0.25 units
+        arm_offset = (arm_length / 2) * arm_direction
         arm_orientation = quat_from_angle_axis(angle_arm, r_arm)
         sphere_orientation = torch.zeros_like(arm_orientation)
-        positions = torch.concat([arm_pos, arm_pos, self._desired_pos_w], dim=0)
+        cylinder_length = 10.0  # same as CylinderCfg height
+        cylinder_offset = (cylinder_length / 2) * arm_direction
+        positions = torch.concat([arm_pos + arm_offset, arm_pos + cylinder_offset, self._desired_pos_w], dim=0)
         orientations = torch.concat([orientation, arm_orientation, sphere_orientation], dim=0)
 
         # Visualize markers in the scene
@@ -268,11 +284,9 @@ class MinitankStage1Env(DirectMARLEnv):
         base_pos_offset[:, 2] = 0.06
         base_pos = base_pos + base_pos_offset
 
-
         diff = self._desired_pos_w - arm_pos
         arm_diff = arm_pos - base_pos
         arm_direction = arm_diff / torch.linalg.norm(arm_diff, dim=1, keepdim=True)
-
         desired_direction = diff / torch.linalg.norm(diff, dim=1, keepdim=True)
         x_vector = torch.zeros_like(desired_direction)
         x_vector[:, 0] = 1.0
@@ -282,14 +296,9 @@ class MinitankStage1Env(DirectMARLEnv):
         r_arm = torch.cross(x_vector, arm_direction)
         r_arm = r_arm / torch.linalg.norm(r_arm, dim=1, keepdim=True)
 
-        dot_prod_angle = torch.sum(x_vector * desired_direction, dim=1)
-        angle = dot_prod_angle / (x_vector.norm(dim=1) * desired_direction.norm(dim=1))
-        angle = torch.acos(angle)
-
-
-        dot_prod_angle_arm = torch.sum(x_vector * arm_direction, dim=1)
-        angle_arm = dot_prod_angle_arm / (x_vector.norm(dim=1) * arm_direction.norm(dim=1))
-        angle_arm = torch.acos(angle_arm)
+        # Use angle_between_vectors for both angles
+        angle = angle_between_vectors(x_vector, desired_direction)
+        angle_arm = angle_between_vectors(x_vector, arm_direction)
 
         self.desired_orientation = normalize(quat_from_angle_axis(angle, r)) 
         self.arm_orientation = normalize(quat_from_angle_axis(angle_arm, r_arm))

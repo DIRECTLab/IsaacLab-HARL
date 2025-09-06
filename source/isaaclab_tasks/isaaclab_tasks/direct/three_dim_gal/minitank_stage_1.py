@@ -168,10 +168,10 @@ def define_markers() -> VisualizationMarkers:
 
 
 class MinitankStage1Env(DirectMARLEnv):
-    cfg: MinitankEnvCfg
+    cfg: MinitankStage1EnvCfg
     def __init__(
         self,
-        cfg: MinitankEnvCfg,
+        cfg: MinitankStage1EnvCfg,
         render_mode: str | None = None,
         headless: bool | None = False,
         **kwargs,

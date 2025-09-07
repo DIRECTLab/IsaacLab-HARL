@@ -147,25 +147,34 @@ class MinitankStage2EnvCfg(DirectMARLEnvCfg):
     max_vel = 2
     ### MINITANK CONFIGURATION ###
 
-def define_markers() -> VisualizationMarkers:
+def define_markers(agent_idx: int) -> VisualizationMarkers:
+    palette = [
+        (1.0, 0.0, 0.0),  # red
+        (0.0, 0.5, 1.0),  # blue
+        (1.0, 1.0, 0.0),  # yellow
+        (1.0, 0.0, 1.0),  # magenta
+        (0.0, 1.0, 1.0),  # cyan
+        (1.0, 0.5, 0.0),  # orange
+        (0.5, 0.0, 1.0),  # purple
+    ]
+    color = palette[agent_idx % len(palette)]
     marker_cfg = VisualizationMarkersCfg(
-        prim_path="/Visuals/myMarkers",
+        prim_path=f"/Visuals/myMarkers/agent_{agent_idx}",
         markers={
-            "arrow1": sim_utils.UsdFileCfg(
+            f"arrow_{agent_idx}": sim_utils.UsdFileCfg(
                 usd_path=f"{ISAAC_NUCLEUS_DIR}/Props/UIElements/arrow_x.usd",
                 scale=(.1, .1, 1),
-                visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(0.8, 0.0, 0.0)),
+                visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=color),
             ),
-            # Cylinder aligned along x-axis (principal axis)
-            "arrow2": sim_utils.CylinderCfg(
+            f"laser_cylinder_{agent_idx}": sim_utils.CylinderCfg(
                 radius=0.01,
                 height=10,
-                axis="x",  # align cylinder along x-axis
-                visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(0.0, 1.0, 1.0)),
+                axis="x",
+                visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=color),
             ),
-            "sphere1": sim_utils.SphereCfg(
+            f"sphere_{agent_idx}": sim_utils.SphereCfg(
                 radius=0.1,
-                visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(0.0, 1.0, 1.0)),
+                visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=color),
             ),
         },
     )
@@ -223,20 +232,42 @@ class MinitankStage2Env(DirectMARLEnv):
         }
 
         if not self.headless:
-            self.my_visualizer = define_markers()
+            self.agent_visualizers = {}
+            for agent_idx, agent in enumerate(self.cfg.action_spaces):
+                self.agent_visualizers[agent] = define_markers(agent_idx)
 
 
     def _draw_markers(self):
-        # Multi-agent marker visualization
-        marker_ids = torch.cat([
-            torch.zeros(self.num_envs, dtype=torch.int32).to(self.device),      # arrow1
-            torch.ones(self.num_envs, dtype=torch.int32).to(self.device),       # arrow2
-            2 * torch.ones(self.num_envs, dtype=torch.int32).to(self.device)    # sphere1
-        ], dim=0)
+        # Color palette for agents
+        palette = [
+            (1.0, 0.0, 0.0),  # red
+            (0.0, 0.5, 1.0),  # blue
+            (1.0, 1.0, 0.0),  # yellow
+            (1.0, 0.0, 1.0),  # magenta
+            (0.0, 1.0, 1.0),  # cyan
+            (1.0, 0.5, 0.0),  # orange
+            (0.5, 0.0, 1.0),  # purple
+        ]
+        num_agents = len(self.cfg.action_spaces)
+        # Each agent gets 3 markers: arrow, cylinder, sphere
+        marker_ids = []
+        for agent_idx in range(num_agents):
+            marker_ids.extend([
+                agent_idx * 3 + 0 for _ in range(self.num_envs)
+            ])  # arrow
+            marker_ids.extend([
+                agent_idx * 3 + 1 for _ in range(self.num_envs)
+            ])  # cylinder
+            marker_ids.extend([
+                agent_idx * 3 + 2 for _ in range(self.num_envs)
+            ])  # sphere
+        marker_ids = torch.tensor(marker_ids, dtype=torch.int32, device=self.device)
+
         positions_list = []
         orientations_list = []
-        for agent in self.cfg.action_spaces:
-            # Get positions for desired, arm, and base
+        # For each agent, for each env, add [arrow, cylinder, sphere] in order
+        for agent_idx, agent in enumerate(self.cfg.action_spaces):
+            color = palette[agent_idx % len(palette)]
             desired_pos = self._desired_pos_w[agent]
             arm_pos = self.robots[agent].data.body_com_pos_w[:, 1, :]
             base_pos = self.robots[agent].data.body_com_pos_w[:, 0, :]
@@ -272,18 +303,30 @@ class MinitankStage2Env(DirectMARLEnv):
             sphere_orientation = torch.zeros_like(arm_orientation)
             cylinder_length = 10.0
             cylinder_offset = (cylinder_length / 2) * arm_direction
-            positions_list.append(arm_pos + arm_offset)
-            positions_list.append(arm_pos + cylinder_offset)
-            positions_list.append(desired_pos)
-            orientations_list.append(orientation)
-            orientations_list.append(arm_orientation)
-            orientations_list.append(sphere_orientation)
-        positions = torch.cat(positions_list, dim=0)
-        orientations = torch.cat(orientations_list, dim=0)
+            # For each env, add [arrow, cylinder, sphere]
+            for env_idx in range(self.num_envs):
+                positions_list.append(arm_pos[env_idx] + arm_offset[env_idx])      # arrow
+                positions_list.append(arm_pos[env_idx] + cylinder_offset[env_idx]) # cylinder
+                positions_list.append(desired_pos[env_idx])                        # sphere
+                orientations_list.append(orientation[env_idx])
+                orientations_list.append(arm_orientation[env_idx])
+                orientations_list.append(sphere_orientation[env_idx])
+        positions = torch.stack(positions_list, dim=0)
+        orientations = torch.stack(orientations_list, dim=0)
         
         # Visualize markers in the scene
         if not self.headless:
-            self.my_visualizer.visualize(positions, orientations, marker_indices=marker_ids)
+            offset = 0
+            for agent_idx, agent in enumerate(self.cfg.action_spaces):
+                agent_marker_count = 3 * self.num_envs
+                agent_positions = positions[offset:offset+agent_marker_count]
+                agent_orientations = orientations[offset:offset+agent_marker_count]
+                # For each env, marker indices should be [0, 1, 2] (arrow, cylinder, sphere)
+                agent_marker_ids = torch.cat([
+                    torch.tensor([0, 1, 2], dtype=torch.int32, device=self.device).repeat(self.num_envs)
+                ])
+                self.agent_visualizers[agent].visualize(agent_positions, agent_orientations, marker_indices=agent_marker_ids)
+                offset += agent_marker_count
 
 
     def _get_vector_angle_reward(self, agent: str):

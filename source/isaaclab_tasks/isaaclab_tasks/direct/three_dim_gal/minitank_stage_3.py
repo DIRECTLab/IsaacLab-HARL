@@ -135,9 +135,19 @@ class MinitankStage3EnvCfg(DirectMARLEnvCfg):
     env_spacing = 10.0
     scene: InteractiveSceneCfg = InteractiveSceneCfg(num_envs=1, env_spacing=10.0, replicate_physics=True)
 
+    ### MINITANK CONFIGURATION ###
     action_scale = .5
     max_vel = 2
-    ### MINITANK CONFIGURATION ###
+
+    ### DRONE CONFIGURATION ###
+    thrust_to_weight = 1.9
+    moment_scale = 0.01
+
+    # reward scales
+    lin_vel_reward_scale = -0.05
+    ang_vel_reward_scale = -0.01
+    distance_to_goal_reward_scale = 15.0
+    debug_vis = True
 
 def define_markers(agent_idx: int) -> VisualizationMarkers:
     palette = [
@@ -227,6 +237,20 @@ class MinitankStage3Env(DirectMARLEnv):
             self.agent_visualizers = {}
             for agent_idx, agent in enumerate(self.cfg.action_spaces):
                 self.agent_visualizers[agent] = define_markers(agent_idx)
+        
+
+        self._thrust = {agent: torch.zeros(self.num_envs, 1, 3, device=self.device) for agent in self.cfg.action_spaces}
+        self._moment = {agent: torch.zeros(self.num_envs, 1, 3, device=self.device) for agent in self.cfg.action_spaces}
+        self._desired_pos_w = {agent: torch.zeros(self.num_envs, 3, device=self.device) for agent in self.cfg.action_spaces}
+
+        self._body_id = {}
+        self._robot_mass = {}
+        self._gravity_magnitude = torch.tensor(self.sim.cfg.gravity, device=self.device).norm()
+        self._robot_weight = {}
+        for agent in self.drones.keys():
+            self._body_id[agent] = self.robots[agent].find_bodies("body")[0]
+            self._robot_mass[agent] = self.robots[agent].root_physx_view.get_masses()[0].sum()
+            self._robot_weight[agent] = (self._robot_mass[agent] * self._gravity_magnitude).item()
 
 
     def _draw_markers(self):
@@ -388,23 +412,31 @@ class MinitankStage3Env(DirectMARLEnv):
     def _pre_physics_step(self, actions: dict):
 
         ### PREPHYSICS FOR MINITANK ###
-        for agent in self.cfg.action_spaces:
+        for agent in self.minitanks.keys():
             self.processed_actions[agent] = torch.clip(
                 (self.cfg.action_scale * actions[agent]) + self.robots[agent].data.joint_vel,
                 -self.cfg.max_vel, self.cfg.max_vel
             )
         ### PREPHYSICS FOR MINITANK ###
+        for agent in self.drones.keys():
+            self.actions[agent] = actions[agent].clone().clamp(-1.0, 1.0)
+            self._thrust[agent][:, 0, 2] = self.cfg.thrust_to_weight * self._robot_weight[agent] * (self.actions[agent][:, 0] + 1.0) / 2.0
+            self._moment[agent][:, 0, :] = self.cfg.moment_scale * self.actions[agent][:, 1:]
 
     def _apply_action(self):
-        for agent in self.cfg.action_spaces:
+        for agent in self.minitanks.keys():
             self.robots[agent].set_joint_velocity_target(self.processed_actions[agent])
+
+        for agent in self.drones.keys():
+            self.robots[agent].set_external_force_and_torque(self._thrust[agent], self._moment[agent], body_ids=self._body_id[agent])
+
+
 
     def _get_observations(self) -> dict:
         obs = {}
         # For now, use a fixed radius (can be made configurable)
         rcol = torch.full((self.num_envs, 1), 2.0, device=self.device)
         env_center = self._terrain.env_origins if hasattr(self._terrain, "env_origins") else torch.zeros((self.num_envs, 3), device=self.device)
-
         for i, (team, agents) in enumerate(self.cfg.teams.items()):
             obs[team] = {}
             for agent_id in agents:
@@ -414,6 +446,11 @@ class MinitankStage3Env(DirectMARLEnv):
 
                 enemy_0_id = enemies[0]
                 enemy_1_id = enemies[1]
+
+                desired_pos, _ = subtract_frame_transforms(
+                    self.robots[agent_id].data.root_state_w[:, :3], self.robots[agent_id].data.root_state_w[:, 3:7],
+                    self._desired_pos_w[agent_id]
+                )
 
                 enemy_0_pos, _ = subtract_frame_transforms(
                     self.robots[agent_id].data.root_state_w[:, :3], self.robots[agent_id].data.root_state_w[:, 3:7],
@@ -430,30 +467,55 @@ class MinitankStage3Env(DirectMARLEnv):
                     self.robots[enemy_1_id].data.root_pos_w
                 )
 
+                zerobuf = torch.zeros((self.num_envs, 6), device=self.device)
+
                 dist_center = torch.norm(
                     self.robots[agent_id].data.root_pos_w - env_center, dim=-1, keepdim=True
                 )
 
                 # For tanks, use full state; for drones, use simpler obs
                 if agent_id.startswith("minitank"):
+
+                    # obs_vec = torch.cat([
+                    #     self.robots[agent_id].data.root_lin_vel_b,
+                    #     self.robots[agent_id].data.root_ang_vel_b,
+                    #     self.robots[agent_id].data.projected_gravity_b,
+                    #     self.robots[agent_id].data.joint_pos - self.robots[agent_id].data.default_joint_pos,
+                    #     self.robots[agent_id].data.joint_vel,
+                    #     self.actions[agent_id],
+                    #     enemy_1_pos,
+                    #     teammate_pos,
+                    #     enemy_0_pos,
+                    #     dist_center,
+                    #     rcol,
+                    # ], dim=-1)
+                    arm_orientation_reward, arm_orientation, desired_orientation = self._get_vector_angle_reward(agent_id)
+                    desiredtorch.full((self.num_envs, 1), 2.0, device=self.device)
                     obs_vec = torch.cat([
-                        self.robots[agent_id].data.root_lin_vel_b,
-                        self.robots[agent_id].data.root_ang_vel_b,
-                        self.robots[agent_id].data.projected_gravity_b,
-                        self.robots[agent_id].data.joint_pos - self.robots[agent_id].data.default_joint_pos,
-                        self.robots[agent_id].data.joint_vel,
-                        self.actions[agent_id],
-                        enemy_1_pos,
+                        self.processed_actions[agent_id],
+                        desired_orientation,        
+                        arm_orientation,
+                        desired_pos,
                         teammate_pos,
-                        enemy_0_pos,
+                        teammate_pos,
                         dist_center,
                         rcol,
                     ], dim=-1)
                 else:
-                    robot_vel = self.robots[agent_id].data.root_lin_vel_b
-                    obs_vec = torch.cat([
-                        enemy_0_pos, teammate_pos, enemy_1_pos, dist_center, robot_vel, rcol
-                    ], dim=1)
+                    obs_vec = torch.cat(
+                        [
+                            self.robots[agent_id].data.root_lin_vel_b,
+                            self.robots[agent_id].data.root_ang_vel_b,
+                            self.robots[agent_id].data.projected_gravity_b,
+                            desired_pos,
+                            teammate_pos,
+                            teammate_pos,
+                            # other_pos,
+                            dist_center,
+                            rcol,
+                        ],
+                        dim=-1,
+                    )
 
                 obs_vec = torch.nan_to_num(obs_vec, nan=0.0, posinf=1e6, neginf=-1e6)
                 # Ensure obs_vec matches expected shape
@@ -508,7 +570,7 @@ class MinitankStage3Env(DirectMARLEnv):
 
         time_out = self.episode_length_buf >= self.max_episode_length - 1
         timeouts = {team: time_out for team in self.cfg.teams.keys()}
-        return dones, timeouts
+        return timeouts, timeouts
 
     def _reset_idx(self, env_ids: torch.Tensor | None):
         # Multiagent reset logic (adapted from sumo_stage_2_hetero)
@@ -527,7 +589,8 @@ class MinitankStage3Env(DirectMARLEnv):
             robot = self.robots[agent_id]
             robot.reset(env_ids)
             default_root_state = robot.data.default_root_state[env_ids].clone()
-            default_root_state[:, :3] = origins[:, :3]
+            default_root_state[:, :2] += origins[:, :2]
+            
             robot.write_root_pose_to_sim(default_root_state[:, :7], env_ids)
             robot.write_root_velocity_to_sim(default_root_state[:, 7:], env_ids)
             if agent_id in self.minitanks:

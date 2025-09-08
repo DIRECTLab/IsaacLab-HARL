@@ -346,8 +346,8 @@ class LeatherbackStage2AdversarialSoccerEnv(DirectMARLEnv):
         ball_in_goal1, ball_in_goal2 = self._ball_in_goal_area()
         time_out = self.episode_length_buf >= self.max_episode_length - 1
 
-        team_0_reward = (ball_in_goal2.to(torch.int8) - ball_in_goal1.to(torch.int8)) * (time_out.to(torch.int8) ^ 1)
-        team_1_reward = ball_in_goal1.to(torch.int8) - ball_in_goal2.to(torch.int8) * (time_out.to(torch.int8) ^ 1)
+        team_0_reward = ball_in_goal2.to(torch.int8) - ball_in_goal1.to(torch.int8) - time_out.to(torch.int8)
+        team_1_reward = ball_in_goal1.to(torch.int8) - ball_in_goal2.to(torch.int8) - time_out.to(torch.int8)
 
         rewards = {
             "team_0": team_0_reward * self.cfg.goal_reward_scale,
@@ -440,7 +440,7 @@ class LeatherbackStage2AdversarialSoccerEnv(DirectMARLEnv):
             default_root_state = self.robots[robot_id].data.default_root_state[env_ids].clone()
 
             # Place robot
-            default_root_state[:, :2] = origins[:, :2] + torch.zeros_like(default_root_state[:, :2], device=self.device).uniform_(-3, 3)
+            default_root_state[:, :2] += origins[:, :2]
 
             # Write to sim
             self.robots[robot_id].write_root_pose_to_sim(default_root_state[:, :7], env_ids)

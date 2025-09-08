@@ -123,6 +123,10 @@ algo:
   share_param: False
   # whether to use a fixed optimisation order
   fixed_order: True
+  # the training mode of the adversarial framework, choose from parallel, leapfrog, ladder
+  adversarial_training_mode: "parallel"
+  # how often to alternate the training mode in the adversarial framework
+  adversarial_training_iterations: 100000000
 logger:
   # logging directory
   log_dir: "./results"

@@ -65,22 +65,22 @@ def get_quaternion_tuple_from_xyz(x, y, z):
     return (quat_tensor[0].item(), quat_tensor[1].item(), quat_tensor[2].item(), quat_tensor[3].item())
 
 @configclass
-class SumoStage1EnvSingleAgentCfg(DirectMARLEnvCfg):
+class AnymalSoccerRunningEnvCfg(DirectMARLEnvCfg):
     # env
     episode_length_s = 20.0
     decimation = 4
     action_scale = 0.5
     action_space = 12
     action_spaces = {f"robot_{i}": 12 for i in range(1)}
-    observation_space = 56
-    observation_spaces = {f"robot_{i}": 56 for i in range(1)}
+    observation_space = 66
+    observation_spaces = {f"robot_{i}": 66 for i in range(1)}
     state_space = 0
     state_spaces = {f"robot_{i}": 0 for i in range(1)}
     possible_agents = [f"robot_{i}" for i in range(1)]
 
-    teams = {
-        "team_0": ["robot_0"],
-    }
+    # teams = {
+    #     "team_0": ["robot_0"],
+    # }
 
     # simulation
     sim: SimulationCfg = SimulationCfg(
@@ -159,11 +159,11 @@ def define_markers() -> VisualizationMarkers:
     return VisualizationMarkers(marker_cfg)
 
 
-class SumoStage1EnvSingleAgent(DirectMARLEnv):
-    cfg: SumoStage1EnvSingleAgentCfg
+class AnymalSoccerRunningEnv(DirectMARLEnv):
+    cfg: AnymalSoccerRunningEnvCfg
 
     def __init__(
-        self, cfg: SumoStage1EnvSingleAgentCfg, render_mode: str | None = None, debug=False, **kwargs
+        self, cfg: AnymalSoccerRunningEnvCfg, render_mode: str | None = None, debug=False, **kwargs
     ):
         self.debug = debug
         super().__init__(cfg, render_mode, **kwargs)
@@ -272,41 +272,30 @@ class SumoStage1EnvSingleAgent(DirectMARLEnv):
             self._min_goal_dist[robot_id] = torch.min(dists, dim=-1).values
 
         obs = {}
-        for team_name, robots in self.cfg.teams.items():
-            team_obs = {}
-            for i, robot_id in enumerate(robots):
-                    
-                goal_pos, _ = subtract_frame_transforms(
-                        self.robots[robot_id].data.root_state_w[:, :3],
-                        self.robots[robot_id].data.root_state_w[:, 3:7],
-                        self._desired_pos
-                    )
-
-                dist_to_center = torch.zeros((self.num_envs, 1), device=self.device)
-                arena_radius = torch.zeros((self.num_envs, 1), device=self.device)
-                time_remaining = torch.zeros((self.num_envs, 1), device=self.device)
-                teammate_pos = torch.zeros((self.num_envs, 3), device=self.device)
-                other_pos = torch.zeros((self.num_envs, 3), device=self.device)
-
-                obs_vec = torch.cat(
-                    [
-                        self.robots[robot_id].data.root_lin_vel_b,
-                        self.robots[robot_id].data.root_ang_vel_b,
-                        self.robots[robot_id].data.projected_gravity_b,
-                        self.robots[robot_id].data.joint_pos - self.robots[robot_id].data.default_joint_pos,
-                        self.robots[robot_id].data.joint_vel,
-                        self.actions[robot_id],
-                        goal_pos,
-                        teammate_pos,
-                        other_pos,
-                        dist_to_center,
-                        arena_radius,
-                        # time_remaining,
-                    ],
-                    dim=-1,
+        for i, robot_id in enumerate(self.robots.keys()):
+                
+            goal_pos, _ = subtract_frame_transforms(
+                    self.robots[robot_id].data.root_state_w[:, :3],
+                    self.robots[robot_id].data.root_state_w[:, 3:7],
+                    self._desired_pos
                 )
-                team_obs[robot_id] = obs_vec
-            obs[team_name] = team_obs
+
+            zero_buffer = torch.zeros((self.num_envs, 18), device=self.device)
+
+            obs_vec = torch.cat(
+                [
+                    self.robots[robot_id].data.root_lin_vel_b,
+                    self.robots[robot_id].data.root_ang_vel_b,
+                    self.robots[robot_id].data.projected_gravity_b,
+                    self.robots[robot_id].data.joint_pos - self.robots[robot_id].data.default_joint_pos,
+                    self.robots[robot_id].data.joint_vel,
+                    self.actions[robot_id],
+                    goal_pos,
+                    zero_buffer
+                ],
+                dim=-1,
+            )
+            obs[robot_id] = obs_vec
 
         return obs
 
@@ -322,7 +311,7 @@ class SumoStage1EnvSingleAgent(DirectMARLEnv):
             dists = torch.norm(goals_xy - robot_xy, dim=-1)
             hit = dists <= reach_r
             # distance reward
-            distance_reward = 1 - torch.tanh(dists / 5)
+            distance_reward = 1 - torch.tanh(dists / 0.8)
             # z velocity tracking
             z_vel_error = torch.square(self.robots[robot_id].data.root_lin_vel_b[:, 2])
             # angular velocity x/y
@@ -367,7 +356,7 @@ class SumoStage1EnvSingleAgent(DirectMARLEnv):
             for key, value in rewards.items():
                 self._episode_sums[key] += value
             
-        return {"team_0" : all_rewards["robot_0"]}
+        return {"robot_0" : all_rewards["robot_0"]}
 
     def _get_dones(self) -> tuple[dict, dict]:
         reach_r = self.cfg.goal_reach_radius
@@ -388,10 +377,10 @@ class SumoStage1EnvSingleAgent(DirectMARLEnv):
             any_robot_reached |= hit
 
 
-        dones = {team: torch.logical_or(died.clone(), any_robot_reached.clone()) for team in self.cfg.teams.keys()}
+        dones = {"robot_0": torch.logical_or(died.clone(), any_robot_reached.clone())}
 
         to_mask = self.episode_length_buf >= (self.max_episode_length - 1)
-        time_out = {team: to_mask for team in self.cfg.teams.keys()}
+        time_out = {robot_id: to_mask for robot_id in self.robots.keys()}
 
         return dones, time_out
 

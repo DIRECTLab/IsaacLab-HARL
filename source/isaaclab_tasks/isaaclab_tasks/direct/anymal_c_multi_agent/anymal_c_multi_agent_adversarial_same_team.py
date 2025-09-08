@@ -114,7 +114,6 @@ class AnymalCAdversarialSameTeamEnvCfg(DirectMARLEnvCfg):
     action_scale = 0.5
     action_space = 12
     action_spaces = {f"robot_{i}": 12 for i in range(2)}
-    # observation_space = 48
     observation_space = 48
     observation_spaces = {f"robot_{i}": 48 for i in range(2)}
     state_space = 0
@@ -460,7 +459,7 @@ class AnymalCAdversarialSameTeamEnv(DirectMARLEnv):
         super()._reset_idx(env_ids)  # once
 
         # spread out resets
-        if len(env_ids) == self.num_envs:
+        if len(env_ids) == self.num_envs: # type: ignore
             self.episode_length_buf[:] = torch.randint_like(self.episode_length_buf, high=int(self.max_episode_length))
 
         # sample commands once

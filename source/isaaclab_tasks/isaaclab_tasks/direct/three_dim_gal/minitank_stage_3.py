@@ -71,7 +71,7 @@ def normalize_angle(x):
     return torch.atan2(torch.sin(x), torch.cos(x))
 
 @configclass
-class MinitankStage2EnvCfg(DirectMARLEnvCfg):
+class MinitankStage3EnvCfg(DirectMARLEnvCfg):
     # env
     episode_length_s = 20.0
     decimation = 4
@@ -197,11 +197,11 @@ def angle_between_vectors(v1: torch.Tensor, v2: torch.Tensor) -> torch.Tensor:
     angle = torch.acos(dot_prod)
     return angle
 
-class MinitankStage2Env(DirectMARLEnv):
-    cfg: MinitankStage2EnvCfg
+class MinitankStage3Env(DirectMARLEnv):
+    cfg: MinitankStage3EnvCfg
     def __init__(
         self,
-        cfg: MinitankStage2EnvCfg,
+        cfg: MinitankStage3EnvCfg,
         render_mode: str | None = None,
         headless: bool | None = False,
         **kwargs,

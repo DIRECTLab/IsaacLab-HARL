@@ -26,6 +26,64 @@
             }
         },
         {
+            "label": "Minitank-Stage-2-Direct-v0",
+            "type": "shell",
+            "command": "${command:python.interpreterPath}",
+            "args": [
+                "${workspaceFolder}/scripts/reinforcement_learning/harl/train.py",
+                "--num_envs", "7_000",
+                "--task", "Minitank-Stage-2-Direct-v0",
+                "--seed", "1",
+                "--save_interval", "5",
+                "--log_interval", "1",
+                "--exp_name", "minitank_training_Stage-2_RUN3",
+                "--num_env_steps", "10_000_000_000",
+                "--algorithm", "happo_adv",
+                // "--algorithm", "happo",
+                "--adversarial_training_iterations", "100_000_000",
+                "--adversarial_training_mode", "parallel",//"leapfrog",
+                "--headless",
+                "--save_checkpoints",
+                // "--video",
+                // "--video_length", "600",
+                // "--video_interval", "30_000",
+                "--dir", "results/isaaclab/Minitank-Stage-1-Direct-v0/happo_adv/minitank_training_RUN2/seed-00001-2025-09-06-16-21-29/best_model"
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "problemMatcher": []
+        },
+        {
+            "label": "Minitank-Stage-1-Direct-v0",
+            "type": "shell",
+            "command": "${command:python.interpreterPath}",
+            "args": [
+                "${workspaceFolder}/scripts/reinforcement_learning/harl/train.py",
+                "--num_envs", "7_000",
+                "--task", "Minitank-Stage-1-Direct-v0",
+                "--seed", "1",
+                "--save_interval", "5",
+                "--log_interval", "1",
+                "--exp_name", "minitank_training_RUN2",
+                "--num_env_steps", "10_000_000_000",
+                "--algorithm", "happo_adv",
+                // "--algorithm", "happo",
+                "--adversarial_training_iterations", "100_000_000",
+                "--adversarial_training_mode", "parallel",//"leapfrog",
+                "--headless",
+                "--save_checkpoints"
+                // "--video",
+                // "--video_length", "600",
+                // "--video_interval", "30_000",
+                
+            ],
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "problemMatcher": []
+        },
+        {
             "label": "Isaac-Quadcopter-Direct-Stage1-SingleAgent-v0",
             "type": "shell",
             "command": "${command:python.interpreterPath}",

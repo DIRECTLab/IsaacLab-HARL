@@ -72,34 +72,52 @@ def normalize_angle(x):
 
 @configclass
 class MinitankStage3EnvCfg(DirectMARLEnvCfg):
-    # env
-    episode_length_s = 20.0
     decimation = 4
-    anymal_action_scale = 0.5
-    action_space = 2
-    action_spaces = {f"robot_{i}": 2 for i in range(2)}
+    episode_length_s = 20.0
 
-    # Padded observation: 10 (original) + 3 (teammate_pos) + 3 (other_pos) + 1 (dist_to_center) + 1 (arena_radius) = 18
-    observation_space = 18
-    observation_spaces = {f"robot_{i}": 18 for i in range(2)}
+    # 2 minitanks, 2 drones
+    action_spaces = {
+        "robot_0": 2,   # e.g. throttle, steering
+        "robot_3": 4,      # e.g. x, y, z, yaw
+        "robot_1": 2,
+        "robot_2": 4,
+    }
+
+    # Example: minitank obs = 18, drone obs = 20
+    observation_spaces = {
+        "robot_0": 18,
+        "robot_3": 20,
+        "robot_1": 18,
+        "robot_2": 20,
+    }
+
     state_space = 0
-    state_spaces = {f"robot_{i}": 0 for i in range(2)}
-    possible_agents = [f"robot_{i}" for i in range(2)]
-    # Teams for two agents
-    teams = {"team_0": ["robot_0"], "team_1": ["robot_1"]}
+    state_spaces = {agent: 0 for agent in action_spaces.keys()}
 
-    # simulation
-    sim: SimulationCfg = SimulationCfg(
-        dt=1 / 200,
-        render_interval=decimation,
-        physics_material=sim_utils.RigidBodyMaterialCfg(
-            friction_combine_mode="multiply",
-            restitution_combine_mode="multiply",
-            static_friction=1.0,
-            dynamic_friction=1.0,
-            restitution=0.0,
-        ),
-    )
+    possible_agents = list(action_spaces.keys())
+
+    teams = {
+        "team_0": ["robot_0", "robot_3"],
+        "team_1": ["robot_1", "robot_2"],
+    }
+
+    sim: SimulationCfg = SimulationCfg(dt=1 / 200, render_interval=decimation)
+
+    # Minitank configs
+    robot_0: ArticulationCfg = MINITANK_CFG.replace(prim_path="/World/envs/env_.*/Minitank_0")
+    robot_0.init_state.pos = (0.0, 0.5, 0.2)
+
+    robot_1: ArticulationCfg = MINITANK_CFG.replace(prim_path="/World/envs/env_.*/Minitank_1")
+    robot_1.init_state.pos = (0.0, -0.5, 0.2)
+
+    # Drone configs
+    robot_3: ArticulationCfg = CRAZYFLIE_CFG.replace(prim_path="/World/envs/env_.*/Drone_0")
+    robot_3.init_state.pos = (2.0, 0.5, 3.5)
+
+    robot_2: ArticulationCfg = CRAZYFLIE_CFG.replace(prim_path="/World/envs/env_.*/Drone_1")
+    robot_2.init_state.pos = (2.0, -0.5, 3.5)
+
+    # Arena/physics
     terrain = TerrainImporterCfg(
         prim_path="/World/ground",
         terrain_type="plane",
@@ -114,34 +132,8 @@ class MinitankStage3EnvCfg(DirectMARLEnvCfg):
         debug_vis=False,
     )
 
-    # scene
+    env_spacing = 10.0
     scene: InteractiveSceneCfg = InteractiveSceneCfg(num_envs=1, env_spacing=10.0, replicate_physics=True)
-
-    # events
-    # events: EventCfg = EventCfg()
-
-    ### MINITANK CONFIGURATION ###
-    robot_0: ArticulationCfg = MINITANK_CFG.replace(prim_path="/World/envs/env_.*/Robot_0")
-    robot_0.init_state.pos = (0.0, 0.5, 0.2)
-
-    robot_1: ArticulationCfg = MINITANK_CFG.replace(prim_path="/World/envs/env_.*/Robot_1")
-    robot_1.init_state.pos = (0.0, -0.5, 0.2)
-
-    # camera_0 = TiledCameraCfg(
-    #     prim_path="/World/envs/env_.*/Robot_0/robot/arm/front_cam",
-    #     update_period=0.1,
-    #     height=256,
-    #     width=256,
-    #     data_types=["depth"],
-    #     spawn=sim_utils.FisheyeCameraCfg(
-    #         projection_type="fisheyePolynomial",
-    #     ),
-    #     # spawn=sim_utils.PinholeCameraCfg(
-    #     #     focal_length=24.0, focus_distance=400.0, horizontal_aperture=20.955, clipping_range=(0.1, 1.0e5)
-    #     # ),
-    #     # offset=CameraCfg.OffsetCfg(pos=(0, 0, .25), rot=(0,0,1,0), convention="opengl"),
-    #     offset=CameraCfg.OffsetCfg(pos=(0, 0, 1), rot=(0,0,1,0), convention="opengl"),
-    # )
 
     action_scale = .5
     max_vel = 2
@@ -368,15 +360,20 @@ class MinitankStage3Env(DirectMARLEnv):
         return reward_mapped, arm_orientation, desired_orientation
  
     def _setup_scene(self):
-        self.num_robots = sum(1 for key in self.cfg.__dict__.keys() if "robot_" in key)
-        self.robots = {}
-        # self.cameras = {}
 
-        for i in range(self.num_robots):
-            robot_id = f"robot_{i}"
-            if robot_id in self.cfg.__dict__:
-                self.robots[robot_id] = Articulation(self.cfg.__dict__[robot_id])
-                self.scene.articulations[robot_id] = self.robots[robot_id]
+        self.robots = {}
+        self.minitanks = {}
+        self.drones = {}
+        # Add minitanks
+        for tank_id in ["robot_0", "robot_1"]:
+            self.robots[tank_id] = Articulation(self.cfg.__dict__[tank_id])
+            self.scene.articulations[tank_id] = self.robots[tank_id]
+            self.minitanks[tank_id] = self.robots[tank_id]
+        # Add drones
+        for drone_id in ["robot_3", "robot_2"]:
+            self.robots[drone_id] = Articulation(self.cfg.__dict__[drone_id])
+            self.scene.articulations[drone_id] = self.robots[drone_id]
+            self.drones[drone_id] = self.robots[drone_id]
 
         self.cfg.terrain.num_envs = self.scene.cfg.num_envs
         self.cfg.terrain.env_spacing = self.scene.cfg.env_spacing
@@ -403,51 +400,74 @@ class MinitankStage3Env(DirectMARLEnv):
             self.robots[agent].set_joint_velocity_target(self.processed_actions[agent])
 
     def _get_observations(self) -> dict:
-        # Arena radius and center
-        arena_radius = torch.full((self.num_envs, 1), 2.0, device=self.device)
+        obs = {}
+        # For now, use a fixed radius (can be made configurable)
+        rcol = torch.full((self.num_envs, 1), 2.0, device=self.device)
         env_center = self._terrain.env_origins if hasattr(self._terrain, "env_origins") else torch.zeros((self.num_envs, 3), device=self.device)
 
-        obs_dict = {team: {} for team in self.cfg.teams}
-        for i, agent in enumerate(self.cfg.action_spaces):
-            # Desired position in body frame
-            desired_pos_b, _ = subtract_frame_transforms(
-                self.robots[agent].data.root_state_w[:, :3], self.robots[agent].data.root_state_w[:, 3:7], self._desired_pos_w[agent]
-            )
-            # Teammate and other agent positions (in body frame)
-            teammate_id = f"robot_{1-i}"
-            teammate_pos, _ = subtract_frame_transforms(
-                self.robots[agent].data.root_state_w[:, :3], self.robots[agent].data.root_state_w[:, 3:7], self.robots[teammate_id].data.root_pos_w
-            )
-            # For two agents, other_pos is same as teammate_pos
-            other_pos = teammate_pos
-            dist_to_center = torch.norm(self.robots[agent].data.root_pos_w - env_center, dim=-1, keepdim=True)
+        for i, (team, agents) in enumerate(self.cfg.teams.items()):
+            obs[team] = {}
+            for agent_id in agents:
+                teammate_id = [a for a in agents if a != agent_id][0]
+                enemy_team = [a for a in self.cfg.teams.keys() if a != team][0]
+                enemies = self.cfg.teams[enemy_team]
 
-            # Use vector angle reward for each agent
-            arm_orientation_reward, arm_orientation, desired_orientation = self._get_vector_angle_reward(agent)
-            processed_actions = self.processed_actions[agent]
-            obs_parts = [
-                processed_actions,
-                desired_orientation,
-                arm_orientation,
-                desired_pos_b,
-                teammate_pos,
-                other_pos,
-                dist_to_center,
-                arena_radius,
-            ]
-            obs = torch.cat(obs_parts, dim=-1)
-            obs_size = obs.shape[1]
-            target_size = self.cfg.observation_spaces[agent]
-            if obs_size < target_size:
-                pad = torch.zeros((self.num_envs, target_size - obs_size), device=self.device)
-                obs = torch.cat([obs, pad], dim=-1)
-            elif obs_size > target_size:
-                obs = obs[:, :target_size]
-            obs = torch.nan_to_num(obs, nan=0.0, posinf=1e6, neginf=-1e6)
-            team = f"team_{i}"
-            obs_dict[team][agent] = obs
+                enemy_0_id = enemies[0]
+                enemy_1_id = enemies[1]
+
+                enemy_0_pos, _ = subtract_frame_transforms(
+                    self.robots[agent_id].data.root_state_w[:, :3], self.robots[agent_id].data.root_state_w[:, 3:7],
+                    self.robots[enemy_0_id].data.root_pos_w
+                )
+
+                teammate_pos, _ = subtract_frame_transforms(
+                    self.robots[agent_id].data.root_state_w[:, :3], self.robots[agent_id].data.root_state_w[:, 3:7],
+                    self.robots[teammate_id].data.root_pos_w
+                )
+
+                enemy_1_pos, _ = subtract_frame_transforms(
+                    self.robots[agent_id].data.root_state_w[:, :3], self.robots[agent_id].data.root_state_w[:, 3:7],
+                    self.robots[enemy_1_id].data.root_pos_w
+                )
+
+                dist_center = torch.norm(
+                    self.robots[agent_id].data.root_pos_w - env_center, dim=-1, keepdim=True
+                )
+
+                # For tanks, use full state; for drones, use simpler obs
+                if agent_id.startswith("minitank"):
+                    obs_vec = torch.cat([
+                        self.robots[agent_id].data.root_lin_vel_b,
+                        self.robots[agent_id].data.root_ang_vel_b,
+                        self.robots[agent_id].data.projected_gravity_b,
+                        self.robots[agent_id].data.joint_pos - self.robots[agent_id].data.default_joint_pos,
+                        self.robots[agent_id].data.joint_vel,
+                        self.actions[agent_id],
+                        enemy_1_pos,
+                        teammate_pos,
+                        enemy_0_pos,
+                        dist_center,
+                        rcol,
+                    ], dim=-1)
+                else:
+                    robot_vel = self.robots[agent_id].data.root_lin_vel_b
+                    obs_vec = torch.cat([
+                        enemy_0_pos, teammate_pos, enemy_1_pos, dist_center, robot_vel, rcol
+                    ], dim=1)
+
+                obs_vec = torch.nan_to_num(obs_vec, nan=0.0, posinf=1e6, neginf=-1e6)
+                # Ensure obs_vec matches expected shape
+                target_size = self.cfg.observation_spaces[agent_id]
+                obs_size = obs_vec.shape[1]
+                if obs_size < target_size:
+                    pad = torch.zeros((self.num_envs, target_size - obs_size), device=self.device)
+                    obs_vec = torch.cat([obs_vec, pad], dim=1)
+                elif obs_size > target_size:
+                    obs_vec = obs_vec[:, :target_size]
+                obs[team][agent_id] = obs_vec
+
         self.previous_actions = copy.deepcopy(self.actions)
-        return obs_dict
+        return obs
 
     def get_y_euler_from_quat(self, quaternion):
         w, x, y, z = quaternion[:, 0], quaternion[:, 1], quaternion[:, 2], quaternion[:, 3]
@@ -455,51 +475,74 @@ class MinitankStage3Env(DirectMARLEnv):
         return y_euler_angle
 
     def _get_rewards(self) -> dict:
-        if not self.headless:
-            self._draw_markers()
+        # Reward logic: teams are rewarded for simply existing together (no push-out or fallen logic)
+        # Each team gets a constant reward per timestep as long as their agents exist
+        reward_value = 1.0  # You can adjust this value as needed
+        team_rewards = {team: torch.full((self.num_envs,), reward_value, device=self.device) for team in self.cfg.teams.keys()}
 
+        # Optionally log the reward
+        for team in self.cfg.teams.keys():
+            self._episode_sums[f"{team}_existence_reward"] = team_rewards[team]
 
-        ### MINITANK REWARDS ###
-        all_rewards = {}
-        team_rewards = {team: torch.zeros(self.num_envs, device=self.device) for team in self.cfg.teams}
-        for i, agent in enumerate(self.cfg.action_spaces):
-            arm_orientation_reward, _, _ = self._get_vector_angle_reward(agent)
-            minitank_rewards = arm_orientation_reward * self.step_dt
-        ### MINITANK REWARDS ###
-    
-            self._episode_sums["tank_angle_reward"] = minitank_rewards
-            rewards = {
-                "tank_angle_reward": minitank_rewards
-            }
-            reward = torch.sum(torch.stack(list(rewards.values())), dim=0)
-            for key, value in rewards.items():
-                self._episode_sums[key] += value
-            all_rewards[agent] = reward
-            team = f"team_{i}"
-            team_rewards[team] += reward
         return team_rewards
 
 
     def _get_dones(self) -> tuple[dict, dict]:
-        time_out_tensor = (self.episode_length_buf >= self.max_episode_length - 1).to(self.device)
-        dones = {}
-        time_out = {}
-        for i, agent in enumerate(self.cfg.action_spaces):
-            died_tensor = self.robots[agent].data.root_pos_w[:, 2] < 0.1
-            team = f"team_{i}"
-            dones[team] = died_tensor
-            time_out[team] = time_out_tensor
-        return dones, time_out
+        # Multiagent done logic (adapted from sumo_stage_2_hetero)
+        env_xy = self._terrain.env_origins[:, :2].to(self.device)
+        out = {}
+        for agent_id in self.robots.keys():
+            pos_xy = self.robots[agent_id].data.root_pos_w[:, :2]
+            dist = torch.linalg.norm(pos_xy - env_xy, dim=1)
+            out[agent_id] = dist > 2.0
+
+        team0_out = torch.any(torch.stack([out["robot_0"], out["robot_3"]]), dim=0)
+        team1_out = torch.any(torch.stack([out["robot_1"], out["robot_2"]]), dim=0)
+        fallen = torch.zeros(self.num_envs, dtype=torch.bool, device=self.device)
+        for agent_id, robot in self.minitanks.items():
+            died = robot.data.root_pos_w[:, 2] < .1
+            fallen |= died
+
+        done = team0_out | team1_out | fallen
+        dones = {team: done for team in self.cfg.teams.keys()}
+
+        time_out = self.episode_length_buf >= self.max_episode_length - 1
+        timeouts = {team: time_out for team in self.cfg.teams.keys()}
+        return dones, timeouts
 
     def _reset_idx(self, env_ids: torch.Tensor | None):
-        # Use the first robot to get ALL_INDICES, but reset all robots
-        first_agent = list(self.cfg.action_spaces.keys())[0]
-        if env_ids is None or (hasattr(env_ids, "__len__") and len(env_ids) == self.num_envs):
-            env_ids = self.robots[first_agent]._ALL_INDICES
+        # Multiagent reset logic (adapted from sumo_stage_2_hetero)
         if env_ids is None:
             env_ids = torch.arange(self.num_envs, device=self.device)
-
         super()._reset_idx(env_ids)
+
+        # Optionally randomize episode length
+        if hasattr(self, "debug") and not self.debug:
+            if len(env_ids) == self.num_envs:
+                self.episode_length_buf[:] = torch.randint_like(self.episode_length_buf, high=int(self.max_episode_length))
+
+        # Reset robots and drones
+        origins = self._terrain.env_origins[env_ids]  # (N, 3)
+        for agent_id in self.robots.keys():
+            robot = self.robots[agent_id]
+            robot.reset(env_ids)
+            default_root_state = robot.data.default_root_state[env_ids].clone()
+            default_root_state[:, :3] = origins[:, :3]
+            robot.write_root_pose_to_sim(default_root_state[:, :7], env_ids)
+            robot.write_root_velocity_to_sim(default_root_state[:, 7:], env_ids)
+            if agent_id in self.minitanks:
+                joint_pos = robot.data.default_joint_pos[env_ids]
+                joint_vel = robot.data.default_joint_vel[env_ids]
+                robot.write_joint_state_to_sim(joint_pos, joint_vel, None, env_ids)
+
+        # Reset actions and sample new commands for all agents
+        for agent_id in self.cfg.action_spaces:
+            self.actions[agent_id][env_ids] = 0.0
+            self._desired_pos_w[agent_id][env_ids, :2] = torch.zeros_like(self._desired_pos_w[agent_id][env_ids, :2]).uniform_(-2.0, 2.0)
+            self._desired_pos_w[agent_id][env_ids, :2] += origins[:, :2]
+            self._desired_pos_w[agent_id][env_ids, 2] = torch.zeros_like(self._desired_pos_w[agent_id][env_ids, 2]).uniform_(0.5, 1.5)
+
+        # Logging
         extras = dict()
         for key in self._episode_sums.keys():
             episodic_sum_avg = torch.mean(self._episode_sums[key][env_ids])
@@ -507,33 +550,6 @@ class MinitankStage3Env(DirectMARLEnv):
             self._episode_sums[key][env_ids] = 0.0
         self.extras["log"] = dict()
         self.extras["log"].update(extras)
-        extras = dict()
-
-        env_size = env_ids.shape[0]
-        for agent, action_space in self.cfg.action_spaces.items():
-            self.actions[agent][env_ids] = torch.zeros(env_size, action_space, device=self.device)
-            self.previous_actions[agent][env_ids] = torch.zeros(env_size, action_space, device=self.device)
-
-        for agent in self.cfg.action_spaces:
-            robot = self.robots[agent]
-            robot.reset(env_ids)
-            if env_ids is not None and hasattr(env_ids, "shape") and env_ids.shape[0] == self.num_envs:
-                self.episode_length_buf[:] = torch.randint_like(self.episode_length_buf, high=int(self.max_episode_length))
-
-            joint_pos = robot.data.default_joint_pos[env_ids]
-            joint_vel = robot.data.default_joint_vel[env_ids]
-            default_root_state = robot.data.default_root_state[env_ids]
-            default_root_state[:, :3] += self._terrain.env_origins[env_ids]
-            robot.write_root_pose_to_sim(default_root_state[:, :7], env_ids)
-            robot.write_root_velocity_to_sim(default_root_state[:, 7:], env_ids)
-            robot.write_joint_state_to_sim(joint_pos, joint_vel, None, env_ids)
-
-        # Reset actions and sample new commands for all robots
-        for agent in self.cfg.action_spaces:
-            self.actions[agent][env_ids] = 0.0
-            self._desired_pos_w[agent][env_ids, :2] = torch.zeros_like(self._desired_pos_w[agent][env_ids, :2]).uniform_(-2.0, 2.0)
-            self._desired_pos_w[agent][env_ids, :2] += self._terrain.env_origins[env_ids, :2]
-            self._desired_pos_w[agent][env_ids, 2] = torch.zeros_like(self._desired_pos_w[agent][env_ids, 2]).uniform_(0.5, 1.5)
 
 
         

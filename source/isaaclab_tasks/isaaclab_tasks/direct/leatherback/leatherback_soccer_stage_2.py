@@ -43,8 +43,10 @@ class LeatherbackStage2AdversarialSoccerEnvCfg(DirectMARLEnvCfg):
     robot_1.init_state.pos = (-1.0, 2.0, .1)
     robot_2: ArticulationCfg = LEATHERBACK_CFG.replace(prim_path="/World/envs/env_.*/Robot_2")
     robot_2.init_state.pos = (1.0, -2.0, .1)
+    robot_2.init_state.rot = get_quaternion_tuple_from_xyz(0, 0, torch.pi)
     robot_3: ArticulationCfg = LEATHERBACK_CFG.replace(prim_path="/World/envs/env_.*/Robot_3")
     robot_3.init_state.pos = (1.0, 2.0, .1)
+    robot_3.init_state.rot = get_quaternion_tuple_from_xyz(0, 0, torch.pi)
 
     wall_0 = RigidObjectCfg(
         prim_path="/World/envs/env_.*/Object0",
@@ -116,14 +118,14 @@ class LeatherbackStage2AdversarialSoccerEnvCfg(DirectMARLEnvCfg):
         "Knuckle__Upright__Front_Left",
     ]
 
-    env_spacing = 20.0
+    env_spacing = 30.0
     scene: InteractiveSceneCfg = InteractiveSceneCfg(num_envs=4096, env_spacing=env_spacing, replicate_physics=True)
     viewer = ViewerCfg(eye=(10.0, 10.0, 10.0), env_index=0, origin_type="env")
 
     throttle_scale = 10
-    throttle_max = 50
+    throttle_max = 30
     steering_scale = 0.1
-    steering_max = 0.75
+    steering_max = 10
 
     goal_reward_scale = 20
     ball_to_goal_reward_scale = 1.0
@@ -247,15 +249,14 @@ class LeatherbackStage2AdversarialSoccerEnv(DirectMARLEnv):
         self.goal_area.visualize(marker_locations, marker_indices=marker_ids)
 
     def _pre_physics_step(self, actions: dict) -> None:
-
         for robot_id in self.robots.keys():
-            self._throttle_action = actions[robot_id][:, 0].repeat_interleave(4).reshape((-1, 4)) * self.cfg.throttle_scale
-            self._throttle_action = torch.clamp(self._throttle_action, -self.cfg.throttle_max, self.cfg.throttle_max)
-            self._throttle_state[robot_id] = self._throttle_action
+            throttle_action = actions[robot_id][:, 0].repeat_interleave(4).reshape((-1, 4)) * self.cfg.throttle_scale
+            throttle_action = torch.clamp(throttle_action, -self.cfg.throttle_max, self.cfg.throttle_max)
+            self._throttle_state[robot_id] = throttle_action
             
-            self._steering_action = actions[robot_id][:, 1].repeat_interleave(2).reshape((-1, 2)) * self.cfg.steering_scale
-            self._steering_action = torch.clamp(self._steering_action, -self.cfg.steering_max, self.cfg.steering_max)
-            self._steering_state[robot_id] = self._steering_action
+            steering_action = actions[robot_id][:, 1].repeat_interleave(2).reshape((-1, 2)) * self.cfg.steering_scale
+            steering_action = torch.clamp(steering_action, -self.cfg.steering_max, self.cfg.steering_max)
+            self._steering_state[robot_id] = steering_action
             self.ball.update(self.step_dt)
 
     def _apply_action(self) -> None:
@@ -369,10 +370,10 @@ class LeatherbackStage2AdversarialSoccerEnv(DirectMARLEnv):
     
     def _get_goal_areas(self):
         goal1_size = self.goal_area.cfg.markers['goal1'].size
-        goal1_pos = self.scene.env_origins.clone() + torch.tensor([-9, 0.0, 0.05], device=self.device)
+        goal1_pos = self.scene.env_origins.clone() + torch.tensor([-9.25, 0.0, 0.05], device=self.device)
 
         goal2_size = self.goal_area.cfg.markers['goal2'].size
-        goal2_pos = self.scene.env_origins.clone() + torch.tensor([9, 0.0, 0.05], device=self.device)
+        goal2_pos = self.scene.env_origins.clone() + torch.tensor([9.25, 0.0, 0.05], device=self.device)
 
         # Extract goal area from goal post positions
         goal1_min = goal1_pos + torch.tensor([-goal1_size[0]/2, -goal1_size[1]/2, 0], device=self.device)

@@ -93,8 +93,8 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     algo_args["train"]["model_dir"] = args["dir"]
     algo_args["seed"]["specify_seed"] = True
     algo_args["seed"]["seed"] = args["seed"]
-    algo_args["seed"]["adversarial_training_mode"] = args["adversarial_training_mode"]
-    algo_args["seed"]["adversarial_training_iterations"] = args["adversarial_training_iterations"]
+    algo_args["algo"]["adversarial_training_mode"] = args["adversarial_training_mode"]
+    algo_args["algo"]["adversarial_training_iterations"] = args["adversarial_training_iterations"]
 
     env_args = {}
     env_cfg.scene.num_envs = args["num_envs"]

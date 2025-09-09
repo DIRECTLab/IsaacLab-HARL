@@ -13,6 +13,8 @@ from isaaclab.markers import VisualizationMarkers, VisualizationMarkersCfg
 from isaaclab.utils.math import subtract_frame_transforms
 from isaaclab.utils.math import quat_from_angle_axis, quat_from_euler_xyz, quat_rotate_inverse
 from isaaclab_assets.custom.soccer_ball import SOCCERBALL_CFG  # isort: skip
+from isaaclab.envs.common import ViewerCfg
+
 import random
 
 def get_quaternion_tuple_from_xyz(x, y, z):
@@ -116,6 +118,7 @@ class LeatherbackStage2AdversarialSoccerEnvCfg(DirectMARLEnvCfg):
 
     env_spacing = 20.0
     scene: InteractiveSceneCfg = InteractiveSceneCfg(num_envs=4096, env_spacing=env_spacing, replicate_physics=True)
+    viewer = ViewerCfg(eye=(10.0, 10.0, 10.0), env_index=0, origin_type="env")
 
     throttle_scale = 10
     throttle_max = 50
@@ -145,9 +148,8 @@ class LeatherbackStage2AdversarialSoccerEnv(DirectMARLEnv):
         self._episode_sums = {
             key: torch.zeros(self.num_envs, dtype=torch.float, device=self.device)
             for key in [
-                "dist_to_ball_reward",
-                "ball_to_goal_reward",
-                "goal_reward",
+                "goal_reward_team0",
+                "goal_reward_team1",
             ]
         }
 
@@ -343,17 +345,25 @@ class LeatherbackStage2AdversarialSoccerEnv(DirectMARLEnv):
         self._draw_team_dots()
         ball_in_goal1, ball_in_goal2 = self._ball_in_goal_area()
         time_out = self.episode_length_buf >= self.max_episode_length - 1
+        out_of_arena = self._get_out_of_arena()
 
-        team_0_reward = (ball_in_goal2.to(torch.int8) - ball_in_goal1.to(torch.int8)) * (time_out.to(torch.int8) ^ 1)
-        team_1_reward = ball_in_goal1.to(torch.int8) - ball_in_goal2.to(torch.int8) * (time_out.to(torch.int8) ^ 1)
+        time_step_reward = -0.01 * torch.ones(self.num_envs, device=self.device)
+
+        team_0_score_reward = ball_in_goal2.to(torch.float32) * self.cfg.goal_reward_scale
+        team_0_loss_reward = - ball_in_goal1.to(torch.float32) - out_of_arena.to(torch.float32)
+        team_1_score_reward = ball_in_goal1.to(torch.float32) * self.cfg.goal_reward_scale
+        team_1_loss_reward = - ball_in_goal2.to(torch.float32) - out_of_arena.to(torch.float32)
 
         rewards = {
-            "team_0_reward": team_0_reward * self.cfg.goal_reward_scale,
-            "team_1_reward": team_1_reward * self.cfg.goal_reward_scale,
+            "team_0": team_0_score_reward + team_0_loss_reward + time_step_reward,
+            "team_1": team_1_score_reward + team_1_loss_reward + time_step_reward,
         }
 
         rewards = {k: torch.nan_to_num(v, nan=0.0, posinf=1e6, neginf=-1e6)
                 for k, v in rewards.items()}
+        
+        self._episode_sums["goal_reward_team0"] += rewards["team_0"]
+        self._episode_sums["goal_reward_team1"] += rewards["team_1"]
 
         return rewards
     
@@ -372,6 +382,14 @@ class LeatherbackStage2AdversarialSoccerEnv(DirectMARLEnv):
 
         return goal1_pos, goal2_pos, (goal1_min, goal1_max), (goal2_min, goal2_max)
     
+    def _get_out_of_arena(self):
+        out_of_arena = torch.zeros(self.num_envs, dtype=torch.int8, device=self.device)
+
+        for robot in self.robots.values():
+            out_of_arena |= robot.data.root_pos_w[:, 2] > 5
+        
+        return out_of_arena
+    
     def _ball_in_goal_area(self):
         ball_pos = self.ball.data.root_pos_w[:, :2]
         in_goal1 = torch.all((ball_pos >= self.goal1_area[0][:,:2]) & (ball_pos <= self.goal1_area[1][:,:2]), dim=1)
@@ -382,11 +400,13 @@ class LeatherbackStage2AdversarialSoccerEnv(DirectMARLEnv):
         ball_in_goal1, ball_in_goal2 = self._ball_in_goal_area()
 
         ball_in_any_goal = ball_in_goal1 | ball_in_goal2
+        out_of_arena = self._get_out_of_arena()
+
+        done = out_of_arena | ball_in_any_goal
 
         time_out = self.episode_length_buf >= self.max_episode_length - 1
 
-
-        dones = {team: ball_in_any_goal for team in self.cfg.teams.keys()}
+        dones = {team: done for team in self.cfg.teams.keys()}
         time_outs = {team: time_out for team in self.cfg.teams.keys()}
 
         return dones, time_outs
@@ -414,7 +434,7 @@ class LeatherbackStage2AdversarialSoccerEnv(DirectMARLEnv):
         self._draw_goal_areas()
 
         # Cache for convenience
-        origins = self.scene.env_origins[env_ids]  # (N, 3)
+        origins = self.scene.env_origins[env_ids].clone()  # (N, 3)
 
         # We’ll assign robots sequentially
         robot_ids = list(self.robots.keys())
@@ -435,7 +455,7 @@ class LeatherbackStage2AdversarialSoccerEnv(DirectMARLEnv):
             default_root_state = self.robots[robot_id].data.default_root_state[env_ids].clone()
 
             # Place robot
-            default_root_state[:, :2] = origins[:, :2] + torch.zeros_like(default_root_state[:, :2], device=self.device).uniform_(-3, 3)
+            default_root_state[:, :2] += origins[:, :2]
 
             # Write to sim
             self.robots[robot_id].write_root_pose_to_sim(default_root_state[:, :7], env_ids)

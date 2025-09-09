@@ -347,12 +347,16 @@ class LeatherbackStage2AdversarialSoccerEnv(DirectMARLEnv):
         time_out = self.episode_length_buf >= self.max_episode_length - 1
         out_of_arena = self._get_out_of_arena()
 
-        team_0_reward = ball_in_goal2.to(torch.int8) - ball_in_goal1.to(torch.int8) - time_out.to(torch.int8) - out_of_arena
-        team_1_reward = ball_in_goal1.to(torch.int8) - ball_in_goal2.to(torch.int8) - time_out.to(torch.int8) - out_of_arena
+        time_step_reward = -0.01 * torch.ones(self.num_envs, device=self.device)
+
+        team_0_score_reward = ball_in_goal2.to(torch.float32) * self.cfg.goal_reward_scale
+        team_0_loss_reward = - ball_in_goal1.to(torch.float32) - out_of_arena.to(torch.float32)
+        team_1_score_reward = ball_in_goal1.to(torch.float32) * self.cfg.goal_reward_scale
+        team_1_loss_reward = - ball_in_goal2.to(torch.float32) - out_of_arena.to(torch.float32)
 
         rewards = {
-            "team_0": team_0_reward * self.cfg.goal_reward_scale,
-            "team_1": team_1_reward * self.cfg.goal_reward_scale,
+            "team_0": team_0_score_reward + team_0_loss_reward + time_step_reward,
+            "team_1": team_1_score_reward + team_1_loss_reward + time_step_reward,
         }
 
         rewards = {k: torch.nan_to_num(v, nan=0.0, posinf=1e6, neginf=-1e6)

@@ -126,6 +126,17 @@ gym.register(
 )
 
 gym.register(
+    id="Minitank-Stage-2-Direct-v0",
+    entry_point=MinitankStage2Env,
+    disable_env_checker=True,
+    kwargs={
+        "env_cfg_entry_point": MinitankStage2EnvCfg,
+        # "harl_happo_cfg_entry_point": f"{agents.__name__}:harl_happo_cfg.yaml",
+        "harl_happo_adv_cfg_entry_point": f"{agents.__name__}:harl_happo_adv_cfg.yaml",
+    },
+)
+
+gym.register(
     id="Minitank-Stage-3-Direct-v0",
     entry_point=MinitankStage3Env,
     disable_env_checker=True,

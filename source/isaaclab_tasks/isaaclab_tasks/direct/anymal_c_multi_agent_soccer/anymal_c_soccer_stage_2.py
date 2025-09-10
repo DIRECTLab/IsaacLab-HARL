@@ -50,7 +50,7 @@ class EventCfg:
     )
 
 @configclass
-class AnymalStage1SoccerEnvCfg(DirectMARLEnvCfg):
+class AnymalStage2SoccerEnvCfg(DirectMARLEnvCfg):
     decimation = 4
     episode_length_s = 10.0
     action_scale = 0.5
@@ -130,11 +130,12 @@ class AnymalStage1SoccerEnvCfg(DirectMARLEnvCfg):
     goal_reward_scale = 20
     ball_to_goal_reward_scale = 1.0
     dist_to_ball_reward_scale = 1.0
+    ball_velocity_scale = 1.0
 
-class AnymalStage1SoccerEnv(DirectMARLEnv):
-    cfg: AnymalStage1SoccerEnvCfg
+class AnymalStage2SoccerEnv(DirectMARLEnv):
+    cfg: AnymalStage2SoccerEnvCfg
 
-    def __init__(self, cfg: AnymalStage1SoccerEnvCfg, render_mode: str | None = None, headless: bool | None = None, **kwargs):
+    def __init__(self, cfg: AnymalStage2SoccerEnvCfg, render_mode: str | None = None, headless: bool | None = None, **kwargs):
         super().__init__(cfg, render_mode, **kwargs)
         self.headless = headless
         
@@ -152,7 +153,8 @@ class AnymalStage1SoccerEnv(DirectMARLEnv):
         self._episode_sums = {
             key: torch.zeros(self.num_envs, dtype=torch.float, device=self.device)
             for key in [
-                "dist_to_ball_reward",
+                # "dist_to_ball_reward",
+                "ball_velocity_reward",
                 "ball_to_goal_reward",
                 "goal_reward",
             ]
@@ -304,8 +306,11 @@ class AnymalStage1SoccerEnv(DirectMARLEnv):
         ball_distance_to_goal = torch.linalg.norm(self.ball.data.root_pos_w - goal_pos, dim=1)
         ball_distance_to_goal_mapped = 1 - torch.tanh(ball_distance_to_goal / .8)
 
-        robot_distance_to_ball = torch.linalg.norm(self.robots["robot_0"].data.root_pos_w[:, :3] - self.ball.data.root_pos_w, dim=1)
-        robot_distance_to_ball_mapped = 1 - torch.tanh(robot_distance_to_ball / .8)
+        ball_vel = torch.norm(self.ball.data.root_lin_vel_w, dim=1)
+        ball_vel_reward = torch.tanh(ball_vel / .8)
+
+        # robot_distance_to_ball = torch.linalg.norm(self.robots["robot_0"].data.root_pos_w[:, :3] - self.ball.data.root_pos_w, dim=1)
+        # robot_distance_to_ball_mapped = 1 - torch.tanh(robot_distance_to_ball / .8)
         
         goal_reward = torch.zeros(self.num_envs, device=self.device)
         # Reward is 1 if ball is in target goal area, if in other goal area, reward is -1
@@ -315,7 +320,8 @@ class AnymalStage1SoccerEnv(DirectMARLEnv):
         goal_reward[ball_in_goal2 & (self.target_goal == 0)] = -1.0
 
         rewards = {
-            "dist_to_ball_reward": robot_distance_to_ball_mapped * self.cfg.dist_to_ball_reward_scale * self.step_dt,
+            # "dist_to_ball_reward": robot_distance_to_ball_mapped * self.cfg.dist_to_ball_reward_scale * self.step_dt,
+            "ball_velocity_reward": ball_vel_reward  * self.cfg.ball_velocity_scale * self.step_dt,
             "ball_to_goal_reward": ball_distance_to_goal_mapped  * self.cfg.ball_to_goal_reward_scale * self.step_dt,
             "goal_reward": goal_reward * self.cfg.goal_reward_scale,
         }

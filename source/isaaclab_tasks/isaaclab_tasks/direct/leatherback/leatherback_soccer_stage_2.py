@@ -38,14 +38,10 @@ class LeatherbackStage2AdversarialSoccerEnvCfg(DirectMARLEnvCfg):
 
     sim: SimulationCfg = SimulationCfg(dt=1 / 200, render_interval=decimation)
     robot_0: ArticulationCfg = LEATHERBACK_CFG.replace(prim_path="/World/envs/env_.*/Robot_0")
-    robot_0.init_state.pos = (-8.0, -2.0, .1)
     robot_1: ArticulationCfg = LEATHERBACK_CFG.replace(prim_path="/World/envs/env_.*/Robot_1")
-    robot_1.init_state.pos = (-8.0, 2.0, .1)
     robot_2: ArticulationCfg = LEATHERBACK_CFG.replace(prim_path="/World/envs/env_.*/Robot_2")
-    robot_2.init_state.pos = (8.0, -2.0, .1)
     robot_2.init_state.rot = get_quaternion_tuple_from_xyz(0, 0, torch.pi)
     robot_3: ArticulationCfg = LEATHERBACK_CFG.replace(prim_path="/World/envs/env_.*/Robot_3")
-    robot_3.init_state.pos = (8.0, 2.0, .1)
     robot_3.init_state.rot = get_quaternion_tuple_from_xyz(0, 0, torch.pi)
 
     wall_0 = RigidObjectCfg(
@@ -150,8 +146,12 @@ class LeatherbackStage2AdversarialSoccerEnv(DirectMARLEnv):
         self._episode_sums = {
             key: torch.zeros(self.num_envs, dtype=torch.float, device=self.device)
             for key in [
-                "goal_reward_team0",
-                "goal_reward_team1",
+                "team_0_score_reward",
+                "team_0_ball_to_goal_reward",
+                "team_0_timestep_reward",
+                "team_1_score_reward",
+                "team_1_ball_to_goal_reward",
+                "team_1_timestep_reward",
             ]
         }
 
@@ -169,8 +169,7 @@ class LeatherbackStage2AdversarialSoccerEnv(DirectMARLEnv):
                 },
         )
         self.goal_area = VisualizationMarkers(marker_cfg)
-        self.goal1_pos, self.goal2_pos, self.goal1_area, self.goal2_area = self._get_goal_areas()
-        self.target_goal = torch.zeros(self.num_envs, dtype=torch.int32, device=self.device)
+        self.goal0_pos, self.goal1_pos, self.goal0_area, self.goal1_area = self._get_goal_areas()
         team_dot_markers = {
             "blue": sim_utils.SphereCfg(
                 radius=0.08,
@@ -244,7 +243,7 @@ class LeatherbackStage2AdversarialSoccerEnv(DirectMARLEnv):
 
         marker_ids = torch.concat([marker_ids0, marker_ids1], dim=0)
 
-        marker_locations = torch.concat([self.goal1_pos, self.goal2_pos], dim=0)
+        marker_locations = torch.concat([self.goal0_pos, self.goal1_pos], dim=0)
 
         self.goal_area.visualize(marker_locations, marker_indices=marker_ids)
 
@@ -299,13 +298,13 @@ class LeatherbackStage2AdversarialSoccerEnv(DirectMARLEnv):
                 target_goal_pos, _ = subtract_frame_transforms(
                     self.robots[robot_id].data.root_state_w[:, :3],
                     self.robots[robot_id].data.root_state_w[:, 3:7],
-                    self.goal2_pos if team == "team_0" else self.goal1_pos  
+                    self.goal1_pos if team == "team_0" else self.goal0_pos  
                 )
 
                 other_goal_pos, _ = subtract_frame_transforms(
                     self.robots[robot_id].data.root_state_w[:, :3],
                     self.robots[robot_id].data.root_state_w[:, 3:7],
-                    self.goal1_pos if team == "team_0" else self.goal2_pos
+                    self.goal0_pos if team == "team_0" else self.goal1_pos
                 )
 
                 teammate_pos, _ = subtract_frame_transforms(
@@ -350,23 +349,50 @@ class LeatherbackStage2AdversarialSoccerEnv(DirectMARLEnv):
 
         time_step_reward = -0.01 * torch.ones(self.num_envs, device=self.device)
 
-        team_0_score_reward = ball_in_goal2.to(torch.float32) * self.cfg.goal_reward_scale
-        team_0_loss_reward = - ball_in_goal1.to(torch.float32) - out_of_arena.to(torch.float32)
-        team_1_score_reward = ball_in_goal1.to(torch.float32) * self.cfg.goal_reward_scale
-        team_1_loss_reward = - ball_in_goal2.to(torch.float32) - out_of_arena.to(torch.float32)
+        # Distances to opponent’s goal
+        team_0_ball_distance_to_goal = torch.linalg.norm(self.ball.data.root_pos_w - self.goal1_pos, dim=1)
+        team_0_ball_distance_to_goal_mapped = 1 - torch.tanh(team_0_ball_distance_to_goal / 0.8)
 
-        rewards = {
-            "team_0": team_0_score_reward + team_0_loss_reward + time_step_reward,
-            "team_1": team_1_score_reward + team_1_loss_reward + time_step_reward,
+        team_1_ball_distance_to_goal = torch.linalg.norm(self.ball.data.root_pos_w - self.goal0_pos, dim=1)
+        team_1_ball_distance_to_goal_mapped = 1 - torch.tanh(team_1_ball_distance_to_goal / 0.8)
+
+        # Score rewards
+        team_0_score_reward = (ball_in_goal2.to(torch.float32) - ball_in_goal1.to(torch.float32)) * self.cfg.goal_reward_scale
+        team_1_score_reward = (ball_in_goal1.to(torch.float32) - ball_in_goal2.to(torch.float32)) * self.cfg.goal_reward_scale
+
+        # Team 0 rewards
+        reward_team_0 = {
+            "team_0_score_reward": team_0_score_reward,
+            "team_0_ball_to_goal_reward": team_0_ball_distance_to_goal_mapped,
+            "team_0_timestep_reward": time_step_reward,
+        }
+        reward_team_0 = {k: torch.nan_to_num(v, nan=0.0, posinf=1e6, neginf=-1e6)
+                        for k, v in reward_team_0.items()}
+
+        for k, v in reward_team_0.items():
+            self._episode_sums[k] += v
+
+        total_reward_team_0 = torch.sum(torch.stack(list(reward_team_0.values()), dim=0), dim=0)
+
+        # Team 1 rewards
+        reward_team_1 = {
+            "team_1_score_reward": team_1_score_reward,
+            "team_1_ball_to_goal_reward": team_1_ball_distance_to_goal_mapped,
+            "team_1_timestep_reward": time_step_reward,
+        }
+        reward_team_1 = {k: torch.nan_to_num(v, nan=0.0, posinf=1e6, neginf=-1e6)
+                        for k, v in reward_team_1.items()}
+
+        for k, v in reward_team_1.items():
+            self._episode_sums[k] += v
+
+        total_reward_team_1 = torch.sum(torch.stack(list(reward_team_1.values()), dim=0), dim=0)
+
+        return {
+            "team_0": total_reward_team_0,
+            "team_1": total_reward_team_1,
         }
 
-        rewards = {k: torch.nan_to_num(v, nan=0.0, posinf=1e6, neginf=-1e6)
-                for k, v in rewards.items()}
-        
-        self._episode_sums["goal_reward_team0"] += rewards["team_0"]
-        self._episode_sums["goal_reward_team1"] += rewards["team_1"]
-
-        return rewards
     
     def _get_goal_areas(self):
         goal1_size = self.goal_area.cfg.markers['goal1'].size
@@ -393,8 +419,8 @@ class LeatherbackStage2AdversarialSoccerEnv(DirectMARLEnv):
     
     def _ball_in_goal_area(self):
         ball_pos = self.ball.data.root_pos_w[:, :2]
-        in_goal1 = torch.all((ball_pos >= self.goal1_area[0][:,:2]) & (ball_pos <= self.goal1_area[1][:,:2]), dim=1)
-        in_goal2 = torch.all((ball_pos >= self.goal2_area[0][:,:2]) & (ball_pos <= self.goal2_area[1][:,:2]), dim=1)
+        in_goal1 = torch.all((ball_pos >= self.goal0_area[0][:,:2]) & (ball_pos <= self.goal0_area[1][:,:2]), dim=1)
+        in_goal2 = torch.all((ball_pos >= self.goal1_area[0][:,:2]) & (ball_pos <= self.goal1_area[1][:,:2]), dim=1)
         return in_goal1, in_goal2
 
     def _get_dones(self) -> tuple[dict, dict]:
@@ -430,18 +456,26 @@ class LeatherbackStage2AdversarialSoccerEnv(DirectMARLEnv):
         team_0_percent_scored = torch.sum(ball_in_goal2.to(torch.float32)) / len(env_ids)
         team_1_percent_scored = torch.sum(ball_in_goal1.to(torch.float32)) / len(env_ids)
 
-        self.target_goal[env_ids] = torch.randint(0, 2, (len(env_ids),), device=self.device).to(torch.int32)
-
         self._draw_goal_areas()
 
         # Cache for convenience
         origins = self.scene.env_origins[env_ids].clone()  # (N, 3)
 
+        offsets = self._sample_positions_grid(env_ids, 5, 1, 1)
+
+        ball_offset, robot_0_offset, robot_1_offset, robot_2_offset, robot_3_offset = offsets[:,0], offsets[:,1], offsets[:,2], offsets[:,3], offsets[:,4],
+
+        offset_dict = {
+            "robot_0":robot_0_offset,
+            "robot_1":robot_1_offset,
+            "robot_2":robot_2_offset,
+            "robot_3":robot_3_offset,
+        }
         # We’ll assign robots sequentially
         robot_ids = list(self.robots.keys())
 
         ball_default_state = self.ball.data.default_root_state.clone()[env_ids]
-        ball_default_state[:, :2] = ball_default_state[:, :2] + self.scene.env_origins[env_ids][:,:2]
+        ball_default_state[:, :2] = ball_default_state[:, :2] + self.scene.env_origins[env_ids][:,:2] + ball_offset
         self.ball.write_root_state_to_sim(ball_default_state, env_ids)
         self.ball.reset(env_ids)
 
@@ -457,6 +491,7 @@ class LeatherbackStage2AdversarialSoccerEnv(DirectMARLEnv):
 
             # Place robot
             default_root_state[:, :2] += origins[:, :2]
+            default_root_state[:, :2] += offset_dict[robot_id]
 
             # Write to sim
             self.robots[robot_id].write_root_pose_to_sim(default_root_state[:, :7], env_ids)
@@ -475,3 +510,96 @@ class LeatherbackStage2AdversarialSoccerEnv(DirectMARLEnv):
         self.extras["log"] = dict()
         self.extras["log"].update(extras)
         extras = dict()
+
+    def _sample_positions_grid(self, env_ids, num_samples, min_dist=1.0, grid_spacing=1.0):
+        device = self.scene.env_origins.device
+        N = len(env_ids)
+
+        offsets = torch.zeros((N, num_samples, 2), device=device)
+        env_origins = self.scene.env_origins[env_ids][:, :2].clone()
+
+        _, _, goal1_area, goal2_area = self._get_goal_areas()
+        goal1_min, goal1_max = goal1_area
+        goal2_min, goal2_max = goal2_area
+
+        all_valid_points = []  # collect per-env lists
+
+        for i in range(N):
+            xs = torch.arange(env_origins[i, 0] - 9, env_origins[i, 0] + 10,
+                            grid_spacing, device=device)
+            ys = torch.arange(env_origins[i, 1] - 4, env_origins[i, 1] + 5,
+                            grid_spacing, device=device)
+            xv, yv = torch.meshgrid(xs, ys, indexing="ij")
+            grid_points = torch.stack([xv.flatten(), yv.flatten()], dim=-1)
+
+            # mask out goal areas
+            in_goal1 = (grid_points[:, 0] >= goal1_min[i, 0]) & (grid_points[:, 0] <= goal1_max[i, 0]) & \
+                    (grid_points[:, 1] >= goal1_min[i, 1]) & (grid_points[:, 1] <= goal1_max[i, 1])
+            in_goal2 = (grid_points[:, 0] >= goal2_min[i, 0]) & (grid_points[:, 0] <= goal2_max[i, 0]) & \
+                    (grid_points[:, 1] >= goal2_min[i, 1]) & (grid_points[:, 1] <= goal2_max[i, 1])
+            mask = ~(in_goal1 | in_goal2)
+
+            valid_points = grid_points[mask]
+            all_valid_points.append(valid_points)
+
+            if valid_points.shape[0] < num_samples:
+                raise ValueError(f"Not enough valid grid points outside goals for env {i}")
+
+            idx = torch.randperm(valid_points.shape[0], device=device)[:num_samples]
+            offsets[i] = valid_points[idx] - env_origins[i]
+
+        # save for visualization
+        self.valid_points = all_valid_points  
+        # self._draw_grid_markers()
+
+        return offsets
+    
+    @torch.no_grad()
+    def _draw_grid_markers(self):
+        """
+        Draws green dots at every valid grid point for every environment
+        stored in self.valid_points (populated by _sample_positions_grid).
+        """
+        device = self.device
+        if not hasattr(self, "valid_points"):
+            raise RuntimeError("Run _sample_positions_grid first to populate valid_points")
+
+        pos_chunks = []
+        idx_chunks = []
+        marker_counter = 0
+
+        for i, pts in enumerate(self.valid_points):
+            z_col = torch.full((pts.shape[0], 1), 0.05, device=device)
+            pos_i = torch.cat([pts, z_col], dim=1)
+
+            pos_chunks.append(pos_i)
+            idx_chunks.append(marker_counter + torch.arange(pts.shape[0],
+                                                            device=device,
+                                                            dtype=torch.long))
+            marker_counter += pts.shape[0]
+
+        marker_positions = torch.cat(pos_chunks, dim=0)      # (M, 3)
+        marker_indices  = torch.cat(idx_chunks, dim=0)       # (M,)
+        marker_scales   = 1 * torch.ones((marker_positions.shape[0], 3), device=device)
+
+        marker_orientations = torch.zeros((marker_positions.shape[0], 4), device=device)
+        marker_orientations[:, 0] = 1.0  # identity quaternion
+
+        if not hasattr(self, "grid_markers"):
+            markers = {f"grid_{i}": sim_utils.SphereCfg(
+                radius=0.05,
+                visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(0.0, 1.0, 0.0)),
+            ) for i in range(marker_counter)}
+
+            grid_marker_cfg = VisualizationMarkersCfg(
+                prim_path="/World/GridMarkers",
+                markers=markers
+            )
+            self.grid_markers = VisualizationMarkers(grid_marker_cfg)
+
+        self.grid_markers.visualize(
+            marker_positions,
+            marker_orientations,
+            scales=marker_scales,
+            marker_indices=marker_indices,
+        )

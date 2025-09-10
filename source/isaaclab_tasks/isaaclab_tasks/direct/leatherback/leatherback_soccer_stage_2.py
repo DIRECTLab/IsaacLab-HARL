@@ -38,14 +38,14 @@ class LeatherbackStage2AdversarialSoccerEnvCfg(DirectMARLEnvCfg):
 
     sim: SimulationCfg = SimulationCfg(dt=1 / 200, render_interval=decimation)
     robot_0: ArticulationCfg = LEATHERBACK_CFG.replace(prim_path="/World/envs/env_.*/Robot_0")
-    robot_0.init_state.pos = (-1.0, -2.0, .1)
+    robot_0.init_state.pos = (-8.0, -2.0, .1)
     robot_1: ArticulationCfg = LEATHERBACK_CFG.replace(prim_path="/World/envs/env_.*/Robot_1")
-    robot_1.init_state.pos = (-1.0, 2.0, .1)
+    robot_1.init_state.pos = (-8.0, 2.0, .1)
     robot_2: ArticulationCfg = LEATHERBACK_CFG.replace(prim_path="/World/envs/env_.*/Robot_2")
-    robot_2.init_state.pos = (1.0, -2.0, .1)
+    robot_2.init_state.pos = (8.0, -2.0, .1)
     robot_2.init_state.rot = get_quaternion_tuple_from_xyz(0, 0, torch.pi)
     robot_3: ArticulationCfg = LEATHERBACK_CFG.replace(prim_path="/World/envs/env_.*/Robot_3")
-    robot_3.init_state.pos = (1.0, 2.0, .1)
+    robot_3.init_state.pos = (8.0, 2.0, .1)
     robot_3.init_state.rot = get_quaternion_tuple_from_xyz(0, 0, torch.pi)
 
     wall_0 = RigidObjectCfg(
@@ -123,7 +123,7 @@ class LeatherbackStage2AdversarialSoccerEnvCfg(DirectMARLEnvCfg):
     viewer = ViewerCfg(eye=(10.0, 10.0, 10.0), env_index=0, origin_type="env")
 
     throttle_scale = 10
-    throttle_max = 30
+    throttle_max = 50
     steering_scale = 0.1
     steering_max = 10
 

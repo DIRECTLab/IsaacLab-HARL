@@ -129,6 +129,7 @@ class AnymalStage2SoccerEnvCfg(DirectMARLEnvCfg):
     scene: InteractiveSceneCfg = InteractiveSceneCfg(num_envs=1, env_spacing=env_spacing, replicate_physics=True)
 
     goal_reward_scale = 20
+    fallen_penalty_scale = -5
     ball_to_goal_reward_scale = 1.0
     dist_to_ball_reward_scale = 1.0
     ball_velocity_scale = 1.0
@@ -139,8 +140,10 @@ class AnymalStage2SoccerEnv(DirectMARLEnv):
     def __init__(self, cfg: AnymalStage2SoccerEnvCfg, render_mode: str | None = None, headless: bool | None = None, **kwargs):
         super().__init__(cfg, render_mode, **kwargs)
         self.headless = headless
-        
         self.env_spacing = self.cfg.env_spacing
+
+        self.goals_scored = torch.zeros(self.num_envs, dtype=torch.float, device=self.device)
+        self.own_goals_scored = torch.zeros(self.num_envs, dtype=torch.float, device=self.device)
 
         self.actions = {
             agent: torch.zeros(self.num_envs, action_space, device=self.device)
@@ -154,10 +157,11 @@ class AnymalStage2SoccerEnv(DirectMARLEnv):
         self._episode_sums = {
             key: torch.zeros(self.num_envs, dtype=torch.float, device=self.device)
             for key in [
-                # "dist_to_ball_reward",
+                "dist_to_ball_reward",
                 "ball_velocity_reward",
                 "ball_to_goal_reward",
                 "goal_reward",
+                "fallen_penalty",
             ]
         }
 
@@ -222,13 +226,10 @@ class AnymalStage2SoccerEnv(DirectMARLEnv):
         marker_ids0 = torch.zeros(self.num_envs, dtype=torch.int32, device=self.device)
         marker_ids1 = torch.ones(self.num_envs, dtype=torch.int32, device=self.device)
         marker_ids2 = 2 * torch.ones(self.num_envs, dtype=torch.int32, device=self.device)
-
         marker_ids = torch.concat([marker_ids0, marker_ids1, marker_ids2], dim=0)
 
         goal_to_score_pos = torch.where(self.target_goal.unsqueeze(1) == 0, self.goal1_pos, self.goal2_pos)
-
         marker_locations = torch.concat([self.goal1_pos, self.goal2_pos, goal_to_score_pos], dim=0)
-
         self.goal_area.visualize(marker_locations, marker_indices=marker_ids)
 
     def _pre_physics_step(self, actions: dict) -> None:
@@ -310,9 +311,10 @@ class AnymalStage2SoccerEnv(DirectMARLEnv):
         ball_vel = torch.norm(self.ball.data.root_lin_vel_w, dim=1)
         ball_vel_reward = torch.tanh(ball_vel / .8)
 
-        # robot_distance_to_ball = torch.linalg.norm(self.robots["robot_0"].data.root_pos_w[:, :3] - self.ball.data.root_pos_w, dim=1)
-        # robot_distance_to_ball_mapped = 1 - torch.tanh(robot_distance_to_ball / .8)
+        robot_distance_to_ball = torch.linalg.norm(self.robots["robot_0"].data.root_pos_w[:, :3] - self.ball.data.root_pos_w, dim=1)
+        robot_distance_to_ball_mapped = 1 - torch.tanh(robot_distance_to_ball / .8)
         
+        fallen = self.robots["robot_0"].data.root_com_pos_w[:, 2] < .1
         goal_reward = torch.zeros(self.num_envs, device=self.device)
         # Reward is 1 if ball is in target goal area, if in other goal area, reward is -1
         goal_reward[ball_in_goal1 & (self.target_goal == 0)] = 1.0
@@ -321,9 +323,10 @@ class AnymalStage2SoccerEnv(DirectMARLEnv):
         goal_reward[ball_in_goal2 & (self.target_goal == 0)] = -1.0
 
         rewards = {
-            # "dist_to_ball_reward": robot_distance_to_ball_mapped * self.cfg.dist_to_ball_reward_scale * self.step_dt,
+            "dist_to_ball_reward": robot_distance_to_ball_mapped * self.cfg.dist_to_ball_reward_scale * self.step_dt,
             "ball_velocity_reward": ball_vel_reward  * self.cfg.ball_velocity_scale * self.step_dt,
             "ball_to_goal_reward": ball_distance_to_goal_mapped  * self.cfg.ball_to_goal_reward_scale * self.step_dt,
+            "fallen_penalty": fallen * self.cfg.fallen_penalty_scale,
             "goal_reward": goal_reward * self.cfg.goal_reward_scale,
         }
 
@@ -339,10 +342,10 @@ class AnymalStage2SoccerEnv(DirectMARLEnv):
     
     def _get_goal_areas(self):
         goal1_size = self.goal_area.cfg.markers['goal1'].size
-        goal1_pos = self.scene.env_origins.clone() + torch.tensor([-9, 0.0, 0.05], device=self.device)
+        goal1_pos = self.scene.env_origins.clone() + torch.tensor([-9.25, 0.0, 0.05], device=self.device)
 
         goal2_size = self.goal_area.cfg.markers['goal2'].size
-        goal2_pos = self.scene.env_origins.clone() + torch.tensor([9, 0.0, 0.05], device=self.device)
+        goal2_pos = self.scene.env_origins.clone() + torch.tensor([9.25, 0.0, 0.05], device=self.device)
 
         # Extract goal area from goal post positions
         goal1_min = goal1_pos + torch.tensor([-goal1_size[0]/2, -goal1_size[1]/2, 0], device=self.device)
@@ -357,13 +360,27 @@ class AnymalStage2SoccerEnv(DirectMARLEnv):
         in_goal1 = torch.all((ball_pos >= self.goal1_area[0][:,:2]) & (ball_pos <= self.goal1_area[1][:,:2]), dim=1)
         in_goal2 = torch.all((ball_pos >= self.goal2_area[0][:,:2]) & (ball_pos <= self.goal2_area[1][:,:2]), dim=1)
         return in_goal1, in_goal2
+    
+    def _spawn_new_ball(self, env_ids):
+        sampled_grid_pos = self._sample_positions_grid(env_ids, 1, 1, 1)
+        ball_default_state = self.ball.data.default_root_state.clone()[env_ids]
+        ball_default_state[:, :2] = ball_default_state[:, :2] + self.scene.env_origins[env_ids][:,:2] +\
+        sampled_grid_pos[:, 0]
+        self.ball.write_root_state_to_sim(ball_default_state, env_ids)
+        self.ball.reset(env_ids)
 
     def _get_dones(self) -> tuple[dict, dict]:
         ball_in_goal1, ball_in_goal2 = self._ball_in_goal_area()
         ball_in_any_goal = ball_in_goal1 | ball_in_goal2
+        if ball_in_any_goal.any():
+            self.goals_scored += ((ball_in_goal1 & (self.target_goal == 0))
+              | (ball_in_goal2 & (self.target_goal == 1))).to(torch.float32)
+            self.own_goals_scored += ((ball_in_goal1 & (self.target_goal == 1))
+              | (ball_in_goal2 & (self.target_goal == 0))).to(torch.float32)
+            self._spawn_new_ball(torch.nonzero(ball_in_any_goal).squeeze(1))
 
         fallen = self.robots["robot_0"].data.root_com_pos_w[:, 2] < .1
-        dones = ball_in_any_goal | fallen
+        dones = fallen
 
         time_out = self.episode_length_buf >= self.max_episode_length - 1
         return {"robot_0": dones}, {"robot_0": time_out}
@@ -381,15 +398,12 @@ class AnymalStage2SoccerEnv(DirectMARLEnv):
             self.episode_length_buf[:] = torch.randint_like(
                 self.episode_length_buf, high=int(self.max_episode_length)
             )
-
-        ball_in_goal1, ball_in_goal2 = self._ball_in_goal_area()
-
-        target_goals = self.target_goal[env_ids]
-
-        goals_scored = ((ball_in_goal1[env_ids] & (target_goals == 0))
-              | (ball_in_goal2[env_ids] & (target_goals == 1))).to(torch.float32).sum().item()
-        
-        percent_scored = goals_scored / num_reset_ids if num_reset_ids > 0 else 0
+        goals_scored = self.goals_scored[env_ids].sum().item()
+        own_goals_scored = self.own_goals_scored[env_ids].sum().item()
+        goals_scored_per_reset = goals_scored / num_reset_ids if num_reset_ids > 0 else 0
+        own_goals_scored_per_reset = own_goals_scored / num_reset_ids if num_reset_ids > 0 else 0
+        self.goals_scored[env_ids] = 0
+        self.own_goals_scored[env_ids] = 0
 
         self.target_goal[env_ids] = torch.randint(0, 2, (num_reset_ids,), device=self.device).to(torch.int32)
 
@@ -421,7 +435,6 @@ class AnymalStage2SoccerEnv(DirectMARLEnv):
 
             # Place robot
             default_root_state[:, :2] = origins[:, :2]
-            default_root_state[:, 2] += self.robots[robot_id].data.default_root_state[env_ids][:, 2]
             default_root_state[:, :2] += sampled_grid_pos[:, 0]
 
             # Write to sim
@@ -436,7 +449,8 @@ class AnymalStage2SoccerEnv(DirectMARLEnv):
             extras["Episode_Reward/"+key] = episodic_sum_avg
             self._episode_sums[key][env_ids] = 0.0
 
-        extras["Percent_Scored"] = percent_scored
+        extras["Goals_Scored_Per_Reset"] = goals_scored_per_reset
+        extras["Own_Goals_Scored_Per_Reset"] = own_goals_scored_per_reset
         self.extras["log"] = dict()
         self.extras["log"].update(extras)
         extras = dict()
@@ -447,7 +461,7 @@ class AnymalStage2SoccerEnv(DirectMARLEnv):
         N = len(env_ids)
 
         offsets = torch.zeros((N, num_samples, 2), device=device)
-        env_origins = self.scene.env_origins[env_ids][:, :2].clone()
+        env_origins = self.scene.env_origins[env_ids, :2].clone()
 
         _, _, goal1_area, goal2_area = self._get_goal_areas()
         goal1_min, goal1_max = goal1_area

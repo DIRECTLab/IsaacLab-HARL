@@ -257,6 +257,39 @@ def angle_between_vectors(v1: torch.Tensor, v2: torch.Tensor) -> torch.Tensor:
     return angle
 
 class MinitankStage3Env(DirectMARLEnv):
+    def draw_action_thrust(self, drone_agent: str):
+        """
+        Draws a thrust vector arrow for the given drone agent using _external_force_b, transformed to world frame.
+        """
+        if self.headless:
+            return
+        # Get drone position
+        drone_pos = self.robots[drone_agent].data.root_pos_w  # shape: (num_envs, 3)
+        # Get external force applied to the drone (body frame)
+        force_b = self.robots[drone_agent]._external_force_b[:, 0, :]  # shape: (num_envs, 3)
+        # Get drone orientation (quaternion)
+        drone_quat = self.robots[drone_agent].data.root_quat_w  # shape: (num_envs, 4)
+        # Transform force from body to world frame
+        # Use torch_utils.quat_rotate for batch rotation
+        force_w = torch_utils.quat_rotate(drone_quat, force_b)  # shape: (num_envs, 3)
+        # Normalize for visualization
+        force_norm = torch.linalg.norm(force_w, dim=1, keepdim=True)
+        force_dir = torch.where(force_norm > 0, force_w / force_norm, force_w)
+        # Arrow length scales with force magnitude
+        arrow_length = 0.5 * force_norm  # scale factor
+        arrow_offset = arrow_length * force_dir
+        arrow_positions = drone_pos + arrow_offset
+        # Orient arrow along force direction
+        x_vector = torch.zeros_like(force_dir)
+        x_vector[:, 0] = 1.0
+        r = torch.cross(x_vector, force_dir)
+        r = torch.where(torch.linalg.norm(r, dim=1, keepdim=True) > 0, r / torch.linalg.norm(r, dim=1, keepdim=True), torch.zeros_like(r))
+        angle = angle_between_vectors(x_vector, force_dir)
+        orientation = quat_from_angle_axis(angle, r)
+        # Use only the arrow marker for visualization
+        marker_indices = torch.zeros(self.num_envs, dtype=torch.int32, device=self.device)  # index 0 for arrow
+        self.agent_visualizers[drone_agent].visualize(arrow_positions, orientation, marker_indices=marker_indices)
+
     cfg: MinitankStage3EnvCfg
     def __init__(
         self,
@@ -590,6 +623,10 @@ class MinitankStage3Env(DirectMARLEnv):
         return y_euler_angle
 
     def _get_rewards(self) -> dict:
+        if not self.headless:
+            self._draw_markers()
+            self.draw_action_thrust("drone_1")
+            self.draw_action_thrust("drone_0")
         # Reward logic: teams are rewarded for simply existing together (no push-out or fallen logic)
         # Each team gets a constant reward per timestep as long as their agents exist
         reward_value = 1.0  # You can adjust this value as needed

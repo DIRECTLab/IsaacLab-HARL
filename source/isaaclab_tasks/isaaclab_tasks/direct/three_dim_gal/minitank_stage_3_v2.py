@@ -486,6 +486,12 @@ class MinitankStage3v2Env(DirectMARLEnv):
 
     def _pre_physics_step(self, actions: dict):
 
+        # Update minitank desired position to the corresponding drone's position at every step
+        for minitank, drone in zip(["minitank_0", "minitank_1"], ["drone_0", "drone_1"]):
+            self._desired_pos_w[minitank] = self.robots[drone].data.root_pos_w.clone()
+            # self._desired_pos_w[drone] = self.robots[minitank].data.root_pos_w.clone()
+
+
         ### PREPHYSICS FOR MINITANK ###
         for agent in self.minitanks.keys():
             self.processed_actions[agent] = torch.clip(
@@ -607,7 +613,6 @@ class MinitankStage3v2Env(DirectMARLEnv):
             self._episode_sums[f"{team}_existence_reward"] = team_rewards[team]
 
 
-        # ### MINITANK REWARDS ###
         # all_rewards = {}
         # team_rewards = {team: torch.zeros(self.num_envs, device=self.device) for team in self.cfg.teams}
         # for team in self.cfg.teams:
@@ -692,9 +697,13 @@ class MinitankStage3v2Env(DirectMARLEnv):
         # Reset actions and sample new commands for all robots
         for agent in self.cfg.action_spaces:
             self.actions[agent][env_ids] = 0.0
-            self._desired_pos_w[agent][env_ids, :2] = torch.zeros_like(self._desired_pos_w[agent][env_ids, :2]).uniform_(-2.0, 2.0)
-            self._desired_pos_w[agent][env_ids, :2] += self._terrain.env_origins[env_ids, :2]
-            self._desired_pos_w[agent][env_ids, 2] = torch.zeros_like(self._desired_pos_w[agent][env_ids, 2]).uniform_(0.5, 1.5)
+
+            # For drones, keep previous logic (random or default)
+            for agent in self.cfg.action_spaces:
+                if "drone" in agent:
+                    self._desired_pos_w[agent][env_ids, :2] = torch.zeros_like(self._desired_pos_w[agent][env_ids, :2]).uniform_(-2.0, 2.0)
+                    self._desired_pos_w[agent][env_ids, :2] += self._terrain.env_origins[env_ids, :2]
+                    self._desired_pos_w[agent][env_ids, 2] = torch.zeros_like(self._desired_pos_w[agent][env_ids, 2]).uniform_(0.5, 1.5)
 
 
         

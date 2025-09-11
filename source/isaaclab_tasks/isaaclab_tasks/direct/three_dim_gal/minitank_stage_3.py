@@ -73,22 +73,22 @@ def normalize_angle(x):
 @configclass
 class MinitankStage3EnvCfg(DirectMARLEnvCfg):
     decimation = 4
-    episode_length_s = 20.0
+    episode_length_s = 5.0
 
     # 2 minitanks, 2 drones
     action_spaces = {
-        "robot_0": 2,   # e.g. throttle, steering
-        "robot_3": 4,      # e.g. x, y, z, yaw
-        "robot_1": 2,
-        "robot_2": 4,
+        "minitank_0": 2,   # e.g. throttle, steering
+        "drone_0": 4,      # e.g. x, y, z, yaw
+        "minitank_1": 2,
+        "drone_1": 4,
     }
 
     # Example: minitank obs = 18, drone obs = 20
     observation_spaces = {
-        "robot_0": 18,
-        "robot_3": 20,
-        "robot_1": 18,
-        "robot_2": 20,
+        "minitank_0": 18,
+        "drone_0": 20,
+        "minitank_1": 18,
+        "drone_1": 20,
     }
 
     state_space = 0
@@ -97,25 +97,82 @@ class MinitankStage3EnvCfg(DirectMARLEnvCfg):
     possible_agents = list(action_spaces.keys())
 
     teams = {
-        "team_0": ["robot_0", "robot_3"],
-        "team_1": ["robot_1", "robot_2"],
+        "team_0": ["minitank_0", "minitank_1"],
+        "team_1": ["drone_0", "drone_1"],
     }
+
+
+    wall_0 = RigidObjectCfg(
+        prim_path="/World/envs/env_.*/Object0",
+        spawn=sim_utils.CuboidCfg(
+            size=(20, 0.5, 2),
+            rigid_props=sim_utils.RigidBodyPropertiesCfg(kinematic_enabled=True),
+            mass_props=sim_utils.MassPropertiesCfg(mass=10.0),  
+            collision_props=sim_utils.CollisionPropertiesCfg(),
+            visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(0.5, 0.5, 0.5)),
+        ),
+        init_state=RigidObjectCfg.InitialStateCfg(
+            pos=(0.0, 5.0, 1), rot=(1.0, 0.0, 0.0, 0.0) # Position originally was (0.0, 0, 0.61)
+        ),
+    )
+
+    wall_1 = RigidObjectCfg(
+        prim_path="/World/envs/env_.*/Object1",
+        spawn=sim_utils.CuboidCfg(
+            size=(20, 0.5, 2),
+            rigid_props=sim_utils.RigidBodyPropertiesCfg(kinematic_enabled=True),
+            mass_props=sim_utils.MassPropertiesCfg(mass=10.0),  
+            collision_props=sim_utils.CollisionPropertiesCfg(),
+            visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(0.5, 0.5, 0.5)),
+        ),
+        init_state=RigidObjectCfg.InitialStateCfg(
+            pos=(0.0, -5.0, 1), rot=(1.0, 0.0, 0.0, 0.0) # Position originally was (0.0, 0, 0.61)
+        ),
+    )
+
+    wall_2 = RigidObjectCfg(
+        prim_path="/World/envs/env_.*/Object2",
+        spawn=sim_utils.CuboidCfg(
+            size=(0.5, 10, 2),
+            rigid_props=sim_utils.RigidBodyPropertiesCfg(kinematic_enabled=True),
+            mass_props=sim_utils.MassPropertiesCfg(mass=10.0),  
+            collision_props=sim_utils.CollisionPropertiesCfg(),
+            visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(0.5, 0.5, 0.5)),
+        ),
+        init_state=RigidObjectCfg.InitialStateCfg(
+            pos=(10.0, 0.0, 1), rot=(1.0, 0.0, 0.0, 0.0) # Position originally was (0.0, 0, 0.61)
+        ),
+    )
+
+    wall_3 = RigidObjectCfg(
+        prim_path="/World/envs/env_.*/Object3",
+        spawn=sim_utils.CuboidCfg(
+            size=(0.5, 10, 2),
+            rigid_props=sim_utils.RigidBodyPropertiesCfg(kinematic_enabled=True),
+            mass_props=sim_utils.MassPropertiesCfg(mass=10.0),  
+            collision_props=sim_utils.CollisionPropertiesCfg(),
+            visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(0.5, 0.5, 0.5)),
+        ),
+        init_state=RigidObjectCfg.InitialStateCfg(
+            pos=(-10.0, 0.0, 1), rot=(1.0, 0.0, 0.0, 0.0) # Position originally was (0.0, 0, 0.61)
+        ),
+    )
 
     sim: SimulationCfg = SimulationCfg(dt=1 / 200, render_interval=decimation)
 
     # Minitank configs
-    robot_0: ArticulationCfg = MINITANK_CFG.replace(prim_path="/World/envs/env_.*/Minitank_0")
-    robot_0.init_state.pos = (0.0, 0.5, 0.2)
+    minitank_0: ArticulationCfg = MINITANK_CFG.replace(prim_path="/World/envs/env_.*/Minitank_0")
+    minitank_0.init_state.pos = (0.0, 0.5, 0.2)
 
-    robot_1: ArticulationCfg = MINITANK_CFG.replace(prim_path="/World/envs/env_.*/Minitank_1")
-    robot_1.init_state.pos = (0.0, -0.5, 0.2)
+    minitank_1: ArticulationCfg = MINITANK_CFG.replace(prim_path="/World/envs/env_.*/Minitank_1")
+    minitank_1.init_state.pos = (0.0, -0.5, 0.2)
 
     # Drone configs
-    robot_3: ArticulationCfg = CRAZYFLIE_CFG.replace(prim_path="/World/envs/env_.*/Drone_0")
-    robot_3.init_state.pos = (2.0, 0.5, 3.5)
+    drone_0: ArticulationCfg = CRAZYFLIE_CFG.replace(prim_path="/World/envs/env_.*/Drone_0")
+    drone_0.init_state.pos = (2.0, 0.5, 3.5)
 
-    robot_2: ArticulationCfg = CRAZYFLIE_CFG.replace(prim_path="/World/envs/env_.*/Drone_1")
-    robot_2.init_state.pos = (2.0, -0.5, 3.5)
+    drone_1: ArticulationCfg = CRAZYFLIE_CFG.replace(prim_path="/World/envs/env_.*/Drone_1")
+    drone_1.init_state.pos = (2.0, -0.5, 3.5)
 
     # Arena/physics
     terrain = TerrainImporterCfg(
@@ -133,7 +190,7 @@ class MinitankStage3EnvCfg(DirectMARLEnvCfg):
     )
 
     env_spacing = 10.0
-    scene: InteractiveSceneCfg = InteractiveSceneCfg(num_envs=1, env_spacing=10.0, replicate_physics=True)
+    scene: InteractiveSceneCfg = InteractiveSceneCfg(num_envs=1, env_spacing=30.0, replicate_physics=True)
 
     ### MINITANK CONFIGURATION ###
     action_scale = .5
@@ -384,17 +441,21 @@ class MinitankStage3Env(DirectMARLEnv):
         return reward_mapped, arm_orientation, desired_orientation
  
     def _setup_scene(self):
+        self.wall_0 = RigidObject(self.cfg.wall_0)
+        self.wall_1 = RigidObject(self.cfg.wall_1)
+        self.wall_2 = RigidObject(self.cfg.wall_2)
+        self.wall_3 = RigidObject(self.cfg.wall_3)
 
         self.robots = {}
         self.minitanks = {}
         self.drones = {}
         # Add minitanks
-        for tank_id in ["robot_0", "robot_1"]:
+        for tank_id in ["minitank_0", "minitank_1"]:
             self.robots[tank_id] = Articulation(self.cfg.__dict__[tank_id])
             self.scene.articulations[tank_id] = self.robots[tank_id]
             self.minitanks[tank_id] = self.robots[tank_id]
         # Add drones
-        for drone_id in ["robot_3", "robot_2"]:
+        for drone_id in ["drone_0", "drone_1"]:
             self.robots[drone_id] = Articulation(self.cfg.__dict__[drone_id])
             self.scene.articulations[drone_id] = self.robots[drone_id]
             self.drones[drone_id] = self.robots[drone_id]
@@ -474,7 +535,7 @@ class MinitankStage3Env(DirectMARLEnv):
                 )
 
                 # For tanks, use full state; for drones, use simpler obs
-                if agent_id.startswith("minitank"):
+                if agent_id.startswith("minitank_0") or agent_id.startswith("minitank_1"):
 
                     # obs_vec = torch.cat([
                     #     self.robots[agent_id].data.root_lin_vel_b,
@@ -490,12 +551,12 @@ class MinitankStage3Env(DirectMARLEnv):
                     #     rcol,
                     # ], dim=-1)
                     arm_orientation_reward, arm_orientation, desired_orientation = self._get_vector_angle_reward(agent_id)
-                    desiredtorch.full((self.num_envs, 1), 2.0, device=self.device)
                     obs_vec = torch.cat([
                         self.processed_actions[agent_id],
                         desired_orientation,        
                         arm_orientation,
                         desired_pos,
+                        # enemy_0_pos if "0" in agent_id else enemy_1_pos,
                         teammate_pos,
                         teammate_pos,
                         dist_center,
@@ -518,14 +579,6 @@ class MinitankStage3Env(DirectMARLEnv):
                     )
 
                 obs_vec = torch.nan_to_num(obs_vec, nan=0.0, posinf=1e6, neginf=-1e6)
-                # Ensure obs_vec matches expected shape
-                target_size = self.cfg.observation_spaces[agent_id]
-                obs_size = obs_vec.shape[1]
-                if obs_size < target_size:
-                    pad = torch.zeros((self.num_envs, target_size - obs_size), device=self.device)
-                    obs_vec = torch.cat([obs_vec, pad], dim=1)
-                elif obs_size > target_size:
-                    obs_vec = obs_vec[:, :target_size]
                 obs[team][agent_id] = obs_vec
 
         self.previous_actions = copy.deepcopy(self.actions)
@@ -558,8 +611,8 @@ class MinitankStage3Env(DirectMARLEnv):
             dist = torch.linalg.norm(pos_xy - env_xy, dim=1)
             out[agent_id] = dist > 2.0
 
-        team0_out = torch.any(torch.stack([out["robot_0"], out["robot_3"]]), dim=0)
-        team1_out = torch.any(torch.stack([out["robot_1"], out["robot_2"]]), dim=0)
+        team0_out = torch.any(torch.stack([out["minitank_0"], out["drone_0"]]), dim=0)
+        team1_out = torch.any(torch.stack([out["minitank_1"], out["drone_1"]]), dim=0)
         fallen = torch.zeros(self.num_envs, dtype=torch.bool, device=self.device)
         for agent_id, robot in self.minitanks.items():
             died = robot.data.root_pos_w[:, 2] < .1
@@ -599,11 +652,17 @@ class MinitankStage3Env(DirectMARLEnv):
                 robot.write_joint_state_to_sim(joint_pos, joint_vel, None, env_ids)
 
         # Reset actions and sample new commands for all agents
-        for agent_id in self.cfg.action_spaces:
+        # for agent_id in self.cfg.action_spaces:
+        for agent_id in self.robots.keys():
             self.actions[agent_id][env_ids] = 0.0
             self._desired_pos_w[agent_id][env_ids, :2] = torch.zeros_like(self._desired_pos_w[agent_id][env_ids, :2]).uniform_(-2.0, 2.0)
             self._desired_pos_w[agent_id][env_ids, :2] += origins[:, :2]
             self._desired_pos_w[agent_id][env_ids, 2] = torch.zeros_like(self._desired_pos_w[agent_id][env_ids, 2]).uniform_(0.5, 1.5)
+
+        # for agent_id in self.minitanks.keys():
+        #     self.actions[agent_id][env_ids] = 0.0
+        #     # self._desired_pos_w[agent_id][env_ids, :3] = self.robots["drone_0"].data.root_pos_w[env_ids, :3] if agent_id == "minitank_0" else self.robots["drone_1"].data.root_pos_w[env_ids, :3]
+        #     self._desired_pos_w[agent_id][env_ids, :3] = torch.ones_like(self._desired_pos_w[agent_id][env_ids, :3])
 
         # Logging
         extras = dict()

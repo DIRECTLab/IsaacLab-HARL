@@ -86,7 +86,14 @@ class MinitankStage2EnvCfg(DirectMARLEnvCfg):
     state_spaces = {f"robot_{i}": 0 for i in range(2)}
     possible_agents = [f"robot_{i}" for i in range(2)]
     # Teams for two agents
-    teams = {"team_0": ["robot_0"], "team_1": ["robot_1"]}
+    # teams = {"team_0": ["robot_0"], "team_1": ["robot_1"]}
+    teams = {"team_0": 
+                [
+                "robot_0",
+                        "robot_1"
+            ], 
+            #  "team_1": []
+                }
 
     # simulation
     sim: SimulationCfg = SimulationCfg(
@@ -408,44 +415,45 @@ class MinitankStage2Env(DirectMARLEnv):
         env_center = self._terrain.env_origins if hasattr(self._terrain, "env_origins") else torch.zeros((self.num_envs, 3), device=self.device)
 
         obs_dict = {team: {} for team in self.cfg.teams}
-        for i, agent in enumerate(self.cfg.action_spaces):
-            # Desired position in body frame
-            desired_pos_b, _ = subtract_frame_transforms(
-                self.robots[agent].data.root_state_w[:, :3], self.robots[agent].data.root_state_w[:, 3:7], self._desired_pos_w[agent]
-            )
-            # Teammate and other agent positions (in body frame)
-            teammate_id = f"robot_{1-i}"
-            teammate_pos, _ = subtract_frame_transforms(
-                self.robots[agent].data.root_state_w[:, :3], self.robots[agent].data.root_state_w[:, 3:7], self.robots[teammate_id].data.root_pos_w
-            )
-            # For two agents, other_pos is same as teammate_pos
-            other_pos = teammate_pos
-            dist_to_center = torch.norm(self.robots[agent].data.root_pos_w - env_center, dim=-1, keepdim=True)
+        # for i, agent in enumerate(self.cfg.action_spaces):
+        for team in self.cfg.teams:
+            for agent in self.cfg.teams[team]:
+                # Desired position in body frame
+                desired_pos_b, _ = subtract_frame_transforms(
+                    self.robots[agent].data.root_state_w[:, :3], self.robots[agent].data.root_state_w[:, 3:7], self._desired_pos_w[agent]
+                )
+                # Teammate and other agent positions (in body frame)
+                teammate_id = "robot_1" if agent == "robot_0" else "robot_0"
+                teammate_pos, _ = subtract_frame_transforms(
+                    self.robots[agent].data.root_state_w[:, :3], self.robots[agent].data.root_state_w[:, 3:7], self.robots[teammate_id].data.root_pos_w
+                )
+                # For two agents, other_pos is same as teammate_pos
+                other_pos = teammate_pos
+                dist_to_center = torch.norm(self.robots[agent].data.root_pos_w - env_center, dim=-1, keepdim=True)
 
-            # Use vector angle reward for each agent
-            arm_orientation_reward, arm_orientation, desired_orientation = self._get_vector_angle_reward(agent)
-            processed_actions = self.processed_actions[agent]
-            obs_parts = [
-                processed_actions,
-                desired_orientation,
-                arm_orientation,
-                desired_pos_b,
-                teammate_pos,
-                other_pos,
-                dist_to_center,
-                arena_radius,
-            ]
-            obs = torch.cat(obs_parts, dim=-1)
-            obs_size = obs.shape[1]
-            target_size = self.cfg.observation_spaces[agent]
-            if obs_size < target_size:
-                pad = torch.zeros((self.num_envs, target_size - obs_size), device=self.device)
-                obs = torch.cat([obs, pad], dim=-1)
-            elif obs_size > target_size:
-                obs = obs[:, :target_size]
-            obs = torch.nan_to_num(obs, nan=0.0, posinf=1e6, neginf=-1e6)
-            team = f"team_{i}"
-            obs_dict[team][agent] = obs
+                # Use vector angle reward for each agent
+                arm_orientation_reward, arm_orientation, desired_orientation = self._get_vector_angle_reward(agent)
+                processed_actions = self.processed_actions[agent]
+                obs_parts = [
+                    processed_actions,
+                    desired_orientation,
+                    arm_orientation,
+                    desired_pos_b,
+                    teammate_pos,
+                    other_pos,
+                    dist_to_center,
+                    arena_radius,
+                ]
+                obs = torch.cat(obs_parts, dim=-1)
+                obs_size = obs.shape[1]
+                target_size = self.cfg.observation_spaces[agent]
+                if obs_size < target_size:
+                    pad = torch.zeros((self.num_envs, target_size - obs_size), device=self.device)
+                    obs = torch.cat([obs, pad], dim=-1)
+                elif obs_size > target_size:
+                    obs = obs[:, :target_size]
+                obs = torch.nan_to_num(obs, nan=0.0, posinf=1e6, neginf=-1e6)
+                obs_dict[team][agent] = obs
         self.previous_actions = copy.deepcopy(self.actions)
         return obs_dict
 
@@ -462,21 +470,21 @@ class MinitankStage2Env(DirectMARLEnv):
         ### MINITANK REWARDS ###
         all_rewards = {}
         team_rewards = {team: torch.zeros(self.num_envs, device=self.device) for team in self.cfg.teams}
-        for i, agent in enumerate(self.cfg.action_spaces):
-            arm_orientation_reward, _, _ = self._get_vector_angle_reward(agent)
-            minitank_rewards = arm_orientation_reward * self.step_dt
-        ### MINITANK REWARDS ###
-    
-            self._episode_sums["tank_angle_reward"] = minitank_rewards
-            rewards = {
-                "tank_angle_reward": minitank_rewards
-            }
-            reward = torch.sum(torch.stack(list(rewards.values())), dim=0)
-            for key, value in rewards.items():
-                self._episode_sums[key] += value
-            all_rewards[agent] = reward
-            team = f"team_{i}"
-            team_rewards[team] += reward
+        for team in self.cfg.teams:
+            for agent in self.cfg.teams[team]:
+                arm_orientation_reward, _, _ = self._get_vector_angle_reward(agent)
+                minitank_rewards = arm_orientation_reward * self.step_dt
+            ### MINITANK REWARDS ###
+        
+                self._episode_sums["tank_angle_reward"] = minitank_rewards
+                rewards = {
+                    "tank_angle_reward": minitank_rewards
+                }
+                reward = torch.sum(torch.stack(list(rewards.values())), dim=0)
+                for key, value in rewards.items():
+                    self._episode_sums[key] += value
+                all_rewards[agent] = reward
+                team_rewards[team] += reward
         return team_rewards
 
 
@@ -484,11 +492,11 @@ class MinitankStage2Env(DirectMARLEnv):
         time_out_tensor = (self.episode_length_buf >= self.max_episode_length - 1).to(self.device)
         dones = {}
         time_out = {}
-        for i, agent in enumerate(self.cfg.action_spaces):
-            died_tensor = self.robots[agent].data.root_pos_w[:, 2] < 0.1
-            team = f"team_{i}"
-            dones[team] = died_tensor
-            time_out[team] = time_out_tensor
+        for team in self.cfg.teams:
+            for agent in self.cfg.teams[team]:            
+                died_tensor = self.robots[agent].data.root_pos_w[:, 2] < 0.1
+                dones[team] = died_tensor
+                time_out[team] = time_out_tensor
         return dones, time_out
 
     def _reset_idx(self, env_ids: torch.Tensor | None):

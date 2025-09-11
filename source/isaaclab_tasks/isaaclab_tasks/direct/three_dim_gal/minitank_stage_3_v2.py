@@ -71,7 +71,7 @@ def normalize_angle(x):
     return torch.atan2(torch.sin(x), torch.cos(x))
 
 @configclass
-class MinitankStage2EnvCfg(DirectMARLEnvCfg):
+class MinitankStage3v2EnvCfg(DirectMARLEnvCfg):
     # env
     episode_length_s = 20.0
     decimation = 4
@@ -94,7 +94,62 @@ class MinitankStage2EnvCfg(DirectMARLEnvCfg):
             ], 
             #  "team_1": []
                 }
+    
+    wall_0 = RigidObjectCfg(
+        prim_path="/World/envs/env_.*/Object0",
+        spawn=sim_utils.CuboidCfg(
+            size=(20, 0.5, 2),
+            rigid_props=sim_utils.RigidBodyPropertiesCfg(kinematic_enabled=True),
+            mass_props=sim_utils.MassPropertiesCfg(mass=10.0),  
+            collision_props=sim_utils.CollisionPropertiesCfg(),
+            visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(0.5, 0.5, 0.5)),
+        ),
+        init_state=RigidObjectCfg.InitialStateCfg(
+            pos=(0.0, 5.0, 1), rot=(1.0, 0.0, 0.0, 0.0) # Position originally was (0.0, 0, 0.61)
+        ),
+    )
 
+    wall_1 = RigidObjectCfg(
+        prim_path="/World/envs/env_.*/Object1",
+        spawn=sim_utils.CuboidCfg(
+            size=(20, 0.5, 2),
+            rigid_props=sim_utils.RigidBodyPropertiesCfg(kinematic_enabled=True),
+            mass_props=sim_utils.MassPropertiesCfg(mass=10.0),  
+            collision_props=sim_utils.CollisionPropertiesCfg(),
+            visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(0.5, 0.5, 0.5)),
+        ),
+        init_state=RigidObjectCfg.InitialStateCfg(
+            pos=(0.0, -5.0, 1), rot=(1.0, 0.0, 0.0, 0.0) # Position originally was (0.0, 0, 0.61)
+        ),
+    )
+
+    wall_2 = RigidObjectCfg(
+        prim_path="/World/envs/env_.*/Object2",
+        spawn=sim_utils.CuboidCfg(
+            size=(0.5, 10, 2),
+            rigid_props=sim_utils.RigidBodyPropertiesCfg(kinematic_enabled=True),
+            mass_props=sim_utils.MassPropertiesCfg(mass=10.0),  
+            collision_props=sim_utils.CollisionPropertiesCfg(),
+            visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(0.5, 0.5, 0.5)),
+        ),
+        init_state=RigidObjectCfg.InitialStateCfg(
+            pos=(10.0, 0.0, 1), rot=(1.0, 0.0, 0.0, 0.0) # Position originally was (0.0, 0, 0.61)
+        ),
+    )
+
+    wall_3 = RigidObjectCfg(
+        prim_path="/World/envs/env_.*/Object3",
+        spawn=sim_utils.CuboidCfg(
+            size=(0.5, 10, 2),
+            rigid_props=sim_utils.RigidBodyPropertiesCfg(kinematic_enabled=True),
+            mass_props=sim_utils.MassPropertiesCfg(mass=10.0),  
+            collision_props=sim_utils.CollisionPropertiesCfg(),
+            visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(0.5, 0.5, 0.5)),
+        ),
+        init_state=RigidObjectCfg.InitialStateCfg(
+            pos=(-10.0, 0.0, 1), rot=(1.0, 0.0, 0.0, 0.0) # Position originally was (0.0, 0, 0.61)
+        ),
+    )
     # simulation
     sim: SimulationCfg = SimulationCfg(
         dt=1 / 200,
@@ -122,7 +177,7 @@ class MinitankStage2EnvCfg(DirectMARLEnvCfg):
     )
 
     # scene
-    scene: InteractiveSceneCfg = InteractiveSceneCfg(num_envs=1, env_spacing=10.0, replicate_physics=True)
+    scene: InteractiveSceneCfg = InteractiveSceneCfg(num_envs=1, env_spacing=20.0, replicate_physics=True)
 
     # events
     # events: EventCfg = EventCfg()
@@ -204,11 +259,11 @@ def angle_between_vectors(v1: torch.Tensor, v2: torch.Tensor) -> torch.Tensor:
     angle = torch.acos(dot_prod)
     return angle
 
-class MinitankStage2Env(DirectMARLEnv):
-    cfg: MinitankStage2EnvCfg
+class MinitankStage3v2Env(DirectMARLEnv):
+    cfg: MinitankStage3v2EnvCfg
     def __init__(
         self,
-        cfg: MinitankStage2EnvCfg,
+        cfg: MinitankStage3v2EnvCfg,
         render_mode: str | None = None,
         headless: bool | None = False,
         **kwargs,
@@ -375,6 +430,10 @@ class MinitankStage2Env(DirectMARLEnv):
         return reward_mapped, arm_orientation, desired_orientation
  
     def _setup_scene(self):
+        self.wall_0 = RigidObject(self.cfg.wall_0)
+        self.wall_1 = RigidObject(self.cfg.wall_1)
+        self.wall_2 = RigidObject(self.cfg.wall_2)
+        self.wall_3 = RigidObject(self.cfg.wall_3)
         self.num_robots = sum(1 for key in self.cfg.__dict__.keys() if "robot_" in key)
         self.robots = {}
         # self.cameras = {}

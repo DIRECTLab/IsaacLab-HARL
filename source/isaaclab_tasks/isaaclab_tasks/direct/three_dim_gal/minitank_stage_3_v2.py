@@ -77,20 +77,20 @@ class MinitankStage3v2EnvCfg(DirectMARLEnvCfg):
     decimation = 4
     anymal_action_scale = 0.5
     action_space = 2
-    action_spaces = {f"robot_{i}": 2 for i in range(2)}
+    action_spaces = {f"minitank_{i}": 2 for i in range(2)}
 
     # Padded observation: 10 (original) + 3 (teammate_pos) + 3 (other_pos) + 1 (dist_to_center) + 1 (arena_radius) = 18
     observation_space = 18
-    observation_spaces = {f"robot_{i}": 18 for i in range(2)}
+    observation_spaces = {f"minitank_{i}": 18 for i in range(2)}
     state_space = 0
-    state_spaces = {f"robot_{i}": 0 for i in range(2)}
-    possible_agents = [f"robot_{i}" for i in range(2)]
+    state_spaces = {f"minitank_{i}": 0 for i in range(2)}
+    possible_agents = [f"minitank_{i}" for i in range(2)]
     # Teams for two agents
-    # teams = {"team_0": ["robot_0"], "team_1": ["robot_1"]}
+    # teams = {"team_0": ["minitank_0"], "team_1": ["minitank_1"]}
     teams = {"team_0": 
                 [
-                "robot_0",
-                        "robot_1"
+                "minitank_0",
+                "minitank_1"
             ], 
             #  "team_1": []
                 }
@@ -183,14 +183,14 @@ class MinitankStage3v2EnvCfg(DirectMARLEnvCfg):
     # events: EventCfg = EventCfg()
 
     ### MINITANK CONFIGURATION ###
-    robot_0: ArticulationCfg = MINITANK_CFG.replace(prim_path="/World/envs/env_.*/Robot_0")
-    robot_0.init_state.pos = (0.0, 0.5, 0.2)
+    minitank_0: ArticulationCfg = MINITANK_CFG.replace(prim_path="/World/envs/env_.*/minitank_0")
+    minitank_0.init_state.pos = (0.0, 0.5, 0.2)
 
-    robot_1: ArticulationCfg = MINITANK_CFG.replace(prim_path="/World/envs/env_.*/Robot_1")
-    robot_1.init_state.pos = (0.0, -0.5, 0.2)
+    minitank_1: ArticulationCfg = MINITANK_CFG.replace(prim_path="/World/envs/env_.*/minitank_1")
+    minitank_1.init_state.pos = (0.0, -0.5, 0.2)
 
     # camera_0 = TiledCameraCfg(
-    #     prim_path="/World/envs/env_.*/Robot_0/robot/arm/front_cam",
+    #     prim_path="/World/envs/env_.*/minitank_0/robot/arm/front_cam",
     #     update_period=0.1,
     #     height=256,
     #     width=256,
@@ -434,15 +434,15 @@ class MinitankStage3v2Env(DirectMARLEnv):
         self.wall_1 = RigidObject(self.cfg.wall_1)
         self.wall_2 = RigidObject(self.cfg.wall_2)
         self.wall_3 = RigidObject(self.cfg.wall_3)
-        self.num_robots = sum(1 for key in self.cfg.__dict__.keys() if "robot_" in key)
+        self.num_robots = sum(1 for key in self.cfg.__dict__.keys() if "minitank_" in key)
         self.robots = {}
         # self.cameras = {}
 
         for i in range(self.num_robots):
-            robot_id = f"robot_{i}"
-            if robot_id in self.cfg.__dict__:
-                self.robots[robot_id] = Articulation(self.cfg.__dict__[robot_id])
-                self.scene.articulations[robot_id] = self.robots[robot_id]
+            minitank_id = f"minitank_{i}"
+            if minitank_id in self.cfg.__dict__:
+                self.robots[minitank_id] = Articulation(self.cfg.__dict__[minitank_id])
+                self.scene.articulations[minitank_id] = self.robots[minitank_id]
 
         self.cfg.terrain.num_envs = self.scene.cfg.num_envs
         self.cfg.terrain.env_spacing = self.scene.cfg.env_spacing
@@ -482,7 +482,7 @@ class MinitankStage3v2Env(DirectMARLEnv):
                     self.robots[agent].data.root_state_w[:, :3], self.robots[agent].data.root_state_w[:, 3:7], self._desired_pos_w[agent]
                 )
                 # Teammate and other agent positions (in body frame)
-                teammate_id = "robot_1" if agent == "robot_0" else "robot_0"
+                teammate_id = "minitank_1" if agent == "minitank_0" else "minitank_0"
                 teammate_pos, _ = subtract_frame_transforms(
                     self.robots[agent].data.root_state_w[:, :3], self.robots[agent].data.root_state_w[:, 3:7], self.robots[teammate_id].data.root_pos_w
                 )

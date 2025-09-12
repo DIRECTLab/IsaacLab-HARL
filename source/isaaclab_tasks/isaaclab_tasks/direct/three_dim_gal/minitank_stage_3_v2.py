@@ -161,17 +161,17 @@ class MinitankStage3v2EnvCfg(DirectMARLEnvCfg):
 
         ### MINITANK CONFIGURATION ###
     minitank_0: ArticulationCfg = MINITANK_CFG.replace(prim_path="/World/envs/env_.*/Minitank_0")
-    minitank_0.init_state.pos = (0.0, 0.5, 0.2)
+    minitank_0.init_state.pos = (7.0, 0.5, 0.2)
 
     minitank_1: ArticulationCfg = MINITANK_CFG.replace(prim_path="/World/envs/env_.*/Minitank_1")
-    minitank_1.init_state.pos = (0.0, -0.5, 0.2)
+    minitank_1.init_state.pos = (7.0, -0.5, 0.2)
 
     # Drone configs
     drone_0: ArticulationCfg = CRAZYFLIE_CFG.replace(prim_path="/World/envs/env_.*/Drone_0")
-    drone_0.init_state.pos = (2.0, 0.5, 3.5)
+    drone_0.init_state.pos = (-7.0, 2, 2.0)
 
     drone_1: ArticulationCfg = CRAZYFLIE_CFG.replace(prim_path="/World/envs/env_.*/Drone_1")
-    drone_1.init_state.pos = (2.0, -0.5, 3.5)
+    drone_1.init_state.pos = (-7.0, -2, 2.0)
 
     # simulation
     sim: SimulationCfg = SimulationCfg(
@@ -237,7 +237,7 @@ def define_markers(agent_idx: int) -> VisualizationMarkers:
         markers={
             f"arrow_{agent_idx}": sim_utils.UsdFileCfg(
                 usd_path=f"{ISAAC_NUCLEUS_DIR}/Props/UIElements/arrow_x.usd",
-                scale=(.1, .1, 1),
+                scale=(.05, .05, .5),
                 visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=color),
             ),
             f"laser_cylinder_{agent_idx}": sim_utils.CylinderCfg(
@@ -324,7 +324,7 @@ class MinitankStage3v2Env(DirectMARLEnv):
         # Add alive mask for drones
         self.drone_alive = {agent: torch.ones(self.num_envs, dtype=torch.bool, device=self.device) for agent in self.drones.keys()}
 
-    def _update_drone_alive(self, thresh: float = 2.0):
+    def _update_drone_alive(self, thresh):
         # Knock out if the closest point on the arm's RAY (from base forward) to the drone is within threshold
         thresh = 1
 
@@ -350,107 +350,111 @@ class MinitankStage3v2Env(DirectMARLEnv):
             # Alive if outside knockout radius
             self.drone_alive[drone] = dist2 > thresh
 
-    def _draw_markers(self):
-        # Color palette for agents
-        palette = [
-            (1.0, 0.0, 0.0),  # red
-            (0.0, 0.5, 1.0),  # blue
-            (1.0, 1.0, 0.0),  # yellow
-            (1.0, 0.0, 1.0),  # magenta
-            (0.0, 1.0, 1.0),  # cyan
-            (1.0, 0.5, 0.0),  # orange
-            (0.5, 0.0, 1.0),  # purple
-        ]
-        num_agents = len(self.cfg.action_spaces)
-        # Each agent gets 3 markers: arrow, cylinder, sphere
-        marker_ids = []
-        for agent_idx in range(len(self.minitanks.keys())):
-            marker_ids.extend([
-                agent_idx * 3 + 0 for _ in range(self.num_envs)
-            ])  # arrow
-            marker_ids.extend([
-                agent_idx * 3 + 1 for _ in range(self.num_envs)
-            ])  # cylinder
-            marker_ids.extend([
-                agent_idx * 3 + 2 for _ in range(self.num_envs)
-            ])  # sphere
-        marker_ids = torch.tensor(marker_ids, dtype=torch.int32, device=self.device)
+    def _draw_minitank_markers(self, agent: str) -> None:
+        """Draw markers for a single minitank agent.
+        Keeps the original minitank marker logic unchanged:
+        - Arrow pointing toward desired direction
+        - Cylinder along the arm direction
+        - Sphere at the desired (goal) position
+        """
+        if self.headless:
+            return
 
         positions_list = []
         orientations_list = []
-        # For each agent, for each env, add markers
-        for agent_idx, agent in enumerate(self.cfg.action_spaces):
-            if agent.startswith("minitank"):
-                color = palette[agent_idx % len(palette)]
-                desired_pos = self._desired_pos_w[agent]
-                arm_pos = self.robots[agent].data.body_com_pos_w[:, 1, :]
-                base_pos = self.robots[agent].data.body_com_pos_w[:, 0, :]
-                base_pos_offset = torch.zeros_like(base_pos)
-                base_pos_offset[:, 2] = 0.06
-                base_pos = base_pos + base_pos_offset
 
-                # Compute direction vectors
-                diff = desired_pos - arm_pos
-                arm_diff = arm_pos - base_pos
-                arm_direction = arm_diff / torch.linalg.norm(arm_diff, dim=1, keepdim=True)
-                desired_direction = diff / torch.linalg.norm(diff, dim=1, keepdim=True)
-                
-                # X axis reference vector
-                x_vector = torch.zeros_like(desired_direction)
-                x_vector[:, 0] = 1.0
-                
-                # Compute rotation axes for desired and arm directions
-                r = torch.cross(x_vector, desired_direction)
-                r = r / torch.linalg.norm(r, dim=1, keepdim=True)
-                r_arm = torch.cross(x_vector, arm_direction)
-                r_arm = r_arm / torch.linalg.norm(r_arm, dim=1, keepdim=True)
-                
-                # Compute angles for desired and arm directions using angle_between_vectors
-                angle = angle_between_vectors(x_vector, desired_direction)
-                angle_arm = angle_between_vectors(x_vector, arm_direction)
-                
-                # Compute quaternions for marker orientations
-                orientation = quat_from_angle_axis(angle, r)
-                arm_length = -0.25
-                arm_offset = (arm_length / 2) * arm_direction
-                arm_orientation = quat_from_angle_axis(angle_arm, r_arm)
-                sphere_orientation = torch.zeros_like(arm_orientation)
-                cylinder_length = 10.0
-                cylinder_offset = (cylinder_length / 2) * arm_direction
-                # For each env, add [arrow, cylinder, sphere]
-                for env_idx in range(self.num_envs):
-                    positions_list.append(arm_pos[env_idx] + arm_offset[env_idx])      # arrow
-                    orientations_list.append(orientation[env_idx])
-                    positions_list.append(arm_pos[env_idx] + cylinder_offset[env_idx]) # cylinder
-                    orientations_list.append(arm_orientation[env_idx])
-                    positions_list.append(desired_pos[env_idx])                        # sphere
-                    orientations_list.append(sphere_orientation[env_idx])
-            elif agent.startswith("drone"):
-                drone_orientation = self.robots[agent].data.root_state_w[:, 3:7]
-                drone_pos = self.robots[agent].data.root_pos_w
-                for env_idx in range(self.num_envs):
-                    # Arrow marker: drone position and orientation
-                    positions_list.append(drone_pos[env_idx])
-                    orientations_list.append(drone_orientation[env_idx])
-                    # Sphere marker: drone position, orientation zeros
-                    positions_list.append(drone_pos[env_idx])
-                    orientations_list.append(torch.zeros_like(drone_orientation[env_idx]))
+        desired_pos = self._desired_pos_w[agent]
+        arm_pos = self.robots[agent].data.body_com_pos_w[:, 1, :]
+        base_pos = self.robots[agent].data.body_com_pos_w[:, 0, :]
+        base_pos_offset = torch.zeros_like(base_pos)
+        base_pos_offset[:, 2] = 0.06
+        base_pos = base_pos + base_pos_offset
+
+        # Compute direction vectors
+        diff = desired_pos - arm_pos
+        arm_diff = arm_pos - base_pos
+        arm_direction = arm_diff / torch.linalg.norm(arm_diff, dim=1, keepdim=True)
+        desired_direction = diff / torch.linalg.norm(diff, dim=1, keepdim=True)
+
+        # X axis reference vector
+        x_vector = torch.zeros_like(desired_direction)
+        x_vector[:, 0] = 1.0
+        
+        # Compute rotation axes for desired and arm directions
+        r = torch.cross(x_vector, desired_direction)
+        r = r / torch.linalg.norm(r, dim=1, keepdim=True)
+        r_arm = torch.cross(x_vector, arm_direction)
+        r_arm = r_arm / torch.linalg.norm(r_arm, dim=1, keepdim=True)
+
+        # Compute angles using angle_between_vectors
+        angle = angle_between_vectors(x_vector, desired_direction)
+        angle_arm = angle_between_vectors(x_vector, arm_direction)
+
+        # Marker orientations
+        orientation = quat_from_angle_axis(angle, r)
+        arm_length = -0.25
+        arm_offset = (arm_length / 2) * arm_direction
+        arm_orientation = quat_from_angle_axis(angle_arm, r_arm)
+        sphere_orientation = torch.zeros_like(arm_orientation)
+
+        cylinder_length = 10.0
+        cylinder_offset = (cylinder_length / 2) * arm_direction
+
+        # For each env, add [arrow, cylinder, sphere]
+        for env_idx in range(self.num_envs):
+            positions_list.append(arm_pos[env_idx] + arm_offset[env_idx])      # arrow
+            orientations_list.append(orientation[env_idx])
+            positions_list.append(arm_pos[env_idx] + cylinder_offset[env_idx]) # cylinder
+            orientations_list.append(arm_orientation[env_idx])
+            positions_list.append(desired_pos[env_idx])                        # sphere (goal)
+            orientations_list.append(sphere_orientation[env_idx])
+
         positions = torch.stack(positions_list, dim=0)
         orientations = torch.stack(orientations_list, dim=0)
-        
-        # Visualize markers in the scene
-        if not self.headless:
-            offset = 0
-            for agent_idx, agent in enumerate(self.cfg.action_spaces):
-                agent_marker_count = 3 * self.num_envs
-                agent_positions = positions[offset:offset+agent_marker_count]
-                agent_orientations = orientations[offset:offset+agent_marker_count]
-                # For each env, marker indices should be [0, 1, 2] (arrow, cylinder, sphere)
-                agent_marker_ids = torch.cat([
-                    torch.tensor([0, 1, 2], dtype=torch.int32, device=self.device).repeat(self.num_envs)
-                ])
-                self.agent_visualizers[agent].visualize(agent_positions, agent_orientations, marker_indices=agent_marker_ids)
-                offset += agent_marker_count
+
+        # Marker indices: [arrow=0, cylinder=1, sphere=2] per env
+        marker_indices = torch.tensor([0, 1, 2], dtype=torch.int32, device=self.device).repeat(self.num_envs)
+        self.agent_visualizers[agent].visualize(positions, orientations, marker_indices=marker_indices)
+
+    def _draw_drone_markers(self, agent: str) -> None:
+        """Draw markers for a single drone agent.
+        Drones: only a heading arrow (at drone pose) and a sphere at the goal position.
+        """
+        if self.headless:
+            return
+
+        positions_list = []
+        orientations_list = []
+
+        drone_pos = self.robots[agent].data.root_pos_w
+        drone_orientation = self.robots[agent].data.root_state_w[:, 3:7]
+        goal_pos = self._desired_pos_w[agent]
+        # calulate drone direction to the goal
+        goal_orientation = torch.zeros_like(drone_orientation)
+        goal_direction = goal_pos - drone_pos
+        goal_direction = goal_direction / (torch.norm(goal_direction, dim=1, keepdim=True) + 1e-8)
+        x_vector = torch.zeros_like(goal_direction)
+        x_vector[:, 0] = 1.0
+        rotation_axis = torch.cross(x_vector, goal_direction)
+        rotation_axis = rotation_axis / (torch.norm(rotation_axis, dim=1, keepdim=True) + 1e-8)
+        angle = angle_between_vectors(x_vector, goal_direction)
+        goal_orientation = quat_from_angle_axis(angle, rotation_axis)
+        for env_idx in range(self.num_envs):
+            # Arrow at drone position, oriented by drone heading (arrow_x.usd points +X)
+            positions_list.append(drone_pos[env_idx])
+            orientations_list.append(goal_orientation[env_idx])
+
+            # Sphere at goal position (orientation not used)
+            positions_list.append(goal_pos[env_idx])
+            orientations_list.append(torch.zeros_like(drone_orientation[env_idx]))
+
+        positions = torch.stack(positions_list, dim=0)
+        orientations = torch.stack(orientations_list, dim=0)
+
+        # Marker indices: [arrow=0, sphere=2] per env
+        marker_indices = torch.tensor([0, 2], dtype=torch.int32, device=self.device).repeat(self.num_envs)
+        self.agent_visualizers[agent].visualize(positions, orientations, marker_indices=marker_indices)
+
 
 
     def _get_vector_angle_reward(self, agent: str):
@@ -522,7 +526,7 @@ class MinitankStage3v2Env(DirectMARLEnv):
 
     def _pre_physics_step(self, actions: dict):
         # Update alive status for drones
-        self._update_drone_alive()
+        self._update_drone_alive(thresh=1.5)
 
         # Update minitank desired position to the corresponding drone's position at every step
         for minitank, drone in zip(["minitank_0", "minitank_1"], ["drone_0", "drone_1"]):
@@ -552,8 +556,6 @@ class MinitankStage3v2Env(DirectMARLEnv):
 
         for agent in self.drones.keys():
             self.robots[agent].set_external_force_and_torque(self._thrust[agent], self._moment[agent], body_ids=self._body_id[agent])
-
-
 
     def _get_observations(self) -> dict:
         # Arena radius and center
@@ -639,7 +641,13 @@ class MinitankStage3v2Env(DirectMARLEnv):
 
     def _get_rewards(self) -> dict:
         if not self.headless:
-            self._draw_markers()
+            # self._draw_markers()
+                    # Minitanks (unchanged logic)
+            for agent in self.minitanks.keys():
+                self._draw_minitank_markers(agent)
+            # Drones (heading arrow + goal sphere)
+            for agent in self.drones.keys():
+                self._draw_drone_markers(agent)
 
         # Knockout penalty for drones
         knockout_penalty = -50.0

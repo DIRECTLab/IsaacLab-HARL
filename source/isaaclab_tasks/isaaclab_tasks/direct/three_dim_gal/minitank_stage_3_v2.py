@@ -168,10 +168,10 @@ class MinitankStage3v2EnvCfg(DirectMARLEnvCfg):
 
     # Drone configs
     drone_0: ArticulationCfg = CRAZYFLIE_CFG.replace(prim_path="/World/envs/env_.*/Drone_0")
-    drone_0.init_state.pos = (-7.0, 2, 2.0)
+    drone_0.init_state.pos = (-7.0, .10, 1.0)
 
     drone_1: ArticulationCfg = CRAZYFLIE_CFG.replace(prim_path="/World/envs/env_.*/Drone_1")
-    drone_1.init_state.pos = (-7.0, -2, 2.0)
+    drone_1.init_state.pos = (-7.0, -.10, 1.0)
 
     # simulation
     sim: SimulationCfg = SimulationCfg(
@@ -323,32 +323,51 @@ class MinitankStage3v2Env(DirectMARLEnv):
 
         # Add alive mask for drones
         self.drone_alive = {agent: torch.ones(self.num_envs, dtype=torch.bool, device=self.device) for agent in self.drones.keys()}
+        # Track invalid deaths for knockout logic
+        self._invalid_death = {agent: torch.zeros(self.num_envs, dtype=torch.bool, device=self.device) for agent in self.drones.keys()}
 
-    def _update_drone_alive(self, thresh):
-        # Knock out if the closest point on the arm's RAY (from base forward) to the drone is within threshold
-        thresh = 1
-
+    def _update_drone_alive(self, radius: float = 1.5, min_z: float = 0.25):
+        """Single place to compute drone alive masks each step.
+        - Knockout if closest distance to the minitank arm *ray* <= radius
+        - Knockout if altitude <= min_z
+        - Tracks 'newly killed' this step
+        - Computes 'both drones eliminated' per env
+        """
+        r2 = radius * radius
+        alive_now = {agent: torch.ones(self.num_envs, dtype=torch.bool, device=self.device)
+                     for agent in self.drones.keys()}
+        # Ray knockout
         for minitank, drone in zip(["minitank_0", "minitank_1"], ["drone_0", "drone_1"]):
-            # Positions
-            arm_base = self.robots[minitank].data.body_com_pos_w[:, 0, :]  # [num_envs, 3]
-            arm_tip  = self.robots[minitank].data.body_com_pos_w[:, 1, :]  # [num_envs, 3]
-            drone_pos = self.robots[drone].data.root_pos_w                 # [num_envs, 3]
-
-            # Ray direction (normalize arm vector)
-            arm_vec = arm_tip - arm_base                                   # [num_envs, 3]
+            arm_base = self.robots[minitank].data.body_com_pos_w[:, 0, :]
+            arm_tip  = self.robots[minitank].data.body_com_pos_w[:, 1, :]
+            drone_pos = self.robots[drone].data.root_pos_w
+            arm_vec = arm_tip - arm_base
             arm_dir = arm_vec / (torch.norm(arm_vec, dim=1, keepdim=True) + 1e-8)
-
-            # Project drone position onto the ray; clamp only at 0 (no upper bound -> ray)
-            to_drone = drone_pos - arm_base                                 # [num_envs, 3]
-            t = torch.sum(to_drone * arm_dir, dim=1, keepdim=True)          # [num_envs, 1]
-            t_ray = torch.clamp_min(t, 0.0)                                 # [num_envs, 1]
-
-            # Closest point on the ray and squared distance
-            closest_point = arm_base + t_ray * arm_dir                      # [num_envs, 3]
-            dist2 = torch.sum((drone_pos - closest_point) ** 2, dim=1)      # [num_envs]
-
-            # Alive if outside knockout radius
-            self.drone_alive[drone] = dist2 > thresh
+            to_drone = drone_pos - arm_base
+            t = torch.sum(to_drone * arm_dir, dim=1, keepdim=True)
+            t_ray = torch.clamp_min(t, 0.0)
+            closest_point = arm_base + t_ray * arm_dir
+            dist2 = torch.sum((drone_pos - closest_point) ** 2, dim=1)
+            hit_ray = dist2 <= r2
+            alive_now[drone] &= ~hit_ray
+        # Altitude knockout
+        for drone in self.drones.keys():
+            z = self.robots[drone].data.root_pos_w[:, 2]
+            above = z > min_z
+            alive_now[drone] &= above
+        # Event tracking: newly killed (was alive last step, now dead)
+        self.drone_newly_killed = {}
+        for drone in self.drones.keys():
+            prev = self.drone_alive.get(drone, torch.ones_like(alive_now[drone]))
+            self.drone_newly_killed[drone] = prev & (~alive_now[drone])
+            # set an invalid flag so tanks dont get reward for knocking out already dead drones
+            self._invalid_death[drone] |= self.drone_newly_killed[drone]
+        self.drone_alive = alive_now
+        # Both drones eliminated per-env
+        all_dead = torch.ones(self.num_envs, dtype=torch.bool, device=self.device)
+        for drone in self.drones.keys():
+            all_dead &= ~self.drone_alive[drone]
+        self.drones_eliminated = all_dead
 
     def _draw_minitank_markers(self, agent: str) -> None:
         """Draw markers for a single minitank agent.
@@ -525,13 +544,14 @@ class MinitankStage3v2Env(DirectMARLEnv):
         light_cfg.func("/World/Light", light_cfg)
 
     def _pre_physics_step(self, actions: dict):
-        # Update alive status for drones
-        self._update_drone_alive(thresh=1.5)
+        # Single source of truth for alive status (radius can be tuned)
+        self._update_drone_alive(radius=1.5, min_z=0.25)
 
         # Update minitank desired position to the corresponding drone's position at every step
         for minitank, drone in zip(["minitank_0", "minitank_1"], ["drone_0", "drone_1"]):
             self._desired_pos_w[minitank] = self.robots[drone].data.root_pos_w.clone()
-
+            self._desired_pos_w[drone] = self.robots[minitank].data.root_pos_w.clone()
+            self._desired_pos_w[drone][:, 2] += 2.0
 
         ### PREPHYSICS FOR MINITANK ###
         for agent in self.minitanks.keys():
@@ -613,6 +633,7 @@ class MinitankStage3v2Env(DirectMARLEnv):
                     teammate_pos, _ = subtract_frame_transforms(
                         self.robots[agent].data.root_state_w[:, :3], self.robots[agent].data.root_state_w[:, 3:7], self.robots[teammate_id].data.root_pos_w
                     )
+                    dist_to_center = torch.norm(self.robots[agent].data.root_pos_w - env_center, dim=-1, keepdim=True)
                     obs_parts = torch.cat([
                             self.robots[agent].data.root_lin_vel_b,
                             self.robots[agent].data.root_ang_vel_b,
@@ -620,7 +641,6 @@ class MinitankStage3v2Env(DirectMARLEnv):
                             desired_pos,
                             teammate_pos,
                             teammate_pos,
-                            # other_pos,
                             dist_to_center,
                             arena_radius,
                         ],
@@ -642,7 +662,7 @@ class MinitankStage3v2Env(DirectMARLEnv):
     def _get_rewards(self) -> dict:
         if not self.headless:
             # self._draw_markers()
-                    # Minitanks (unchanged logic)
+            # Minitanks (unchanged logic)
             for agent in self.minitanks.keys():
                 self._draw_minitank_markers(agent)
             # Drones (heading arrow + goal sphere)
@@ -653,8 +673,11 @@ class MinitankStage3v2Env(DirectMARLEnv):
         knockout_penalty = -50.0
         drone_knockout = {}
         for agent in self.drones.keys():
-            # If drone is knocked out, apply penalty
-            penalty = (~self.drone_alive[agent]).float() * knockout_penalty * self.step_dt
+            # If drone is knocked out, apply penalty only to valid deaths (not already dead)
+            if not hasattr(self, "_invalid_death"):
+                self._invalid_death = {a: torch.zeros(self.num_envs, dtype=torch.bool, device=self.device) for a in self.drones.keys()}
+            valid_knockout = (~self.drone_alive[agent]) & (~self._invalid_death[agent])
+            penalty = valid_knockout.float() * knockout_penalty * self.step_dt
             drone_knockout[agent] = penalty
             self._episode_sums["drone_knockout"] += penalty
 
@@ -665,6 +688,28 @@ class MinitankStage3v2Env(DirectMARLEnv):
         for agent in self.drones.keys():
             team_rewards["team_1"] += drone_knockout[agent]
 
+        # --- Goal and elimination logic ---
+        # Drones reach goal: award 100 points and end episode
+        goal_reward = 100.0
+        goal_radius = 0.5  # adjust as needed
+        drone_goal_reached = torch.zeros(self.num_envs, dtype=torch.bool, device=self.device)
+        for agent in self.drones.keys():
+            # Distance to goal
+            dist_to_goal = torch.norm(self.robots[agent].data.root_pos_w - self._desired_pos_w[agent], dim=1)
+            reached = dist_to_goal < goal_radius
+            drone_goal_reached |= reached
+            # Award reward only for reaching
+            team_rewards["team_1"] += reached.float() * goal_reward
+
+        # If any drone reaches the goal, end episode for drone team
+        self.drone_goal_reached = drone_goal_reached
+
+        # Minitanks eliminate drones: award large reward and end episode
+        elimination_reward = 200.0
+        for agent in self.drones.keys():
+            eliminated = ~self.drone_alive[agent]
+            team_rewards["team_0"] += eliminated.float() * elimination_reward
+
         # Optionally log the reward
         for team in self.cfg.teams.keys():
             self._episode_sums[f"{team}_existence_reward"] = team_rewards[team]
@@ -672,12 +717,12 @@ class MinitankStage3v2Env(DirectMARLEnv):
 
 
     def _get_dones(self) -> tuple[dict, dict]:
-        # Team 1 (drones) is done if both drones are knocked out
-        drone_done = torch.ones(self.num_envs, dtype=torch.bool, device=self.device)
-        for agent in self.drones.keys():
-            drone_done &= ~self.drone_alive[agent]
-        # Team 0 (minitanks) never done by knockout (can add logic if needed)
-        dones = {"team_0": torch.zeros(self.num_envs, dtype=torch.bool, device=self.device), "team_1": drone_done}
+        drone_done = torch.zeros(self.num_envs, dtype=torch.bool, device=self.device)
+        if hasattr(self, "drone_goal_reached"):
+            drone_done |= self.drone_goal_reached
+        minitank_done = torch.zeros(self.num_envs, dtype=torch.bool, device=self.device)
+        minitank_done |= self.drones_eliminated
+        dones = {"team_0": minitank_done, "team_1": drone_done}
         time_out = self.episode_length_buf >= self.max_episode_length - 1
         timeouts = {team: time_out for team in self.cfg.teams.keys()}
         return dones, timeouts
@@ -691,10 +736,15 @@ class MinitankStage3v2Env(DirectMARLEnv):
             env_ids = torch.arange(self.num_envs, device=self.device)
 
         super()._reset_idx(env_ids)
+        for drone in self.drones.keys():
+            self.drone_alive[drone][env_ids] = True
+        self.drone_goal_reached = torch.zeros(self.num_envs, dtype=torch.bool, device=self.device)
+        self.drones_eliminated = torch.zeros(self.num_envs, dtype=torch.bool, device=self.device)
         extras = dict()
         for key in self._episode_sums.keys():
             episodic_sum_avg = torch.mean(self._episode_sums[key][env_ids])
             extras["Episode_Reward/" + key] = episodic_sum_avg / self.max_episode_length_s
+            extras["Drone_Alive/" + key] = torch.mean(self.drone_alive["drone_0"][env_ids].float())
             self._episode_sums[key][env_ids] = 0.0
         self.extras["log"] = dict()
         self.extras["log"].update(extras)
@@ -726,9 +776,15 @@ class MinitankStage3v2Env(DirectMARLEnv):
             # For drones, keep previous logic (random or default)
             for agent in self.cfg.action_spaces:
                 if "drone" in agent:
-                    self._desired_pos_w[agent][env_ids, :2] = torch.zeros_like(self._desired_pos_w[agent][env_ids, :2]).uniform_(-2.0, 2.0)
-                    self._desired_pos_w[agent][env_ids, :2] += self._terrain.env_origins[env_ids, :2]
-                    self._desired_pos_w[agent][env_ids, 2] = torch.zeros_like(self._desired_pos_w[agent][env_ids, 2]).uniform_(0.5, 1.5)
-
+                    # Sample random positions within the arena bounds (x/y in [-10, 10], z in [0.5, 10.5])
+                    x = torch.zeros_like(self._desired_pos_w[agent][env_ids, 0]).uniform_(-10.0, 10.0)
+                    y = torch.zeros_like(self._desired_pos_w[agent][env_ids, 1]).uniform_(-10.0, 10.0)
+                    # Clamp to arena bounds (walls at x/y = ±10)
+                    x = torch.clamp(x + self._terrain.env_origins[env_ids, 0], -9.5, 9.5)
+                    y = torch.clamp(y + self._terrain.env_origins[env_ids, 1], -9.5, 9.5)
+                    z = torch.zeros_like(self._desired_pos_w[agent][env_ids, 2]).uniform_(0.5, 10.5)
+                    self._desired_pos_w[agent][env_ids, 0] = x
+                    self._desired_pos_w[agent][env_ids, 1] = y
+                    self._desired_pos_w[agent][env_ids, 2] = z
 
         

@@ -20,6 +20,7 @@ from .leatherback_sumo_ma_stage1 import LeatherbackSumoMAStage1Env, LeatherbackS
 from .leatherback_sumo_ma_stage2 import LeatherbackSumoMAStage2Env, LeatherbackSumoMAStage2EnvCfg
 from .leatherback_soccer_stage_1 import LeatherbackStage1SoccerEnv, LeatherbackStage1SoccerEnvCfg
 from .leatherback_soccer_stage_2 import LeatherbackStage2AdversarialSoccerEnv, LeatherbackStage2AdversarialSoccerEnvCfg
+from .leatherback_sumo_ma_stage1_same_team import LeatherbackSumoMAStage1SameTeamEnv, LeatherbackSumoMAStage1SameTeamEnvCfg
 
 ##
 # Register Gym environments.
@@ -112,6 +113,20 @@ gym.register(
         "harl_happo_cfg_entry_point": f"{agents.__name__}:harl_happo_cfg.yaml",
         "harl_happo_adv_cfg_entry_point": f"{agents.__name__}:harl_happo_adv_cfg.yaml",
 
+    },
+)
+
+gym.register(
+    id="Leatherback-Stage1-Soccer-v0-Same-Team",
+    entry_point=LeatherbackSumoMAStage1SameTeamEnv, 
+    disable_env_checker=True,
+    kwargs={
+        "env_cfg_entry_point": LeatherbackSumoMAStage1SameTeamEnvCfg,
+        "rl_games_cfg_entry_point": f"{agents.__name__}:rl_games_flat_ppo_cfg.yaml",
+        "rsl_rl_cfg_entry_point": f"{agents.__name__}.rsl_rl_ppo_cfg:AnymalCSoccerFlatPPORunnerCfg",
+        "skrl_cfg_entry_point": f"{agents.__name__}:skrl_flat_ppo_cfg.yaml",
+        "harl_happo_cfg_entry_point": f"{agents.__name__}:harl_happo_cfg.yaml",
+        "harl_happo_adv_cfg_entry_point": f"{agents.__name__}:harl_happo_adv_cfg.yaml",
     },
 )
 

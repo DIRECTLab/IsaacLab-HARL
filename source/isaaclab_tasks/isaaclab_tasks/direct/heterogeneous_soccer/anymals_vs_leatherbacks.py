@@ -1,20 +1,24 @@
 from __future__ import annotations
 
 import torch
+import copy
 import isaaclab.sim as sim_utils
+import isaaclab.envs.mdp as mdp
 from isaaclab.assets import Articulation, ArticulationCfg, RigidObject, RigidObjectCfg
 from isaaclab.envs import DirectMARLEnv, DirectMARLEnvCfg
+from isaaclab.managers import EventTermCfg as EventTerm
+from isaaclab.managers import SceneEntityCfg
 from isaaclab.scene import InteractiveSceneCfg
 from isaaclab.sim import SimulationCfg
 from isaaclab.sim.spawners.from_files import GroundPlaneCfg, spawn_ground_plane
 from isaaclab.utils import configclass
 from isaaclab_assets.robots.leatherback import LEATHERBACK_CFG  # isort: skip
+from isaaclab_assets.robots.anymal import ANYMAL_C_CFG  # isort: skip
 from isaaclab.markers import VisualizationMarkers, VisualizationMarkersCfg
 from isaaclab.utils.math import subtract_frame_transforms
 from isaaclab.utils.math import quat_from_angle_axis, quat_from_euler_xyz, quat_rotate_inverse
 from isaaclab_assets.custom.soccer_ball import SOCCERBALL_CFG  # isort: skip
 from isaaclab.envs.common import ViewerCfg
-
 import random
 
 def get_quaternion_tuple_from_xyz(x, y, z):
@@ -22,27 +26,90 @@ def get_quaternion_tuple_from_xyz(x, y, z):
     return (quat_tensor[0].item(), quat_tensor[1].item(), quat_tensor[2].item(), quat_tensor[3].item())
 
 @configclass
-class LeatherbackStage2AdversarialSoccerEnvCfg(DirectMARLEnvCfg):
+class EventCfg:
+    """Configuration for randomization."""
+
+    physics_material_0 = EventTerm(
+        func=mdp.randomize_rigid_body_material,
+        mode="startup",
+        params={
+            "asset_cfg": SceneEntityCfg("anymal_0", body_names=".*"),
+            "static_friction_range": (0.8, 0.8),
+            "dynamic_friction_range": (0.6, 0.6),
+            "restitution_range": (0.0, 0.2),
+            "num_buckets": 64,
+        },
+    )
+
+    add_base_mass_0 = EventTerm(
+        func=mdp.randomize_rigid_body_mass,
+        mode="startup",
+        params={
+            "asset_cfg": SceneEntityCfg("anymal_0", body_names="base"),
+            "mass_distribution_params": (-5.0, 5.0),
+            "operation": "add",
+        },
+    )
+
+    physics_material_1 = EventTerm(
+        func=mdp.randomize_rigid_body_material,
+        mode="startup",
+        params={
+            "asset_cfg": SceneEntityCfg("anymal_1", body_names=".*"),
+            "static_friction_range": (0.8, 0.8),
+            "dynamic_friction_range": (0.6, 0.6),
+            "restitution_range": (0.0, 0.2),
+            "num_buckets": 64,
+        },
+    )
+
+    add_base_mass_1 = EventTerm(
+        func=mdp.randomize_rigid_body_mass,
+        mode="startup",
+        params={
+            "asset_cfg": SceneEntityCfg("anymal_1", body_names="base"),
+            "mass_distribution_params": (-5.0, 5.0),
+            "operation": "add",
+        },
+    )
+
+@configclass
+class AnymalSoccerHeteroByTeamEnvCfg(DirectMARLEnvCfg):
     decimation = 4
     episode_length_s = 30.0
-    action_spaces = {f"robot_{i}": 2 for i in range(4)}
-    observation_spaces = {f"robot_{i}": 24 for i in range(4)}
+    action_scale = 0.5
+    anymal_action_spaces = {f"anymal_{i}": 12 for i in range(2)}
+    leatherback_action_spaces = {f"leatherback_{i}": 2 for i in range(2)}
+    action_spaces = anymal_action_spaces | leatherback_action_spaces
+    anymal_observation_spaces = {f"anymal_{i}": 66 for i in range(2)}
+    leatherback_observation_spaces = {f"leatherback_{i}": 24 for i in range(2)}
+    observation_spaces = anymal_observation_spaces | leatherback_observation_spaces
     state_space = 0
-    state_spaces = {f"robot_{i}": 0 for i in range(4)}
-    possible_agents = ["robot_0", "robot_1", "robot_2", "robot_3"]
+    state_spaces = {robot: 0 for robot in observation_spaces.keys()}
+    possible_agents = ["anymal_0", "anymal_1", "leatherback_0", "leatherback_1"]
 
     teams = {
-        "team_0": ["robot_0", "robot_1"],
-        "team_1": ["robot_2", "robot_3"],
+        "team_0": ["anymal_0", "anymal_1"],
+        "team_1": ["leatherback_0", "leatherback_1"],
     }
 
     sim: SimulationCfg = SimulationCfg(dt=1 / 200, render_interval=decimation)
-    robot_0: ArticulationCfg = LEATHERBACK_CFG.replace(prim_path="/World/envs/env_.*/Robot_0")
-    robot_1: ArticulationCfg = LEATHERBACK_CFG.replace(prim_path="/World/envs/env_.*/Robot_1")
-    robot_2: ArticulationCfg = LEATHERBACK_CFG.replace(prim_path="/World/envs/env_.*/Robot_2")
-    robot_2.init_state.rot = get_quaternion_tuple_from_xyz(0, 0, torch.pi)
-    robot_3: ArticulationCfg = LEATHERBACK_CFG.replace(prim_path="/World/envs/env_.*/Robot_3")
-    robot_3.init_state.rot = get_quaternion_tuple_from_xyz(0, 0, torch.pi)
+
+    anymal_0: ArticulationCfg = ANYMAL_C_CFG.replace(prim_path="/World/envs/env_.*/Anymal_0")
+    anymal_0.init_state.rot = get_quaternion_tuple_from_xyz(0,0,torch.pi)
+    anymal_0.init_state.pos = (0, 0, .5)
+
+    anymal_1: ArticulationCfg = ANYMAL_C_CFG.replace(prim_path="/World/envs/env_.*/Anymal_1")
+    anymal_1.init_state.rot = get_quaternion_tuple_from_xyz(0,0,torch.pi)
+    anymal_1.init_state.pos = (0, 0, .5)
+
+    leatherback_0: ArticulationCfg = LEATHERBACK_CFG.replace(prim_path="/World/envs/env_.*/Leatherback_0")
+    leatherback_0.init_state.rot = get_quaternion_tuple_from_xyz(0,0,torch.pi)
+    leatherback_0.init_state.pos = (0, 0, .3)
+
+    leatherback_1: ArticulationCfg = LEATHERBACK_CFG.replace(prim_path="/World/envs/env_.*/Leatherback_1")
+    leatherback_1.init_state.rot = get_quaternion_tuple_from_xyz(0,0,torch.pi)
+    leatherback_1.init_state.pos = (0, 0, .3)
 
     wall_0 = RigidObjectCfg(
         prim_path="/World/envs/env_.*/Object0",
@@ -114,34 +181,46 @@ class LeatherbackStage2AdversarialSoccerEnvCfg(DirectMARLEnvCfg):
         "Knuckle__Upright__Front_Left",
     ]
 
-    env_spacing = 30.0
-    scene: InteractiveSceneCfg = InteractiveSceneCfg(num_envs=4096, env_spacing=env_spacing, replicate_physics=True)
-    viewer = ViewerCfg(eye=(10.0, 10.0, 10.0), env_index=0, origin_type="env")
-
     throttle_scale = 10
     throttle_max = 50
     steering_scale = 0.1
-    steering_max = 10
+    steering_max = 0.75
+
+    env_spacing = 20.0
+    scene: InteractiveSceneCfg = InteractiveSceneCfg(num_envs=4096, env_spacing=env_spacing, replicate_physics=True)
+    viewer = ViewerCfg(eye=(10.0, 10.0, 10.0), env_index=0, origin_type="env")
 
     goal_reward_scale = 20
     ball_to_goal_reward_scale = 1.0
     dist_to_ball_reward_scale = 1.0
 
-class LeatherbackStage2AdversarialSoccerEnv(DirectMARLEnv):
-    cfg: LeatherbackStage2AdversarialSoccerEnvCfg
+class AnymalSoccerHeteroByTeamEnv(DirectMARLEnv):
+    cfg: AnymalSoccerHeteroByTeamEnvCfg
 
-    def __init__(self, cfg: LeatherbackStage2AdversarialSoccerEnvCfg, render_mode: str | None = None, headless: bool | None = None, **kwargs):
+    def __init__(self, cfg: AnymalSoccerHeteroByTeamEnvCfg, render_mode: str | None = None, headless: bool | None = None, **kwargs):
         super().__init__(cfg, render_mode, **kwargs)
         self.headless = headless
-        
-        self._throttle_dof_idx, _ = self.robots["robot_0"].find_joints(self.cfg.throttle_dof_name)
-        self._steering_dof_idx, _ = self.robots["robot_0"].find_joints(self.cfg.steering_dof_name)
 
-        self._throttle_state = {robot_id:torch.zeros((self.num_envs,4), device=self.device, dtype=torch.float32) for robot_id in self.robots.keys()}
-        self._steering_state = {robot_id:torch.zeros((self.num_envs,2), device=self.device, dtype=torch.float32) for robot_id in self.robots.keys()}
+        self._throttle_dof_idx, _ = self.robots["leatherback_0"].find_joints(self.cfg.throttle_dof_name)
+        self._steering_dof_idx, _ = self.robots["leatherback_0"].find_joints(self.cfg.steering_dof_name)
+
+        self._throttle_state = {robot_id:torch.zeros((self.num_envs,4), device=self.device, dtype=torch.float32) for robot_id in self.leatherbacks.keys()}
+        self._steering_state = {robot_id:torch.zeros((self.num_envs,2), device=self.device, dtype=torch.float32) for robot_id in self.leatherbacks.keys()}
+        
+        self.actions = {
+            agent: torch.zeros(self.num_envs, action_space, device=self.device)
+            for agent, action_space in self.cfg.action_spaces.items()
+        }
+        self.previous_actions = {
+            agent: torch.zeros(self.num_envs, action_space, device=self.device)
+            for agent, action_space in self.cfg.action_spaces.items()
+        }
+        self.penalty_box = {
+            agent: torch.zeros(self.num_envs, 2, device=self.device)
+            for agent  in self.robots.keys()
+        }
 
         self.env_spacing = self.cfg.env_spacing
-
 
         self._episode_sums = {
             key: torch.zeros(self.num_envs, dtype=torch.float, device=self.device)
@@ -170,6 +249,7 @@ class LeatherbackStage2AdversarialSoccerEnv(DirectMARLEnv):
         )
         self.goal_area = VisualizationMarkers(marker_cfg)
         self.goal0_pos, self.goal1_pos, self.goal0_area, self.goal1_area = self._get_goal_areas()
+        self.target_goal = torch.zeros(self.num_envs, dtype=torch.int32, device=self.device)
         team_dot_markers = {
             "blue": sim_utils.SphereCfg(
                 radius=0.08,
@@ -208,10 +288,16 @@ class LeatherbackStage2AdversarialSoccerEnv(DirectMARLEnv):
         )
         # Setup rest of the scene
         self.robots = {}
-        self.num_robots = sum(1 for key in self.cfg.__dict__.keys() if "robot_" in key)
-        for i in range(self.num_robots):
-            self.robots[f"robot_{i}"] = Articulation(self.cfg.__dict__["robot_" + str(i)])
-            self.scene.articulations[f"robot_{i}"] = self.robots[f"robot_{i}"]
+        self.anymals = {}
+        self.leatherbacks = {}
+        self.num_robots = len(self.cfg.possible_agents)
+        for agent_id in self.cfg.possible_agents:
+            self.robots[agent_id] = Articulation(self.cfg.__dict__[agent_id])
+            self.scene.articulations[agent_id] = self.robots[agent_id]
+            if 'anymal' in agent_id:
+                self.anymals[agent_id] = self.robots[agent_id]
+            elif 'leatherback' in agent_id:
+                self.leatherbacks[agent_id] = self.robots[agent_id]
 
         self.scene.clone_environments(copy_from_source=False)
         self.scene.filter_collisions(global_prim_paths=[])
@@ -222,13 +308,14 @@ class LeatherbackStage2AdversarialSoccerEnv(DirectMARLEnv):
     @torch.no_grad()
     def _draw_team_dots(self):
         positions, indices, orientations, scales = [], [], [], []
-        for robot_id, robot in self.robots.items():
-            pos = robot.data.root_pos_w.clone()
-            pos[:, 2] += 0.5  # hover above robot
-            positions.append(pos)
-
-            team = "blue" if "0" in robot_id or "1" in robot_id else "red"
-            indices.append(torch.full((self.num_envs,), 0 if team=="blue" else 1, device=self.device))
+        for team, agents in self.cfg.teams.items():
+            for robot_id in agents:
+                pos = self.robots[robot_id].data.root_pos_w.clone()
+                pos[:, 2] += 0.5  # hover above robot
+                positions.append(pos)
+    
+                team_color = "blue" if "0" in team else "red"
+                indices.append(torch.full((self.num_envs,), 0 if team_color=="blue" else 1, device=self.device))
 
         marker_positions = torch.cat(positions, dim=0)
         marker_indices = torch.cat(indices, dim=0)
@@ -248,41 +335,50 @@ class LeatherbackStage2AdversarialSoccerEnv(DirectMARLEnv):
         self.goal_area.visualize(marker_locations, marker_indices=marker_ids)
 
     def _pre_physics_step(self, actions: dict) -> None:
-        for robot_id in self.robots.keys():
-            throttle_action = actions[robot_id][:, 0].repeat_interleave(4).reshape((-1, 4)) * self.cfg.throttle_scale
-            throttle_action = torch.clamp(throttle_action, -self.cfg.throttle_max, self.cfg.throttle_max)
-            self._throttle_state[robot_id] = throttle_action
+
+        for robot_id in self.leatherbacks.keys():
+            self._throttle_action = actions[robot_id][:, 0].repeat_interleave(4).reshape((-1, 4)) * self.cfg.throttle_scale
+            self.throttle_action = torch.clamp(self._throttle_action, -self.cfg.throttle_max, self.cfg.throttle_max)
+            self._throttle_state[robot_id] = self._throttle_action
             
-            steering_action = actions[robot_id][:, 1].repeat_interleave(2).reshape((-1, 2)) * self.cfg.steering_scale
-            steering_action = torch.clamp(steering_action, -self.cfg.steering_max, self.cfg.steering_max)
-            self._steering_state[robot_id] = steering_action
-            self.ball.update(self.step_dt)
+            self._steering_action = actions[robot_id][:, 1].repeat_interleave(2).reshape((-1, 2)) * self.cfg.steering_scale
+            self._steering_action = torch.clamp(self._steering_action, -self.cfg.steering_max, self.cfg.steering_max)
+            self._steering_state[robot_id] = self._steering_action
+
+        self.processed_actions = {}
+        self.actions = copy.deepcopy(actions)
+        for robot_id, robot in self.anymals.items():
+            self.processed_actions[robot_id] = (
+                self.cfg.action_scale * actions[robot_id] + robot.data.default_joint_pos
+            )
+        self.ball.update(self.step_dt)
 
     def _apply_action(self) -> None:
-        for robot_id in self.robots.keys():
-            # self._throttle_state[robot_id] = -5*torch.ones_like(self._throttle_state[robot_id], device=self.device)
-            self.robots[robot_id].set_joint_velocity_target(self._throttle_state[robot_id], joint_ids=self._throttle_dof_idx)
-            self.robots[robot_id].set_joint_position_target(self._steering_state[robot_id], joint_ids=self._steering_dof_idx)
+        for robot_id, robot in self.leatherbacks.items():
+            robot.set_joint_velocity_target(self._throttle_state[robot_id], joint_ids=self._throttle_dof_idx)
+            robot.set_joint_position_target(self._steering_state[robot_id], joint_ids=self._steering_dof_idx)
 
-
-    def relative_velocity(obj_vel_w, ref_rot_w):
-        """Convert world-frame velocity into reference-frame coordinates.
-        
-        Args:
-            obj_vel_w (torch.Tensor): (E, 3) linear velocity of object in world frame
-            ref_rot_w (torch.Tensor): (E, 4) quaternion of reference orientation in world frame
-        
-        Returns:
-            torch.Tensor: (E, 3) velocity in the reference's local frame
-        """
-        return quat_rotate_inverse(ref_rot_w, obj_vel_w)
+        for robot_id, robot in self.anymals.items():
+            robot.set_joint_position_target(self.processed_actions[robot_id])
     
     def _get_observations(self) -> dict:
         all_obs = {}
         for team in self.cfg.teams.keys():
             all_obs[team] = {}
             for robot_id in self.cfg.teams[team]:
-                robot_vel = self.robots[robot_id].data.root_lin_vel_b
+                if robot_id in self.anymals.keys():
+                    robot_state = (
+                        self.robots[robot_id].data.root_lin_vel_b,
+                        self.robots[robot_id].data.root_ang_vel_b,
+                        self.robots[robot_id].data.projected_gravity_b,
+                        self.robots[robot_id].data.joint_pos - self.robots[robot_id].data.default_joint_pos,
+                        self.robots[robot_id].data.joint_vel,
+                        self.actions[robot_id],
+                    )
+                else:
+                    robot_state = (
+                        self.robots[robot_id].data.root_lin_vel_b,
+                    )
 
                 ball_pos, _ = subtract_frame_transforms(
                     self.robots[robot_id].data.root_state_w[:, :3], self.robots[robot_id].data.root_state_w[:, 3:7],
@@ -324,8 +420,21 @@ class LeatherbackStage2AdversarialSoccerEnv(DirectMARLEnv):
                     self.robots[self.cfg.teams["team_1" if team == "team_0" else "team_0"][1]].data.root_pos_w
                 )
 
-                obs = torch.cat((
-                    robot_vel, # Robot velocity in world frame (3)
+                # buf0 = torch.zeros((self.num_envs, 9), device = self.device)
+
+
+
+                # obs = torch.cat(
+                #     robot_state + (
+                #     ball_pos,  # Ball position in robot frame (3)
+                #     ball_vel, # Ball velocity in robot frame (3)
+                #     target_goal_pos, # Target goal position in robot frame (3)
+                #     other_goal_pos,  # other goal position in robot frame (3)
+                #     buf0
+                # ), dim=-1)
+
+                obs = torch.cat(
+                    robot_state + (
                     ball_pos,  # Ball position in robot frame (3)
                     ball_vel, # Ball velocity in robot frame (3)
                     target_goal_pos, # Target goal position in robot frame (3)
@@ -350,7 +459,7 @@ class LeatherbackStage2AdversarialSoccerEnv(DirectMARLEnv):
         time_step_reward = -0.01 * torch.ones(self.num_envs, device=self.device)
 
         # Distances to opponent’s goal
-        team_0_ball_distance_to_goal = torch.linalg.norm(self.ball.data.root_pos_w - self.goal1_pos, dim=1)
+        team_0_ball_distance_to_goal = torch.linalg.norm(self.ball.data.root_pos_w - self.goal0_pos, dim=1)
         team_0_ball_distance_to_goal_mapped = 1 - torch.tanh(team_0_ball_distance_to_goal / 0.8)
 
         team_1_ball_distance_to_goal = torch.linalg.norm(self.ball.data.root_pos_w - self.goal0_pos, dim=1)
@@ -392,22 +501,21 @@ class LeatherbackStage2AdversarialSoccerEnv(DirectMARLEnv):
             "team_0": total_reward_team_0,
             "team_1": total_reward_team_1,
         }
-
     
     def _get_goal_areas(self):
         goal1_size = self.goal_area.cfg.markers['goal1'].size
-        goal1_pos = self.scene.env_origins.clone() + torch.tensor([-9.25, 0.0, 0.05], device=self.device)
+        goal0_pos = self.scene.env_origins.clone() + torch.tensor([-9.25, 0.0, 0.05], device=self.device)
 
         goal2_size = self.goal_area.cfg.markers['goal2'].size
-        goal2_pos = self.scene.env_origins.clone() + torch.tensor([9.25, 0.0, 0.05], device=self.device)
+        goal1_pos = self.scene.env_origins.clone() + torch.tensor([9.25, 0.0, 0.05], device=self.device)
 
         # Extract goal area from goal post positions
-        goal1_min = goal1_pos + torch.tensor([-goal1_size[0]/2, -goal1_size[1]/2, 0], device=self.device)
-        goal1_max = goal1_pos + torch.tensor([goal1_size[0]/2, goal1_size[1]/2, 0], device=self.device)   
-        goal2_min = goal2_pos + torch.tensor([-goal2_size[0]/2, -goal2_size[1]/2, 0], device=self.device)
-        goal2_max = goal2_pos + torch.tensor([goal2_size[0]/2, goal2_size[1]/2, 0], device=self.device)
+        goal1_min = goal0_pos + torch.tensor([-goal1_size[0]/2, -goal1_size[1]/2, 0], device=self.device)
+        goal1_max = goal0_pos + torch.tensor([goal1_size[0]/2, goal1_size[1]/2, 0], device=self.device)   
+        goal2_min = goal1_pos + torch.tensor([-goal2_size[0]/2, -goal2_size[1]/2, 0], device=self.device)
+        goal2_max = goal1_pos + torch.tensor([goal2_size[0]/2, goal2_size[1]/2, 0], device=self.device)
 
-        return goal1_pos, goal2_pos, (goal1_min, goal1_max), (goal2_min, goal2_max)
+        return goal0_pos, goal1_pos, (goal1_min, goal1_max), (goal2_min, goal2_max)
     
     def _get_out_of_arena(self):
         out_of_arena = torch.zeros(self.num_envs, dtype=torch.int8, device=self.device)
@@ -416,6 +524,13 @@ class LeatherbackStage2AdversarialSoccerEnv(DirectMARLEnv):
             out_of_arena |= robot.data.root_pos_w[:, 2] > 5
         
         return out_of_arena
+    
+    def _get_fallen_robots(self, robot_ids):
+        fallen = {}
+        for robot_id in robot_ids:
+            fallen[robot_id] = torch.zeros(self.num_envs, dtype=torch.bool, device=self.device)
+            fallen[robot_id] = self.robots[robot_id].data.root_com_pos_w[:, 2] < .09
+        return fallen
     
     def _ball_in_goal_area(self):
         ball_pos = self.ball.data.root_pos_w[:, :2]
@@ -429,10 +544,10 @@ class LeatherbackStage2AdversarialSoccerEnv(DirectMARLEnv):
         ball_in_any_goal = ball_in_goal1 | ball_in_goal2
         out_of_arena = self._get_out_of_arena()
 
+        # fallen = self._get_fallen_robots(self.robots.keys())
+
         done = out_of_arena | ball_in_any_goal
-
         time_out = self.episode_length_buf >= self.max_episode_length - 1
-
         dones = {team: done for team in self.cfg.teams.keys()}
         time_outs = {team: time_out for team in self.cfg.teams.keys()}
 
@@ -445,7 +560,8 @@ class LeatherbackStage2AdversarialSoccerEnv(DirectMARLEnv):
         episode_lengths = self.episode_length_buf[env_ids].to(torch.float32).clone() + 1
         super()._reset_idx(env_ids)
 
-        if len(env_ids) == self.num_envs:
+        num_reset_envs = len(env_ids) # type: ignore
+        if num_reset_envs == self.num_envs:
             # Spread out the resets to avoid spikes in training when many environments reset at a similar time
             self.episode_length_buf[:] = torch.randint_like(
                 self.episode_length_buf, high=int(self.max_episode_length)
@@ -453,29 +569,24 @@ class LeatherbackStage2AdversarialSoccerEnv(DirectMARLEnv):
 
         ball_in_goal1, ball_in_goal2 = self._ball_in_goal_area()
 
-        team_0_percent_scored = torch.sum(ball_in_goal2.to(torch.float32)) / len(env_ids)
-        team_1_percent_scored = torch.sum(ball_in_goal1.to(torch.float32)) / len(env_ids)
+        team_0_percent_scored = torch.sum(ball_in_goal2.to(torch.float32)) / num_reset_envs
+        team_1_percent_scored = torch.sum(ball_in_goal1.to(torch.float32)) / num_reset_envs
+
+        self.target_goal[env_ids] = torch.randint(0, 2, (num_reset_envs,), device=self.device).to(torch.int32)
 
         self._draw_goal_areas()
+
+        sampled_grid_pos = self._sample_positions_grid(env_ids, self.num_robots+1, 1, 1)
 
         # Cache for convenience
         origins = self.scene.env_origins[env_ids].clone()  # (N, 3)
 
-        offsets = self._sample_positions_grid(env_ids, 5, 1, 1)
-
-        ball_offset, robot_0_offset, robot_1_offset, robot_2_offset, robot_3_offset = offsets[:,0], offsets[:,1], offsets[:,2], offsets[:,3], offsets[:,4],
-
-        offset_dict = {
-            "robot_0":robot_0_offset,
-            "robot_1":robot_1_offset,
-            "robot_2":robot_2_offset,
-            "robot_3":robot_3_offset,
-        }
         # We’ll assign robots sequentially
         robot_ids = list(self.robots.keys())
 
         ball_default_state = self.ball.data.default_root_state.clone()[env_ids]
-        ball_default_state[:, :2] = ball_default_state[:, :2] + self.scene.env_origins[env_ids][:,:2] + ball_offset
+        ball_default_state[:, :2] = ball_default_state[:, :2] + self.scene.env_origins[env_ids][:,:2] +\
+        sampled_grid_pos[:, self.num_robots]
         self.ball.write_root_state_to_sim(ball_default_state, env_ids)
         self.ball.reset(env_ids)
 
@@ -491,7 +602,7 @@ class LeatherbackStage2AdversarialSoccerEnv(DirectMARLEnv):
 
             # Place robot
             default_root_state[:, :2] += origins[:, :2]
-            default_root_state[:, :2] += offset_dict[robot_id]
+            default_root_state[:, :2] += sampled_grid_pos[:, i]
 
             # Write to sim
             self.robots[robot_id].write_root_pose_to_sim(default_root_state[:, :7], env_ids)
@@ -511,6 +622,7 @@ class LeatherbackStage2AdversarialSoccerEnv(DirectMARLEnv):
         self.extras["log"].update(extras)
         extras = dict()
 
+
     def _sample_positions_grid(self, env_ids, num_samples, min_dist=1.0, grid_spacing=1.0):
         device = self.scene.env_origins.device
         N = len(env_ids)
@@ -518,9 +630,9 @@ class LeatherbackStage2AdversarialSoccerEnv(DirectMARLEnv):
         offsets = torch.zeros((N, num_samples, 2), device=device)
         env_origins = self.scene.env_origins[env_ids][:, :2].clone()
 
-        _, _, goal1_area, goal2_area = self._get_goal_areas()
-        goal1_min, goal1_max = goal1_area
-        goal2_min, goal2_max = goal2_area
+        _, _, goal0_area, goal1_area = self._get_goal_areas()
+        goal1_min, goal1_max = goal0_area
+        goal2_min, goal2_max = goal1_area
 
         all_valid_points = []  # collect per-env lists
 
@@ -554,6 +666,7 @@ class LeatherbackStage2AdversarialSoccerEnv(DirectMARLEnv):
 
         return offsets
     
+
     @torch.no_grad()
     def _draw_grid_markers(self):
         """
@@ -580,7 +693,7 @@ class LeatherbackStage2AdversarialSoccerEnv(DirectMARLEnv):
 
         marker_positions = torch.cat(pos_chunks, dim=0)      # (M, 3)
         marker_indices  = torch.cat(idx_chunks, dim=0)       # (M,)
-        marker_scales   = 1 * torch.ones((marker_positions.shape[0], 3), device=device)
+        marker_scales   = 10 * torch.ones((marker_positions.shape[0], 3), device=device)
 
         marker_orientations = torch.zeros((marker_positions.shape[0], 4), device=device)
         marker_orientations[:, 0] = 1.0  # identity quaternion

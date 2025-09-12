@@ -14,8 +14,8 @@ from .anymal_c_soccer_running import AnymalSoccerRunningEnv, AnymalSoccerRunning
 from .anymal_c_soccer_stage_1 import AnymalStage1SoccerEnv, AnymalStage1SoccerEnvCfg
 from .anymal_c_soccer_stage_2 import AnymalStage2SoccerEnv, AnymalStage2SoccerEnvCfg
 from .anymal_c_soccer_ma_homo import AnymalSoccerMAHomoEnv, AnymalSoccerMAHomoEnvCfg
-from .anymal_c_soccer_hetero_by_team import AnymalSoccerHeteroByTeamEnv, AnymalSoccerHeteroByTeamEnvCfg
-from .anymal_c_soccer_hetero_within_team import AnymalSoccerHeteroInTeamEnv, AnymalSoccerHeteroInTeamEnvCfg
+from .anymals_vs_leatherbacks import AnymalSoccerHeteroByTeamEnv, AnymalSoccerHeteroByTeamEnvCfg
+from .anymal_leatherback_on_each_team import AnymalSoccerHeteroInTeamEnv, AnymalSoccerHeteroInTeamEnvCfg
 
 ##
 # Register Gym environments.

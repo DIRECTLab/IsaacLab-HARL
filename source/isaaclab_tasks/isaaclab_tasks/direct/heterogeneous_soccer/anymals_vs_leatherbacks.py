@@ -85,7 +85,7 @@ class AnymalSoccerHeteroByTeamEnvCfg(DirectMARLEnvCfg):
     leatherback_observation_spaces = {f"leatherback_{i}": 24 for i in range(2)}
     observation_spaces = anymal_observation_spaces | leatherback_observation_spaces
     state_space = 0
-    state_spaces = {f"robot_{i}": 0 for i in range(4)}
+    state_spaces = {robot: 0 for robot in observation_spaces.keys()}
     possible_agents = ["anymal_0", "anymal_1", "leatherback_0", "leatherback_1"]
 
     teams = {
@@ -97,19 +97,19 @@ class AnymalSoccerHeteroByTeamEnvCfg(DirectMARLEnvCfg):
 
     anymal_0: ArticulationCfg = ANYMAL_C_CFG.replace(prim_path="/World/envs/env_.*/Anymal_0")
     anymal_0.init_state.rot = get_quaternion_tuple_from_xyz(0,0,torch.pi)
-    anymal_0.init_state.pos = (-1.0, -2.0, .3)
+    anymal_0.init_state.pos = (0, 0, .5)
 
     anymal_1: ArticulationCfg = ANYMAL_C_CFG.replace(prim_path="/World/envs/env_.*/Anymal_1")
     anymal_1.init_state.rot = get_quaternion_tuple_from_xyz(0,0,torch.pi)
-    anymal_1.init_state.pos = (-1.0, 2.0, .3)
+    anymal_1.init_state.pos = (0, 0, .5)
 
     leatherback_0: ArticulationCfg = LEATHERBACK_CFG.replace(prim_path="/World/envs/env_.*/Leatherback_0")
     leatherback_0.init_state.rot = get_quaternion_tuple_from_xyz(0,0,torch.pi)
-    leatherback_0.init_state.pos = (1.0, -2.0, .3)
+    leatherback_0.init_state.pos = (0, 0, .3)
 
     leatherback_1: ArticulationCfg = LEATHERBACK_CFG.replace(prim_path="/World/envs/env_.*/Leatherback_1")
     leatherback_1.init_state.rot = get_quaternion_tuple_from_xyz(0,0,torch.pi)
-    leatherback_1.init_state.pos = (1.0, 2.0, .3)
+    leatherback_1.init_state.pos = (0, 0, .3)
 
     wall_0 = RigidObjectCfg(
         prim_path="/World/envs/env_.*/Object0",
@@ -225,8 +225,12 @@ class AnymalSoccerHeteroByTeamEnv(DirectMARLEnv):
         self._episode_sums = {
             key: torch.zeros(self.num_envs, dtype=torch.float, device=self.device)
             for key in [
-                "goal_reward_team0",
-                "goal_reward_team1",
+                "team_0_score_reward",
+                "team_0_ball_to_goal_reward",
+                "team_0_timestep_reward",
+                "team_1_score_reward",
+                "team_1_ball_to_goal_reward",
+                "team_1_timestep_reward",
             ]
         }
 
@@ -244,7 +248,7 @@ class AnymalSoccerHeteroByTeamEnv(DirectMARLEnv):
                 },
         )
         self.goal_area = VisualizationMarkers(marker_cfg)
-        self.goal1_pos, self.goal2_pos, self.goal1_area, self.goal2_area = self._get_goal_areas()
+        self.goal0_pos, self.goal1_pos, self.goal0_area, self.goal1_area = self._get_goal_areas()
         self.target_goal = torch.zeros(self.num_envs, dtype=torch.int32, device=self.device)
         team_dot_markers = {
             "blue": sim_utils.SphereCfg(
@@ -310,8 +314,8 @@ class AnymalSoccerHeteroByTeamEnv(DirectMARLEnv):
                 pos[:, 2] += 0.5  # hover above robot
                 positions.append(pos)
     
-                team = "blue" if "0" in team else "red"
-                indices.append(torch.full((self.num_envs,), 0 if team=="blue" else 1, device=self.device))
+                team_color = "blue" if "0" in team else "red"
+                indices.append(torch.full((self.num_envs,), 0 if team_color=="blue" else 1, device=self.device))
 
         marker_positions = torch.cat(positions, dim=0)
         marker_indices = torch.cat(indices, dim=0)
@@ -326,7 +330,7 @@ class AnymalSoccerHeteroByTeamEnv(DirectMARLEnv):
 
         marker_ids = torch.concat([marker_ids0, marker_ids1], dim=0)
 
-        marker_locations = torch.concat([self.goal1_pos, self.goal2_pos], dim=0)
+        marker_locations = torch.concat([self.goal0_pos, self.goal1_pos], dim=0)
 
         self.goal_area.visualize(marker_locations, marker_indices=marker_ids)
 
@@ -362,7 +366,7 @@ class AnymalSoccerHeteroByTeamEnv(DirectMARLEnv):
         for team in self.cfg.teams.keys():
             all_obs[team] = {}
             for robot_id in self.cfg.teams[team]:
-                if robot_id in self.leatherbacks.keys():
+                if robot_id in self.anymals.keys():
                     robot_state = (
                         self.robots[robot_id].data.root_lin_vel_b,
                         self.robots[robot_id].data.root_ang_vel_b,
@@ -390,13 +394,13 @@ class AnymalSoccerHeteroByTeamEnv(DirectMARLEnv):
                 target_goal_pos, _ = subtract_frame_transforms(
                     self.robots[robot_id].data.root_state_w[:, :3],
                     self.robots[robot_id].data.root_state_w[:, 3:7],
-                    self.goal2_pos if team == "team_0" else self.goal1_pos  
+                    self.goal1_pos if team == "team_0" else self.goal0_pos  
                 )
 
                 other_goal_pos, _ = subtract_frame_transforms(
                     self.robots[robot_id].data.root_state_w[:, :3],
                     self.robots[robot_id].data.root_state_w[:, 3:7],
-                    self.goal1_pos if team == "team_0" else self.goal2_pos
+                    self.goal0_pos if team == "team_0" else self.goal1_pos
                 )
 
                 teammate_pos, _ = subtract_frame_transforms(
@@ -415,6 +419,19 @@ class AnymalSoccerHeteroByTeamEnv(DirectMARLEnv):
                     self.robots[robot_id].data.root_state_w[:, 3:7],
                     self.robots[self.cfg.teams["team_1" if team == "team_0" else "team_0"][1]].data.root_pos_w
                 )
+
+                # buf0 = torch.zeros((self.num_envs, 9), device = self.device)
+
+
+
+                # obs = torch.cat(
+                #     robot_state + (
+                #     ball_pos,  # Ball position in robot frame (3)
+                #     ball_vel, # Ball velocity in robot frame (3)
+                #     target_goal_pos, # Target goal position in robot frame (3)
+                #     other_goal_pos,  # other goal position in robot frame (3)
+                #     buf0
+                # ), dim=-1)
 
                 obs = torch.cat(
                     robot_state + (
@@ -438,43 +455,67 @@ class AnymalSoccerHeteroByTeamEnv(DirectMARLEnv):
         ball_in_goal1, ball_in_goal2 = self._ball_in_goal_area()
         time_out = self.episode_length_buf >= self.max_episode_length - 1
         out_of_arena = self._get_out_of_arena()
-        # fallen_team_0 = self._get_fallen_robots(self.cfg.teams["team_0"])
-        # fallen_team_1 = self._get_fallen_robots(self.cfg.teams["team_1"])
 
         time_step_reward = -0.01 * torch.ones(self.num_envs, device=self.device)
 
-        team_0_score_reward = ball_in_goal2.to(torch.float32) * self.cfg.goal_reward_scale
-        team_0_loss_reward = - ball_in_goal1.to(torch.float32) - out_of_arena.to(torch.float32)# - fallen_team_0.to(torch.float32)
-        team_1_score_reward = ball_in_goal1.to(torch.float32) * self.cfg.goal_reward_scale
-        team_1_loss_reward = - ball_in_goal2.to(torch.float32) - out_of_arena.to(torch.float32)# - fallen_team_1.to(torch.float32)
+        # Distances to opponent’s goal
+        team_0_ball_distance_to_goal = torch.linalg.norm(self.ball.data.root_pos_w - self.goal0_pos, dim=1)
+        team_0_ball_distance_to_goal_mapped = 1 - torch.tanh(team_0_ball_distance_to_goal / 0.8)
 
-        rewards = {
-            "team_0": team_0_score_reward + team_0_loss_reward + time_step_reward,
-            "team_1": team_1_score_reward + team_1_loss_reward + time_step_reward,
+        team_1_ball_distance_to_goal = torch.linalg.norm(self.ball.data.root_pos_w - self.goal0_pos, dim=1)
+        team_1_ball_distance_to_goal_mapped = 1 - torch.tanh(team_1_ball_distance_to_goal / 0.8)
+
+        # Score rewards
+        team_0_score_reward = (ball_in_goal2.to(torch.float32) - ball_in_goal1.to(torch.float32)) * self.cfg.goal_reward_scale
+        team_1_score_reward = (ball_in_goal1.to(torch.float32) - ball_in_goal2.to(torch.float32)) * self.cfg.goal_reward_scale
+
+        # Team 0 rewards
+        reward_team_0 = {
+            "team_0_score_reward": team_0_score_reward,
+            "team_0_ball_to_goal_reward": team_0_ball_distance_to_goal_mapped,
+            "team_0_timestep_reward": time_step_reward,
         }
+        reward_team_0 = {k: torch.nan_to_num(v, nan=0.0, posinf=1e6, neginf=-1e6)
+                        for k, v in reward_team_0.items()}
 
-        rewards = {k: torch.nan_to_num(v, nan=0.0, posinf=1e6, neginf=-1e6)
-                for k, v in rewards.items()}
-        
-        self._episode_sums["goal_reward_team0"] += rewards["team_0"]
-        self._episode_sums["goal_reward_team1"] += rewards["team_1"]
+        for k, v in reward_team_0.items():
+            self._episode_sums[k] += v
 
-        return rewards
+        total_reward_team_0 = torch.sum(torch.stack(list(reward_team_0.values()), dim=0), dim=0)
+
+        # Team 1 rewards
+        reward_team_1 = {
+            "team_1_score_reward": team_1_score_reward,
+            "team_1_ball_to_goal_reward": team_1_ball_distance_to_goal_mapped,
+            "team_1_timestep_reward": time_step_reward,
+        }
+        reward_team_1 = {k: torch.nan_to_num(v, nan=0.0, posinf=1e6, neginf=-1e6)
+                        for k, v in reward_team_1.items()}
+
+        for k, v in reward_team_1.items():
+            self._episode_sums[k] += v
+
+        total_reward_team_1 = torch.sum(torch.stack(list(reward_team_1.values()), dim=0), dim=0)
+
+        return {
+            "team_0": total_reward_team_0,
+            "team_1": total_reward_team_1,
+        }
     
     def _get_goal_areas(self):
         goal1_size = self.goal_area.cfg.markers['goal1'].size
-        goal1_pos = self.scene.env_origins.clone() + torch.tensor([-9.25, 0.0, 0.05], device=self.device)
+        goal0_pos = self.scene.env_origins.clone() + torch.tensor([-9.25, 0.0, 0.05], device=self.device)
 
         goal2_size = self.goal_area.cfg.markers['goal2'].size
-        goal2_pos = self.scene.env_origins.clone() + torch.tensor([9.25, 0.0, 0.05], device=self.device)
+        goal1_pos = self.scene.env_origins.clone() + torch.tensor([9.25, 0.0, 0.05], device=self.device)
 
         # Extract goal area from goal post positions
-        goal1_min = goal1_pos + torch.tensor([-goal1_size[0]/2, -goal1_size[1]/2, 0], device=self.device)
-        goal1_max = goal1_pos + torch.tensor([goal1_size[0]/2, goal1_size[1]/2, 0], device=self.device)   
-        goal2_min = goal2_pos + torch.tensor([-goal2_size[0]/2, -goal2_size[1]/2, 0], device=self.device)
-        goal2_max = goal2_pos + torch.tensor([goal2_size[0]/2, goal2_size[1]/2, 0], device=self.device)
+        goal1_min = goal0_pos + torch.tensor([-goal1_size[0]/2, -goal1_size[1]/2, 0], device=self.device)
+        goal1_max = goal0_pos + torch.tensor([goal1_size[0]/2, goal1_size[1]/2, 0], device=self.device)   
+        goal2_min = goal1_pos + torch.tensor([-goal2_size[0]/2, -goal2_size[1]/2, 0], device=self.device)
+        goal2_max = goal1_pos + torch.tensor([goal2_size[0]/2, goal2_size[1]/2, 0], device=self.device)
 
-        return goal1_pos, goal2_pos, (goal1_min, goal1_max), (goal2_min, goal2_max)
+        return goal0_pos, goal1_pos, (goal1_min, goal1_max), (goal2_min, goal2_max)
     
     def _get_out_of_arena(self):
         out_of_arena = torch.zeros(self.num_envs, dtype=torch.int8, device=self.device)
@@ -493,8 +534,8 @@ class AnymalSoccerHeteroByTeamEnv(DirectMARLEnv):
     
     def _ball_in_goal_area(self):
         ball_pos = self.ball.data.root_pos_w[:, :2]
-        in_goal1 = torch.all((ball_pos >= self.goal1_area[0][:,:2]) & (ball_pos <= self.goal1_area[1][:,:2]), dim=1)
-        in_goal2 = torch.all((ball_pos >= self.goal2_area[0][:,:2]) & (ball_pos <= self.goal2_area[1][:,:2]), dim=1)
+        in_goal1 = torch.all((ball_pos >= self.goal0_area[0][:,:2]) & (ball_pos <= self.goal0_area[1][:,:2]), dim=1)
+        in_goal2 = torch.all((ball_pos >= self.goal1_area[0][:,:2]) & (ball_pos <= self.goal1_area[1][:,:2]), dim=1)
         return in_goal1, in_goal2
 
     def _get_dones(self) -> tuple[dict, dict]:
@@ -589,16 +630,16 @@ class AnymalSoccerHeteroByTeamEnv(DirectMARLEnv):
         offsets = torch.zeros((N, num_samples, 2), device=device)
         env_origins = self.scene.env_origins[env_ids][:, :2].clone()
 
-        _, _, goal1_area, goal2_area = self._get_goal_areas()
-        goal1_min, goal1_max = goal1_area
-        goal2_min, goal2_max = goal2_area
+        _, _, goal0_area, goal1_area = self._get_goal_areas()
+        goal1_min, goal1_max = goal0_area
+        goal2_min, goal2_max = goal1_area
 
         all_valid_points = []  # collect per-env lists
 
         for i in range(N):
-            xs = torch.arange(env_origins[i, 0] - 8, env_origins[i, 0] + 9,
+            xs = torch.arange(env_origins[i, 0] - 9, env_origins[i, 0] + 10,
                             grid_spacing, device=device)
-            ys = torch.arange(env_origins[i, 1] - 3, env_origins[i, 1] + 4,
+            ys = torch.arange(env_origins[i, 1] - 4, env_origins[i, 1] + 5,
                             grid_spacing, device=device)
             xv, yv = torch.meshgrid(xs, ys, indexing="ij")
             grid_points = torch.stack([xv.flatten(), yv.flatten()], dim=-1)
@@ -621,7 +662,7 @@ class AnymalSoccerHeteroByTeamEnv(DirectMARLEnv):
 
         # save for visualization
         self.valid_points = all_valid_points  
-        self._draw_grid_markers()
+        # self._draw_grid_markers()
 
         return offsets
     

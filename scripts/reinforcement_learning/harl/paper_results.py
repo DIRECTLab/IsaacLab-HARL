@@ -21,6 +21,7 @@ def main(args):
 
     learned_agent_names = list(args.learned_agents_names.split(','))
     unlearned_agent_names = list(args.unlearned_agents_names.split(','))
+    num_envs, num_steps_per_episode = args.num_envs_episode_length(',')
 
     results = {}
 
@@ -31,8 +32,9 @@ def main(args):
         ):
             if "episode" in curr_folder:
                 episode_num = int(curr_folder.split("_")[-1])
-
+                num_steps = episode_num * num_steps_per_episode * num_envs
                 results.setdefault("episode_num", []).append(episode_num)
+                results.setdefault("num_steps", []).append(num_steps)
                 curr_checkpoint_path = checkpoints_path / curr_folder
                 new_checkpoint_path = checkpoints_path / "curr_checkpoint"
 
@@ -134,6 +136,8 @@ if __name__ == "__main__":
     parser.add_argument("--checkpoint_path", type=str, required=True, help="Path to checkpoints directory")
     parser.add_argument("--learned_agents_names", type=str, required=True, help="Agents to evaluate adversarial learning, separated by commas i.e 'agent_1_name,agent_2_name'")
     parser.add_argument("--unlearned_agents_names", type=str, required=True, help="Agents to evaluate against, separated by commas 'agent_1_name,agent_2_name'")
+    parser.add_argument("--num_envs_episode_length", type=str, required=True, help="For calculating the number of steps given the episodes, this parameters should be" \
+    "formatted as 'num_envs,episode_length'")
     parser.add_argument("--eval_script", type=str, default="./get_adversarial_results.py", help="Evaluation script path")
 
     parser.add_argument("--outdir", type=str, help="Output directory for results and plots")

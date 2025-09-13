@@ -73,7 +73,7 @@ class AnymalSoccerRunningEnvCfg(DirectMARLEnvCfg):
     action_space = 12
     action_spaces = {f"robot_{i}": 12 for i in range(1)}
     observation_space = 100
-    observation_spaces = {f"robot_{i}": 100 for i in range(1)}
+    observation_spaces = {f"robot_{i}": 98 for i in range(1)}
     state_space = 0
     state_spaces = {f"robot_{i}": 0 for i in range(1)}
     possible_agents = [f"robot_{i}" for i in range(1)]
@@ -280,7 +280,7 @@ class AnymalSoccerRunningEnv(DirectMARLEnv):
                     self._desired_pos
                 )
 
-            zero_buffer = torch.zeros((self.num_envs, 52), device=self.device)
+            zero_buffer = torch.zeros((self.num_envs, 50), device=self.device)
 
             obs_vec = torch.cat(
                 [

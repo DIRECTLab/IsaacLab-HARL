@@ -161,17 +161,17 @@ class MinitankStage3v2EnvCfg(DirectMARLEnvCfg):
 
         ### MINITANK CONFIGURATION ###
     minitank_0: ArticulationCfg = MINITANK_CFG.replace(prim_path="/World/envs/env_.*/Minitank_0")
-    minitank_0.init_state.pos = (7.0, 0.5, 0.2)
+    minitank_0.init_state.pos = (3.0, 0.5, 0.2)
 
     minitank_1: ArticulationCfg = MINITANK_CFG.replace(prim_path="/World/envs/env_.*/Minitank_1")
-    minitank_1.init_state.pos = (7.0, -0.5, 0.2)
+    minitank_1.init_state.pos = (3.0, -0.5, 0.2)
 
     # Drone configs
     drone_0: ArticulationCfg = CRAZYFLIE_CFG.replace(prim_path="/World/envs/env_.*/Drone_0")
-    drone_0.init_state.pos = (-7.0, .10, 1.0)
+    drone_0.init_state.pos = (-3.0, .10, 3.0)
 
     drone_1: ArticulationCfg = CRAZYFLIE_CFG.replace(prim_path="/World/envs/env_.*/Drone_1")
-    drone_1.init_state.pos = (-7.0, -.10, 1.0)
+    drone_1.init_state.pos = (-3.0, -.10, 3.0)
 
     # simulation
     sim: SimulationCfg = SimulationCfg(

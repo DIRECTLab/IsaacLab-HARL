@@ -26,7 +26,9 @@ parser.add_argument("--exp_name", type=str, default="test", help="Name of the Ex
 parser.add_argument("--num_env_steps", type=int, default=None, help="RL Policy training iterations.")
 parser.add_argument("--dir", type=str, default=None, help="folder with trained models")
 parser.add_argument("--debug", action="store_true", help="whether to run in debug mode for visualization")
-parser.add_argument("--adversarial_training_mode", default="parallel", choices=["parallel", "ladder", "leapfrog"], help="the mode type for adversarial training")
+parser.add_argument("--adversarial_training_mode", default="parallel", choices=["parallel", "ladder", "leapfrog"], help="the mode type for adversarial training,\
+                     note on ladder training with teams that are composed of heterogenous agents, the two teams must place the robots in the same order in their environment \
+                    for ladder to work")
 parser.add_argument("--adversarial_training_iterations", default=50_000_000, type=int,help="the number of iterations to swap training for adversarial modes like ladder and leapfrog")
 
 parser.add_argument(

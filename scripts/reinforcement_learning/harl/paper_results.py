@@ -21,7 +21,7 @@ def main(args):
 
     learned_agent_names = list(args.learned_agents_names.split(','))
     unlearned_agent_names = list(args.unlearned_agents_names.split(','))
-    num_envs, num_steps_per_episode = args.num_envs_episode_length(',')
+    num_envs, num_steps_per_episode = args.num_envs_episode_length.split(',')
 
     results = {}
 
@@ -32,7 +32,7 @@ def main(args):
         ):
             if "episode" in curr_folder:
                 episode_num = int(curr_folder.split("_")[-1])
-                num_steps = episode_num * num_steps_per_episode * num_envs
+                num_steps = episode_num * int(num_steps_per_episode) * int(num_envs)
                 results.setdefault("episode_num", []).append(episode_num)
                 results.setdefault("num_steps", []).append(num_steps)
                 curr_checkpoint_path = checkpoints_path / curr_folder

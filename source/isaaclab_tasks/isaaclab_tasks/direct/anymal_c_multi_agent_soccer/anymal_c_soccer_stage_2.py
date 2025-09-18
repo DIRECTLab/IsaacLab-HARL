@@ -131,7 +131,6 @@ class AnymalStage2SoccerEnvCfg(DirectMARLEnvCfg):
     goal_reward_scale = 20
     fallen_penalty_scale = -5
     ball_to_goal_reward_scale = 1.0
-    dist_to_ball_reward_scale = 1.0
     ball_velocity_scale = 1.0
 
 class AnymalStage2SoccerEnv(DirectMARLEnv):
@@ -157,11 +156,9 @@ class AnymalStage2SoccerEnv(DirectMARLEnv):
         self._episode_sums = {
             key: torch.zeros(self.num_envs, dtype=torch.float, device=self.device)
             for key in [
-                "dist_to_ball_reward",
                 "ball_velocity_reward",
                 "ball_to_goal_reward",
                 "goal_reward",
-                "fallen_penalty",
             ]
         }
 
@@ -311,10 +308,6 @@ class AnymalStage2SoccerEnv(DirectMARLEnv):
         ball_vel = torch.norm(self.ball.data.root_lin_vel_w, dim=1)
         ball_vel_reward = torch.tanh(ball_vel / .8)
 
-        robot_distance_to_ball = torch.linalg.norm(self.robots["robot_0"].data.root_pos_w[:, :3] - self.ball.data.root_pos_w, dim=1)
-        robot_distance_to_ball_mapped = 1 - torch.tanh(robot_distance_to_ball / .8)
-        
-        fallen = self.robots["robot_0"].data.root_com_pos_w[:, 2] < .1
         goal_reward = torch.zeros(self.num_envs, device=self.device)
         # Reward is 1 if ball is in target goal area, if in other goal area, reward is -1
         goal_reward[ball_in_goal1 & (self.target_goal == 0)] = 1.0
@@ -323,10 +316,8 @@ class AnymalStage2SoccerEnv(DirectMARLEnv):
         goal_reward[ball_in_goal2 & (self.target_goal == 0)] = -1.0
 
         rewards = {
-            "dist_to_ball_reward": robot_distance_to_ball_mapped * self.cfg.dist_to_ball_reward_scale * self.step_dt,
             "ball_velocity_reward": ball_vel_reward  * self.cfg.ball_velocity_scale * self.step_dt,
             "ball_to_goal_reward": ball_distance_to_goal_mapped  * self.cfg.ball_to_goal_reward_scale * self.step_dt,
-            "fallen_penalty": fallen * self.cfg.fallen_penalty_scale,
             "goal_reward": goal_reward * self.cfg.goal_reward_scale,
         }
 
@@ -405,7 +396,7 @@ class AnymalStage2SoccerEnv(DirectMARLEnv):
         self.goals_scored[env_ids] = 0
         self.own_goals_scored[env_ids] = 0
 
-        self.target_goal[env_ids] = torch.randint(0, 2, (num_reset_ids,), device=self.device).to(torch.int32)
+        self.target_goal[env_ids] = 1#torch.randint(0, 2, (num_reset_ids,), device=self.device).to(torch.int32)
 
         self._draw_goal_areas()
 

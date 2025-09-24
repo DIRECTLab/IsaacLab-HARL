@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta name="description" content="A framework for training realistic Heterogeneous Multi-Agent Reinforcement Learning (HARL) environments in NVIDIA's IsaacLab.">
+    <meta name="keywords" content="IsaacLab, MARL, HARL, Multi-Agent Reinforcement Learning, Robotics">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    
+    <title>HARL in IsaacLab: Realistic Multi-Agent RL</title>
+    
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css?family=Google+Sans|Noto+Sans|Castoro" rel="stylesheet">
+    
+    <!-- Stylesheets -->
+    <link rel="stylesheet" href="./static/css/bulma.min.css">  <!-- Bulma CSS Framework -->
+    <link rel="stylesheet" href="./static/css/index.css">  <!-- Custom Styles -->
+    <link rel="icon" href="./static/images/favicon.svg">  <!-- Favicon -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
+    
+    <!-- jQuery Library -->
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+    
+    <!-- Google Analytics (Commented out for now) -->
+    <!-- 
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-PYVRSFMDRL"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag() { dataLayer.push(arguments); }
+        gtag('js', new Date());
+        gtag('config', 'G-PYVRSFMDRL');
+    </script> 
+    -->
+</head>
+<body>
+
+<!-- Navigation Bar -->
+<nav class="navbar">
+    <div class="navbar-brand">
+        <a role="button" class="navbar-burger">
+            <span aria-hidden="true"></span>
+            <span aria-hidden="true"></span>
+            <span aria-hidden="true"></span>
+        </a>
+    </div>
+    <div class="navbar-menu">
+        <div class="navbar-start" style="flex-grow: 1; justify-content: center;">
+            <a class="navbar-item" href="https://github.com/DIRECTLab/IsaacLab-HARL">
+                <span class="icon"><i class="fa fa-github"></i></span>
+                <span>GitHub</span>
+            </a>
+        </div>
+    </div>
+</nav>
+
+<!-- Hero Section: Title & Authors -->
+<section class="hero">
+    <div class="hero-body">
+        <div class="container is-max-desktop">
+            <div class="columns is-centered">
+                <div class="column has-text-centered">
+                    <h1 class="title is-1 publication-title">Heterogeneous Multi-Agent Learning in Isaac Lab: Scalable Simulation for Robotic Collaboration</h1>
+                    
+                    <!-- Author List -->
+                    <div class="is-size-5 publication-authors">
+                        <span class="author-block"><a href="#">Jacob Haight</a><sup>1</sup>,</span>
+                        <span class="author-block"><a href="#">Isaac Peterson</a><sup>1</sup>,</span>
+                        <span class="author-block"><a href="https://zenif-night.github.io">Christopher Allred</a><sup>1, 2</sup>,</span>
+                        <span class="author-block"><a href="#">Mario Harper</a><sup>1</sup></span>
+                        <div class="is-size-5 publication-authors">
+                            <span class="author-block"><sup>1</sup> Utah State University,</span>
+                            <span class="author-block"><sup>2</sup>DEVCOM Army Research Laboratory</span>
+                        </div>
+                    </div>
+
+                    <!-- Links to Paper and Code -->
+                    <div class="publication-links">
+                        <span class="link-block">
+                            <a href="https://arxiv.org/pdf/YOUR_PAPER_ID.pdf" class="external-link button is-normal is-rounded is-dark">
+                                <span class="icon"><i class="fa fa-file-pdf-o"></i></span>
+                                <span>Paper</span>
+                            </a>
+                        </span>
+                        <span class="link-block">
+                            <a href="https://github.com/DIRECTLab/IsaacLab-HARL_HARL" class="external-link button is-normal is-rounded is-dark">
+                                <span class="icon"><i class="fa fa-github"></i></span>
+                                <span>Code</span>
+                            </a>
+                        </span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- Video Teaser Section -->
+<section class="hero teaser">
+    <div class="container is-max-desktop">
+        <div class="hero-body">
+            <video id="teaser" autoplay muted loop playsinline height="100%">
+                <source src="./static/videos/rl-video-step-80000.mp4" type="video/mp4">
+            </video>
+            <h2 class="subtitle has-text-centered">
+                <span class="dnerf">Heterogeneous Multi-Agent Learning in Isaac Lab: Scalable Simulation for Robotic Collaboration</span>
+            </h2>
+        </div>
+    </div>
+</section>
+
+<!-- Abstract Section -->
+<section class="section">
+    <div class="container is-max-desktop">
+        <div class="columns is-centered has-text-centered">
+            <div class="column is-four-fifths">
+                <h2 class="title is-3">Abstract</h2>
+                <div class="content has-text-justified">
+                    <p>
+                        Multi-Agent Reinforcement Learning (MARL) plays a crucial role in robotic coordination and control, yet existing simulation environments often lack the fidelity and scalability needed for real-world applications. In this work, we extend Isaac Lab to support efficient training of both homogeneous and heterogeneous multi-agent robotic policies in high-fidelity physics simulations. Our contributions include the development of diverse MARL environments tailored for robotic coordination, integration of Heterogeneous Agent Reinforcement Learning (HARL) algorithms, and a scalable GPU-accelerated framework optimized for large-scale training. We evaluate our framework using two state-of-the-art MARL algorithms Multi-Agent Reinforcement Learning with Proximal Policy Optimization (MAPPO) and Heterogeneous Agent Reinforcement Learning with Proximal Policy Optimization (HAPPO) across six challenging robotic tasks. Our results confirm the feasibility of training heterogeneous agents in high-fidelity environments while maintaining the scalability and performance benefits of Isaac Lab. By enabling realistic multi-agent learning at scale, our work lays a foundation for advancing MARL research in physics-driven robotics. The source code and demonstration videos are available at <a href="https://some45bucks.github.io/IsaacLab-HARL/">https://some45bucks.github.io/IsaacLab-HARL/</a>.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+
+<!-- Video Demonstration -->
+<section class="section">
+    <div class="container is-max-desktop">
+        <h2 class="title is-3">Video</h2>
+        <div class="publication-video">
+            <iframe width="560" height="315" src="https://www.youtube.com/embed/GCoUsj5UNqY?si=lpu7CJoxEInTpHHS" frameborder="0" allow="autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen></iframe>
+        </div>
+    </div>
+</section>
+
+<!-- Video Demonstration -->
+<section class="section">
+    <div class="container is-max-desktop">
+        <h2 class="title is-3">Team Coordination</h2>
+        <div class="publication-video">
+            <iframe src="https://www.youtube.com/embed/misjumC_yiI?si=2IZmnFJyw1iwyVsk" frameborder="0" allow="autoplay; encrypted-media" allowfullscreen></iframe>
+        </div>
+    </div>
+</section>
+
+<!-- Figures Section -->
+<section class="section">
+    <div class="container is-max-desktop">
+        <h2 class="title">Figures</h2>
+
+        <h3 class="title is-4">Multi-Agent RL Environments</h3>
+        <p>Overview of the developed multi-agent RL environments in IsaacLab.</p>
+        <img src="./static/images/all_envs.png" alt="Multi-Agent RL Environments" class="image">
+
+        <h3 class="title is-4">Learned Collaboration</h3>
+        <p>Comparison of agent coordination before and after training.</p>
+        <img src="./static/images/learned_colaberation.png" alt="Learned Collaboration" class="image">
+
+        <h3 class="title is-4">Performance Results</h3>
+        <p>Learning curves comparing MAPPO and HAPPO algorithms.</p>
+        <img src="./static/images/results.png" alt="Performance Results" class="image">
+    </div>
+</section>
+
+<!-- BibTeX Citation -->
+<section class="section">
+    <div class="container is-max-desktop">
+        <h2 class="title">BibTeX</h2>
+        <pre><code>@inproceedings{haight2025heterogeneous,
+  author    = {Haight, Jacob and Peterson, Isaac and Allred, Christopher and Harper, Mario},
+  title     = {Heterogeneous Multi-Agent Learning in Isaac Lab: Scalable Simulation for Robotic Collaboration},
+  booktitle = {Proceedings of the IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS)},
+  year      = {2025},
+  pages     = {xx--xx},
+  address   = {Hangzhou, China},
+  publisher = {IEEE},
+  doi       = {DOI_TBD_HERE},
+  url       = {https://directlab.github.io/IsaacLab-HARL/
+}
+}</code></pre>
+    </div>
+</section>
+
+<!-- Footer Section -->
+<footer class="footer">
+    <div class="container has-text-centered">
+        <a class="icon-link" href="https://github.com/DIRECTLab/IsaacLab-HARL">
+            <i class="fa fa-github"></i>
+        </a>
+        <p>This website is licensed under a <a rel="license" href="http://creativecommons.org/licenses/by-sa/4.0/">Creative Commons License</a>.</p>
+        <p>Website template by <a href="https://github.com/nerfies/nerfies.github.io">Nefi</a>.</p>
+    </div>
+</footer>
+
+</body>
+</html>

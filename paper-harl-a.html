@@ -2,11 +2,11 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="description" content="A framework for training realistic Heterogeneous Multi-Agent Reinforcement Learning (HARL) environments in NVIDIA's IsaacLab." />
+  <meta name="description" content="Adversarial Heterogeneous Multi-Agent Reinforcement Learning (HARL)" />
   <meta name="keywords" content="IsaacLab, MARL, HARL, Multi-Agent Reinforcement Learning, Robotics" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
 
-  <title>HARL-A in IsaacLab: Realistic Multi-Agent RL</title>
+  <title>Adversarial HARL in IsaacLab: Realistic Multi-Agent RL</title>
 
   <!-- Google Fonts -->
   <link href="https://fonts.googleapis.com/css?family=Google+Sans|Noto+Sans|Castoro" rel="stylesheet" />
@@ -243,9 +243,64 @@
           </figure>
         </article>
       </div>
+    <!-- Environment Videos Section -->
+</div>
+</div>
+</section>
+<section class="section is-light" id="env-videos">
+  <div class="container is-max-desktop">
+    <h2 class="title is-3">Environment Videos</h2>
+    <div class="columns is-multiline">
+
+      <!-- Sumo video -->
+      <div class="column is-12-mobile is-4-tablet">
+        <div class="video is-16by9" style="margin-bottom:0.5rem; aspect-ratio:16/9; max-width:100%;">
+          <iframe
+            src="https://www.youtube.com/embed/IV1fg8_Izlw"
+            title="Sumo (Heterogeneous) Demo"
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+            allowfullscreen
+            loading="lazy"
+            referrerpolicy="strict-origin-when-cross-origin"
+            style="width:100%; height:100%; display:block; object-fit:contain; border-radius:12px;"></iframe>
+        </div>
+        <p class="is-size-7 is-muted has-text-centered">Sumo (Leatherback Stage 1)</p>
+      </div>
+
+      <!-- Soccer video -->
+      <div class="column is-12-mobile is-4-tablet">
+        <div class="video is-16by9" style="margin-bottom:0.5rem; aspect-ratio:16/9; max-width:100%;">
+          <iframe
+            src="https://www.youtube.com/embed/v4tYHn3ngsk"
+            title="Soccer (1v1 / 2v2) Demo"
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+            allowfullscreen
+            loading="lazy"
+            referrerpolicy="strict-origin-when-cross-origin"
+            style="width:100%; height:100%; display:block; object-fit:contain; border-radius:12px;"></iframe>
+        </div>
+        <p class="is-size-7 is-muted has-text-centered">Soccer (Leatherback Stage 1)</p>
+      </div>
+
+      <!-- 3D Galaga video -->
+      <div class="column is-12-mobile is-4-tablet">
+        <div class="video is-16by9" style="margin-bottom:0.5rem; aspect-ratio:16/9; max-width:100%;">
+          <iframe
+            src="https://www.youtube.com/embed/qqgj2oZZ7cw"
+            title="3D Galaga: Aerial–Ground Interception Demo"
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+            allowfullscreen
+            loading="lazy"
+            referrerpolicy="strict-origin-when-cross-origin"
+            style="width:100%; height:100%; display:block; object-fit:contain; border-radius:12px;"></iframe>
+        </div>
+        <p class="is-size-7 is-muted has-text-centered">3D Galaga: Aerial–Ground Interception</p>
+      </div>
+
     </div>
   </div>
 </section>
+
 
 <!-- Results -->
 <section class="section is-light" id="results">
@@ -261,8 +316,6 @@
             <img src="./static/images/harl-a/emergent_behaviors.png" alt="Emergent strategies: destabilization and dragging" />
           </figure>
         </article>
-      </div>
-      <div class="column">
         <article class="box">
           <h3 class="title is-5">Win-Rates Over Time</h3>
           <p>Trained policies consistently outperform initial versions across environments; both alternating and simultaneous training are effective.</p>

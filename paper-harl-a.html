@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="description" content="A framework for training realistic Heterogeneous Multi-Agent Reinforcement Learning (HARL) environments in NVIDIA's IsaacLab." />
+  <meta name="keywords" content="IsaacLab, MARL, HARL, Multi-Agent Reinforcement Learning, Robotics" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <title>HARL-A in IsaacLab: Realistic Multi-Agent RL</title>
+
+  <!-- Google Fonts -->
+  <link href="https://fonts.googleapis.com/css?family=Google+Sans|Noto+Sans|Castoro" rel="stylesheet" />
+
+  <!-- Stylesheets -->
+  <link rel="stylesheet" href="./static/css/bulma.min.css" />
+  <link rel="stylesheet" href="./static/css/index.css" />
+  <link rel="icon" href="./static/images/harl-a/favicon.svg" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css"/>
+
+  <!-- jQuery Library -->
+  <!-- <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script> -->
+
+  <style>
+    :root {
+      --accent: #3c6df0;
+      --bg-soft: #f7f9fc;
+    }
+    body { font-family: "Noto Sans", system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial; }
+    .navbar { border-bottom: 1px solid #eee; }
+    .hero { background: linear-gradient(180deg, #ffffff 0%, var(--bg-soft) 100%); }
+    .hero .title { font-family: "Google Sans", "Noto Sans", sans-serif; }
+    .subtitle.em { font-family: "Castoro", Georgia, serif; font-style: italic; color: #4a4a4a; }
+    .author-list a { color: #363636; text-decoration: none; border-bottom: 1px dotted rgba(0,0,0,.2); }
+    .btn-row .button { margin: 0 .35rem .35rem 0; }
+    .is-accent { background: var(--accent); color: #fff; }
+    .is-accent:hover { filter: brightness(0.95); }
+    .figure-card { border-radius: 16px; overflow: hidden; box-shadow: 0 8px 24px rgba(0,0,0,.06); }
+    .badge { display:inline-flex; align-items:center; gap:.4rem; background:#fff; border:1px solid #e5e9f2; border-radius:999px; padding:.4rem .75rem; font-size:.9rem; }
+    .section.is-light { background: var(--bg-soft); }
+    code.bib { white-space: pre; display:block; padding:1rem; background:#111; color:#e6e6e6; border-radius:12px; overflow:auto; }
+    .footnote { color:#666; font-size:.95rem; }
+    .sticky-nav { position: sticky; top: 0; z-index: 50; background: #fff; }
+    .video-embed, .teaser-img { width:100%; border-radius: 14px; }
+    .icon.is-inline { vertical-align: middle; }
+    .smallcaps { font-variant: small-caps; letter-spacing: .03em; }
+    .is-muted { color:#6b7280; }
+
+    /* Make images fluid, full width of their container, preserve intrinsic aspect */
+    .image,
+    .figure-card { width: 100%; }
+
+    .image img,
+    .figure-card img,
+    .teaser-img {
+    display: block;
+    width: 100%;
+    height: auto;         /* keep natural aspect ratio */
+    }
+
+    /* (optional) if any image has inline height/fit overrides, neutralize them */
+    img[style*="height:"],
+    img[style*="object-fit:"] {
+    height: auto !important;
+    object-fit: unset !important;
+    }
+
+  </style>
+</head>
+<body>
+
+<!-- Navigation Bar -->
+<nav class="navbar sticky-nav" role="navigation" aria-label="main navigation">
+  <div class="container">
+    <div class="navbar-brand">
+      <a class="navbar-item" href="#">
+        <span class="badge"><i class="fa fa-rocket"></i><strong>HARL-A</strong></span>
+      </a>
+
+      <a role="button" class="navbar-burger" aria-label="menu" aria-expanded="false" data-target="navMenu">
+        <span aria-hidden="true"></span>
+        <span aria-hidden="true"></span>
+        <span aria-hidden="true"></span>
+      </a>
+    </div>
+
+    <div id="navMenu" class="navbar-menu">
+      <div class="navbar-start" style="flex-grow:1; justify-content:center;">
+        <a class="navbar-item" href="#abstract">Abstract</a>
+        <a class="navbar-item" href="#environments">Environments</a>
+        <a class="navbar-item" href="#results">Results</a>
+        <a class="navbar-item" href="#citation">Citation</a>
+      </div>
+      <div class="navbar-end">
+        <a class="navbar-item" href="https://github.com/DIRECTLab/IsaacLab-HARL" target="_blank" rel="noopener">
+          <span class="icon"><i class="fa fa-github"></i></span>&nbsp;Code
+        </a>
+      </div>
+    </div>
+  </div>
+</nav>
+
+<!-- Hero Section -->
+<section class="hero">
+  <div class="hero-body">
+    <div class="container is-max-desktop">
+      <div class="columns is-centered">
+        <div class="column has-text-centered">
+          <h1 class="title is-1 publication-title">
+            A Framework for Scalable Heterogeneous Multi-Agent Adversarial RL in IsaacLab
+          </h1>
+          <p class="subtitle em">Training robust, competitive policies across morphology-diverse robot teams.</p>
+
+          <!-- Authors -->
+          <p class="author-list" style="margin-top: 1rem;">
+            <a title="Utah State University">Isaac Peterson<sup>*1</sup></a>,
+            <a title="Utah State University; US DEVCOM Army Research Laboratory">Christopher Allred<sup>*1,2</sup></a>,
+            <a title="Utah State University">Jacob Morrey<sup>1</sup></a>,
+            <a title="Utah State University">Mario Harper<sup>1</sup></a>
+          </p>
+          <p class="is-size-7 footnote" style="margin-top:.35rem;"><sup>*</sup>Equal contribution. <sup>1</sup>Utah State University. <sup>2</sup>US DEVCOM Army Research Laboratory.</p>
+
+          <!-- Action Buttons -->
+          <div class="buttons is-centered btn-row" style="margin-top:1rem;">
+            <a class="button is-accent" href="#abstract">
+              <span class="icon"><i class="fa fa-file-text-o"></i></span><span>Abstract</span>
+            </a>
+            <a class="button is-light" href="https://github.com/DIRECTLab/IsaacLab-HARL" target="_blank" rel="noopener">
+              <span class="icon"><i class="fa fa-github"></i></span><span>Code</span>
+            </a>
+            <a class="button is-light" href="#video">
+              <span class="icon"><i class="fa fa-play-circle-o"></i></span><span>Video</span>
+            </a>
+            <a class="button is-light" href="#citation">
+              <span class="icon"><i class="fa fa-quote-right"></i></span><span>Citation</span>
+            </a>
+          </div>
+
+          <!-- Teaser -->
+          <figure class="image" style="margin-top:1.25rem; max-width:1900px; margin-left:auto; margin-right:auto;">
+            <img class="teaser-img" src="./static/images/harl-a/main_idea3.png" alt="HARL-A heterogeneous adversarial environments teaser (Sumo and mixed-agent teams)" style="object-fit:cover; width:100%; height:100%;" />
+          </figure>
+
+          <p class="is-size-7 is-muted" style="margin-top:.5rem;">
+            Heterogeneous adversarial multi-agent settings in IsaacLab. Top: quadruped teams in Sumo with Leatherback rovers.
+          </p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Abstract -->
+<section class="section" id="abstract">
+  <div class="container is-max-desktop">
+    <h2 class="title is-3">Abstract</h2>
+    <div class="content is-medium">
+        <p>
+        MARL is central to robotic systems cooperating in dynamic environments. While prior work has focused on these collaborative settings, adversarial interactions are equally critical for real-world applications such as pursuit-evasion, security, and competitive manipulation. In this work, we extend the IsaacLab framework to support scalable training of adversarial policies in high-fidelity physics simulations. We introduce a suite of adversarial MARL environments featuring heterogeneous agents with asymmetric goals and capabilities. Our platform integrates a competitive variant of HAPPO, enabling efficient training and evaluation under adversarial dynamics. Experiments across several benchmark scenarios demonstrate the framework’s ability to model and train robust policies for morphologically diverse multi-agent competition while maintaining high throughput and simulation realism. Code and benchmarks are available at: <a href="https://directlab.github.io/IsaacLab-HARL/" target="_blank" rel="noopener">https://directlab.github.io/IsaacLab-HARL/</a>.
+        </p>
+    </div>
+
+    <div class="columns is-multiline" style="margin-top:1rem;">
+      <div class="column is-12-mobile is-6-tablet">
+        <article class="box">
+          <p class="smallcaps is-muted">Highlights</p>
+          <ul>
+            <li>Team-specific critics for competitive HARL (HAPPO-style) in IsaacLab.</li>
+            <li>Plug-and-play adversarial environments with curriculum learning.</li>
+            <li>Robust emergent behavior and role specialization across morphologies.</li>
+          </ul>
+        </article>
+      </div>
+      <div class="column is-12-mobile is-6-tablet">
+        <article class="box">
+          <p class="smallcaps is-muted">Resources</p>
+          <ul>
+            <li><a href="https://github.com/DIRECTLab/IsaacLab-HARL" target="_blank" rel="noopener"><i class="fa fa-github"></i> GitHub (code &amp; configs)</a></li>
+            <li><a href="#environments"><i class="fa fa-cubes"></i> Benchmark environments</a></li>
+            <li><a href="#citation"><i class="fa fa-quote-right"></i> Citation &amp; BibTeX</a></li>
+          </ul>
+        </article>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Video -->
+<section class="section is-light" id="video" style="padding-left:0; padding-right:0;">
+    <div class="container is-max-desktop" style="max-width:100vw;">
+        <h2 class="title is-3">Video</h2>
+        <div class="content" style="padding:0;">
+            <div class="figure-card" style="padding:0; width:100vw; max-width:100vw; margin-left:calc(-50vw + 50%);">
+                <div class="video is-16by9" style="width:100vw; max-width:100vw;">
+                    <iframe
+                        src="https://www.youtube.com/embed/ufpgSooXSJM"
+                        title="HARL-A Demonstration Video"
+                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                        allowfullscreen
+                        loading="lazy"
+                        referrerpolicy="strict-origin-when-cross-origin"
+                        style="width:100vw; height:56.25vw; max-width:100vw; max-height:calc(100vw * 9 / 16); display:block;">
+                    </iframe>
+                </div>
+            </div>
+            <p class="is-size-7 is-muted" style="margin-top:.5rem;">
+                Demonstration video: heterogeneous adversarial multi-agent learning in IsaacLab.
+            </p>
+        </div>
+    </div>
+</section>
+
+<!-- Environments / Figures -->
+<section class="section" id="environments">
+  <div class="container is-max-desktop">
+    <h2 class="title is-3">Benchmark Environments</h2>
+
+    <div class="columns is-variable is-6">
+  <div class="column is-12-mobile is-4-tablet is-flex is-flex-direction-column">
+        <article class="box" style="height: 100%;">
+          <h3 class="title is-5">Sumo (Heterogeneous)</h3>
+          <p>Quadrupeds and wheeled rovers compete to force opponents out of a ring. Trained with curriculum: walk → push block → adversarial Sumo.</p>
+          <figure class="image is-16by9" style="margin-top:.75rem;">
+            <img src="./static/images/harl-a/sumo.png" alt="Sumo heterogeneous teams" />
+          </figure>
+        </article>
+      </div>
+  <div class="column is-12-mobile is-4-tablet is-flex is-flex-direction-column">
+        <article class="box" style="height: 100%;">
+          <h3 class="title is-5">Soccer (1v1 / 2v2)</h3>
+          <p>Adversarial ball manipulation with morphology-appropriate actions and team dictionaries; trained with leapfrog actor updates.</p>
+          <figure class="image is-16by9" style="margin-top:.75rem;">
+            <img src="./static/images/harl-a/soccer_1v1_goal.png" alt="Soccer rollouts and goals" />
+          </figure>
+        </article>
+      </div>
+  <div class="column is-12-mobile is-4-tablet is-flex is-flex-direction-column">
+        <article class="box" style="height: 100%;">
+          <h3 class="title is-5">3D Galaga: Aerial–Ground Interception</h3>
+          <p>Drones attempt goal hits while MiniTanks ray-cast “laser-tag” knockouts. Demonstrates transfer and emergent competence in adversarial play.</p>
+          <figure class="image is-16by9" style="margin-top:.75rem;">
+            <img src="./static/images/harl-a/mini3DG.png" alt="3D Galaga: MiniTanks vs Drones" />
+          </figure>
+        </article>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Results -->
+<section class="section is-light" id="results">
+  <div class="container is-max-desktop">
+    <h2 class="title is-3">Results &amp; Findings</h2>
+
+    <div class="columns is-variable is-6">
+      <div class="column">
+        <article class="box">
+          <h3 class="title is-5">Emergent Behaviors</h3>
+          <p>Role specialization emerges: rovers destabilize legs; quadrupeds develop dragging maneuvers.</p>
+          <figure class="image is-16by9" style="margin-top:.75rem;">
+            <img src="./static/images/harl-a/emergent_behaviors.png" alt="Emergent strategies: destabilization and dragging" />
+          </figure>
+        </article>
+      </div>
+      <div class="column">
+        <article class="box">
+          <h3 class="title is-5">Win-Rates Over Time</h3>
+          <p>Trained policies consistently outperform initial versions across environments; both alternating and simultaneous training are effective.</p>
+          <figure class="image is-16by9" style="margin-top:.75rem;">
+            <img src="./static/images/harl-a/winrates.png" alt="Win-rate curves across environments" />
+          </figure>
+        </article>
+      </div>
+    </div>
+
+    <div class="columns is-variable is-6">
+      <div class="column is-12">
+        <article class="box">
+          <h3 class="title is-5">Curriculum &amp; Zero-Buffer</h3>
+          <p>Zero-buffer enables consistent observation spaces across stages. Slightly slower early convergence but smoother stage transitions.</p>
+          <figure class="image is-16by9" style="margin-top:.75rem;">
+            <img src="./static/images/harl-a/thetruthzerobuffernolies.png" alt="Effect of zero-buffer on curriculum learning" />
+          </figure>
+        </article>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Citation -->
+<section class="section" id="citation">
+  <div class="container is-max-desktop">
+    <h2 class="title is-3">Citation</h2>
+
+    <div class="columns">
+      <div class="column is-12">
+        <div class="buttons" style="margin-bottom:.5rem;">
+          <button id="copyBib" class="button is-accent">
+            <span class="icon"><i class="fa fa-clipboard"></i></span>
+            <span>Copy BibTeX</span>
+          </button>
+        </div>
+
+        <code id="bibtex" class="bib">
+@inproceedings{peterson2025harlA,
+  title     = {A Framework for Scalable Heterogeneous Multi-Agent Adversarial Reinforcement Learning in IsaacLab},
+  author    = {Isaac Peterson and Christopher Allred and Jacob Morrey and Mario Harper},
+  booktitle = {Proceedings of the IEEE Conference},
+  year      = {2025},
+  note      = {Code and benchmarks: \url{https://github.com/DIRECTLab/IsaacLab-HARL}}
+}
+        </code>
+        <p class="is-size-7 is-muted" style="margin-top:.5rem;">Adjust venue/year as appropriate once finalized.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Footer -->
+<footer class="footer">
+  <div class="content has-text-centered">
+    <p>
+      <strong>HARL-A</strong> • IsaacLab Adversarial Heterogeneous MARL<br/>
+      <span class="is-size-7 is-muted">© 2025 The Authors. Site built with Bulma.</span>
+    </p>
+    <p class="is-size-7">
+      <a href="https://github.com/DIRECTLab/IsaacLab-HARL" target="_blank" rel="noopener">
+        <i class="fa fa-github"></i> GitHub
+      </a>
+      &nbsp;•&nbsp;
+      <a href="#video"><i class="fa fa-play-circle-o"></i> Video</a>
+      &nbsp;•&nbsp;
+      <a href="#citation"><i class="fa fa-quote-right"></i> Cite</a>
+    </p>
+  </div>
+</footer>
+
+<!-- Scripts -->
+<script>
+  // Bulma burger
+  document.addEventListener('DOMContentLoaded', function () {
+    var $burgers = Array.prototype.slice.call(document.querySelectorAll('.navbar-burger'), 0);
+    $burgers.forEach(function ($el) {
+      $el.addEventListener('click', function () {
+        var target = $el.dataset.target || 'navMenu';
+        var $target = document.getElementById(target);
+        $el.classList.toggle('is-active');
+        $target.classList.toggle('is-active');
+      });
+    });
+  });
+
+  // Smooth scroll for same-page anchors
+  document.querySelectorAll('a.navbar-item[href^="#"], .btn-row a[href^="#"]').forEach(function (a) {
+    a.addEventListener('click', function (e) {
+      const id = a.getAttribute('href').slice(1);
+      const el = document.getElementById(id);
+      if (el) {
+        e.preventDefault();
+        window.scrollTo({ top: el.offsetTop - 68, behavior: 'smooth' });
+      }
+    });
+  });
+
+  // Copy BibTeX
+  const copyBtn = document.getElementById('copyBib');
+  if (copyBtn) {
+    copyBtn.addEventListener('click', async () => {
+      const txt = document.getElementById('bibtex').innerText;
+      try {
+        await navigator.clipboard.writeText(txt);
+        copyBtn.classList.add('is-success');
+        copyBtn.innerHTML = '<span class="icon"><i class="fa fa-check"></i></span><span>Copied!</span>';
+        setTimeout(() => {
+          copyBtn.classList.remove('is-success');
+          copyBtn.innerHTML = '<span class="icon"><i class="fa fa-clipboard"></i></span><span>Copy BibTeX</span>';
+        }, 1600);
+      } catch (err) {
+        alert('Copy failed. Please select and copy manually.');
+      }
+    });
+  }
+</script>
+
+</body>
+</html>

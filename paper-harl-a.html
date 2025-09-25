@@ -17,9 +17,6 @@
   <link rel="icon" href="./static/images/harl-a/favicon.svg" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css"/>
 
-  <!-- jQuery Library -->
-  <!-- <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script> -->
-
   <style>
     :root {
       --accent: #3c6df0;
@@ -45,25 +42,30 @@
     .smallcaps { font-variant: small-caps; letter-spacing: .03em; }
     .is-muted { color:#6b7280; }
 
-    /* Make images fluid, full width of their container, preserve intrinsic aspect */
+    /* --- FLUID, FULL-WIDTH IMAGES (no forced aspect ratio) --- */
     .image,
     .figure-card { width: 100%; }
 
     .image img,
     .figure-card img,
     .teaser-img {
-    display: block;
-    width: 100%;
-    height: auto;         /* keep natural aspect ratio */
+      display: block;
+      width: 100%;
+      height: auto;         /* preserve natural aspect ratio */
     }
 
-    /* (optional) if any image has inline height/fit overrides, neutralize them */
+    /* neutralize any inline overrides that might crop/stretch */
     img[style*="height:"],
     img[style*="object-fit:"] {
-    height: auto !important;
-    object-fit: unset !important;
+      height: auto !important;
+      object-fit: unset !important;
     }
 
+    /* keep videos responsive 16:9 where intended */
+    .video.is-16by9 {
+      position: relative;
+      width: 100%;
+    }
   </style>
 </head>
 <body>
@@ -136,10 +138,9 @@
           </div>
 
           <!-- Teaser -->
-          <figure class="image" style="margin-top:1.25rem; max-width:1900px; margin-left:auto; margin-right:auto;">
-            <img class="teaser-img" src="./static/images/harl-a/main_idea3.png" alt="HARL-A heterogeneous adversarial environments teaser (Sumo and mixed-agent teams)" style="object-fit:cover; width:100%; height:100%;" />
+          <figure class="image figure-card" style="margin-top:1.25rem; max-width:1900px; margin-left:auto; margin-right:auto;">
+            <img class="teaser-img" src="./static/images/harl-a/main_idea3.png" alt="HARL-A heterogeneous adversarial environments teaser (Sumo and mixed-agent teams)" />
           </figure>
-
           <p class="is-size-7 is-muted" style="margin-top:.5rem;">
             Heterogeneous adversarial multi-agent settings in IsaacLab. Top: quadruped teams in Sumo with Leatherback rovers.
           </p>
@@ -215,29 +216,29 @@
     <h2 class="title is-3">Benchmark Environments</h2>
 
     <div class="columns is-variable is-6">
-  <div class="column is-12-mobile is-4-tablet is-flex is-flex-direction-column">
+      <div class="column is-12-mobile is-4-tablet is-flex is-flex-direction-column">
         <article class="box" style="height: 100%;">
           <h3 class="title is-5">Sumo (Heterogeneous)</h3>
           <p>Quadrupeds and wheeled rovers compete to force opponents out of a ring. Trained with curriculum: walk → push block → adversarial Sumo.</p>
-          <figure class="image is-16by9" style="margin-top:.75rem;">
+          <figure class="image" style="margin-top:.75rem;">
             <img src="./static/images/harl-a/sumo.png" alt="Sumo heterogeneous teams" />
           </figure>
         </article>
       </div>
-  <div class="column is-12-mobile is-4-tablet is-flex is-flex-direction-column">
+      <div class="column is-12-mobile is-4-tablet is-flex is-flex-direction-column">
         <article class="box" style="height: 100%;">
           <h3 class="title is-5">Soccer (1v1 / 2v2)</h3>
           <p>Adversarial ball manipulation with morphology-appropriate actions and team dictionaries; trained with leapfrog actor updates.</p>
-          <figure class="image is-16by9" style="margin-top:.75rem;">
+          <figure class="image" style="margin-top:.75rem;">
             <img src="./static/images/harl-a/soccer_1v1_goal.png" alt="Soccer rollouts and goals" />
           </figure>
         </article>
       </div>
-  <div class="column is-12-mobile is-4-tablet is-flex is-flex-direction-column">
+      <div class="column is-12-mobile is-4-tablet is-flex is-flex-direction-column">
         <article class="box" style="height: 100%;">
           <h3 class="title is-5">3D Galaga: Aerial–Ground Interception</h3>
           <p>Drones attempt goal hits while MiniTanks ray-cast “laser-tag” knockouts. Demonstrates transfer and emergent competence in adversarial play.</p>
-          <figure class="image is-16by9" style="margin-top:.75rem;">
+        <figure class="image" style="margin-top:.75rem;">
             <img src="./static/images/harl-a/mini3DG.png" alt="3D Galaga: MiniTanks vs Drones" />
           </figure>
         </article>
@@ -256,7 +257,7 @@
         <article class="box">
           <h3 class="title is-5">Emergent Behaviors</h3>
           <p>Role specialization emerges: rovers destabilize legs; quadrupeds develop dragging maneuvers.</p>
-          <figure class="image is-16by9" style="margin-top:.75rem;">
+          <figure class="image" style="margin-top:.75rem;">
             <img src="./static/images/harl-a/emergent_behaviors.png" alt="Emergent strategies: destabilization and dragging" />
           </figure>
         </article>
@@ -265,7 +266,7 @@
         <article class="box">
           <h3 class="title is-5">Win-Rates Over Time</h3>
           <p>Trained policies consistently outperform initial versions across environments; both alternating and simultaneous training are effective.</p>
-          <figure class="image is-16by9" style="margin-top:.75rem;">
+          <figure class="image" style="margin-top:.75rem;">
             <img src="./static/images/harl-a/winrates.png" alt="Win-rate curves across environments" />
           </figure>
         </article>
@@ -277,7 +278,7 @@
         <article class="box">
           <h3 class="title is-5">Curriculum &amp; Zero-Buffer</h3>
           <p>Zero-buffer enables consistent observation spaces across stages. Slightly slower early convergence but smoother stage transitions.</p>
-          <figure class="image is-16by9" style="margin-top:.75rem;">
+          <figure class="image" style="margin-top:.75rem;">
             <img src="./static/images/harl-a/thetruthzerobuffernolies.png" alt="Effect of zero-buffer on curriculum learning" />
           </figure>
         </article>

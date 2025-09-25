@@ -1,55 +1,78 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>IsaacLab Papers</title>
-    <link href="https://fonts.googleapis.com/css?family=Google+Sans|Noto+Sans|Castoro" rel="stylesheet">
-    <link rel="stylesheet" href="/static/css/bulma.min.css">
-    <link rel="stylesheet" href="/static/css/index.css">
-    <link rel="icon" href="/static/images/favicon.svg">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>IsaacLab Papers</title>
+
+  <!-- Fonts -->
+  <link href="https://fonts.googleapis.com/css?family=Google+Sans|Noto+Sans|Castoro" rel="stylesheet">
+
+  <!-- Local CSS (relative paths so it works on GitHub Pages project sites) -->
+  <link rel="stylesheet" href="./static/css/bulma.min.css">
+  <link rel="stylesheet" href="./static/css/index.css">
+  <link rel="stylesheet" href="./static/css/fontawesome.all.min.css">
 </head>
 <body>
-    <section class="section">
-        <div class="container">
-            <h1 class="title has-text-centered">IsaacLab Heterogeneous Multi-Agent Learning Research</h1>
-            <div class="columns is-multiline">
-                <div class="column is-half">
-                    <div class="card">
-                        <div class="card-content">
-                            <p class="title is-5">Heterogeneous Multi-Agent Learning in Isaac Lab: Scalable Simulation for Robotic Collaboration</p>
-                            <p class="subtitle is-6">Haight, Peterson, Allred, Harper (IROS 2025)</p>
-                            <video id="teaser" autoplay muted loop playsinline height="100%">
-                                <source src="./static/videos/rl-video-step-80000.mp4" type="video/mp4">
-                            </video>
-                            <a class="button is-dark is-rounded" href="/papers/paper-harl.html">View page</a>
-                            <a class="button is-link is-rounded" href="./static/videos/rl-video-step-80000.mp4" target="_blank" style="margin-left: 0.5em;">View video</a>
-                            <a class="button is-primary is-rounded" href="/papers/paper-harl-a.pdf" target="_blank" style="margin-left: 0.5em;">View paper</a>
-                        </div>
-                    </div>
-                </div>
-                <div class="column is-half">
-                    <div class="card">
-                        <div class="card-content">
-                            <p class="title is-5">A Framework for Scalable Heterogeneous Multi-Agent Adversarial Reinforcement Learning in IsaacLab</p>
-                            <p class="subtitle is-6">Isaac Peterson* Christopher Allred* Jacob Morrey, Mario Harper ([arxiv, 2025])</p>
-                            <video id="teaser" autoplay muted loop playsinline height="100%">
-                                <source src="./static/videos/anymal_vs_lb.mp4" type="video/mp4">
-                            </video>
-                            <a class="button is-dark is-rounded" href="/papers/paper-harl-a.html">View page</a>
-                            <a class="button is-link is-rounded" href="./static/videos/rl-video-step-80000.mp4" target="_blank" style="margin-left: 0.5em;">View video</a>
-                            <a class="button is-primary is-rounded" href="/papers/paper-harl-a.pdf" target="_blank" style="margin-left: 0.5em;">View paper</a>
-                        </div>
-                    </div>
-                </div>
+  <section class="section">
+    <div class="container">
+      <h1 class="title has-text-centered">IsaacLab Heterogeneous Multi-Agent Learning Research</h1>
+
+      <div class="columns is-multiline">
+        <!-- Card 1 -->
+        <div class="column is-half">
+          <div class="card">
+            <div class="card-content">
+              <p class="title is-5">Heterogeneous Multi-Agent Learning in Isaac Lab: Scalable Simulation for Robotic Collaboration</p>
+              <p class="subtitle is-6">Haight, Peterson, Allred, Harper (IROS 2025)</p>
+
+              <video id="teaser-1" autoplay muted loop playsinline height="100%">
+                <source src="./static/videos/rl-video-step-80000.mp4" type="video/mp4">
+              </video>
+
+              <div class="buttons" style="margin-top:0.75rem;">
+                <a class="button is-dark is-rounded" href="./papers/paper-harl.html">View page</a>
+                <a class="button is-link is-rounded" href="./static/videos/rl-video-step-80000.mp4" target="_blank">View video</a>
+                <!-- TODO: replace href with the actual PDF when available -->
+                <a class="button is-primary is-rounded" href="./papers/paper-harl.html" target="_blank">View paper</a>
+              </div>
             </div>
-            <p class="has-text-centered" style="margin-top:2rem;">
-                <a href="https://github.com/DIRECTLab/IsaacLab-HARL" class="button is-light">
-                    <span class="icon"><i class="fa fa-github"></i></span>
-                    <span>Project Code</span>
-                </a>
-            </p>
+          </div>
         </div>
-    </section>
-    </section>
+
+        <!-- Card 2 -->
+        <div class="column is-half">
+          <div class="card">
+            <div class="card-content">
+              <p class="title is-5">A Framework for Scalable Heterogeneous Multi-Agent Adversarial Reinforcement Learning in IsaacLab</p>
+              <p class="subtitle is-6">Isaac Peterson* Christopher Allred* Jacob Morrey, Mario Harper (arXiv, 2025)</p>
+
+              <video id="teaser-2" autoplay muted loop playsinline height="100%">
+                <source src="./static/videos/anymal_vs_lb.mp4" type="video/mp4">
+              </video>
+
+              <div class="buttons" style="margin-top:0.75rem;">
+                <a class="button is-dark is-rounded" href="./papers/paper-harl-a.html">View page</a>
+                <a class="button is-link is-rounded" href="./static/videos/anymal_vs_lb.mp4" target="_blank">View video</a>
+                <!-- TODO: replace href with the actual PDF when available -->
+                <a class="button is-primary is-rounded" href="./papers/paper-harl-a.html" target="_blank">View paper</a>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <p class="has-text-centered" style="margin-top:2rem;">
+        <a href="https://github.com/DIRECTLab/IsaacLab-HARL" class="button is-light">
+          <span class="icon"><i class="fa fa-github"></i></span>
+          <span>Project Code</span>
+        </a>
+      </p>
+    </div>
+  </section>
+
+  <!-- Optional local JS if you need it later
+  <script src="./static/js/fontawesome.all.min.js" defer></script>
+  <script src="./static/js/index.js"></script>
+  -->
 </body>
 </html>

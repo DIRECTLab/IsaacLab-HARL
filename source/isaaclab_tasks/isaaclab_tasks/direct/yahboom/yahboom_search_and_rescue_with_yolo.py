@@ -14,19 +14,28 @@ from isaaclab.sensors import Camera, CameraCfg, TiledCamera, TiledCameraCfg
 from isaaclab.utils.math import subtract_frame_transforms
 from isaaclab.utils.math import quat_from_angle_axis, quat_from_euler_xyz, quat_rotate_inverse
 from isaaclab_assets.custom.soccer_ball import SOCCERBALL_CFG  # isort: skip
-import numpy as np
+import random
 import matplotlib.pyplot as plt
+from transformers import AutoImageProcessor, AutoModelForDepthEstimation, DepthAnythingConfig, DepthAnythingForDepthEstimation
+from PIL import Image
+import requests
+import numpy as np
+from torchvision import transforms
+from transformers import AutoImageProcessor, AutoModelForObjectDetection, AutoModelForImageClassification
+from PIL import Image
+import torch.nn.functional as F
+from ultralytics import YOLO
 
 def get_quaternion_tuple_from_xyz(x, y, z):
     quat_tensor = quat_from_euler_xyz(torch.tensor([x]), torch.tensor([y]), torch.tensor([z])).flatten()
     return (quat_tensor[0].item(), quat_tensor[1].item(), quat_tensor[2].item(), quat_tensor[3].item())
 
 @configclass
-class YahboomSearchAndRescueEnvCfg(DirectMARLEnvCfg):
+class YahboomSearchAndRescueYOLOEnvCfg(DirectMARLEnvCfg):
     decimation = 4
     episode_length_s = 20.0
     action_spaces = {f"robot_{i}": 2 for i in range(1)}
-    observation_spaces = {f"robot_{i}": 43 for i in range(1)}
+    observation_spaces = {f"robot_{i}": 851 for i in range(1)}
     state_space = 0
     state_spaces = {f"robot_{i}": 0 for i in range(1)}
     possible_agents = ["robot_0"]
@@ -39,9 +48,9 @@ class YahboomSearchAndRescueEnvCfg(DirectMARLEnvCfg):
     camera_0 = TiledCameraCfg(
         prim_path="/World/envs/env_.*/Robot_0/Rigid_Bodies/Chassis/Camera",
         update_period=0.1,
-        height=40,
-        width=40,
-        data_types=["depth"],
+        height=480,
+        width=848,
+        data_types=["rgb", "depth"],
         spawn=sim_utils.PinholeCameraCfg(
             focal_length=24.0, focus_distance=400.0, horizontal_aperture=20.955, clipping_range=(0.1, 20.0)
         ),
@@ -108,20 +117,6 @@ class YahboomSearchAndRescueEnvCfg(DirectMARLEnvCfg):
         ),
     )
 
-    block = RigidObjectCfg(
-        prim_path="/World/envs/env_.*/Block_.*",
-        spawn=sim_utils.CuboidCfg(
-            size=(0.5, 0.5, 0.5),
-            rigid_props=sim_utils.RigidBodyPropertiesCfg(kinematic_enabled=True),
-            collision_props=sim_utils.CollisionPropertiesCfg(),
-            visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(0.8, 0.2, 0.2)),
-        ),
-        init_state=RigidObjectCfg.InitialStateCfg(
-            pos=(0.0, 0.0, 0.25),  # base height above ground
-            rot=(1.0, 0.0, 0.0, 0.0)
-        ),
-    )
-
     ball = SOCCERBALL_CFG.replace(prim_path="/World/envs/env_.*/Object4")
     ball.init_state.pos = (1.0, 0.0, 0.5)
 
@@ -148,10 +143,10 @@ class YahboomSearchAndRescueEnvCfg(DirectMARLEnvCfg):
     ball_to_goal_reward_scale = 1.0
     dist_to_ball_reward_scale = 1.0
 
-class YahboomSearchAndRescueEnv(DirectMARLEnv):
-    cfg: YahboomSearchAndRescueEnvCfg
+class YahboomSearchAndRescueYOLOEnv(DirectMARLEnv):
+    cfg: YahboomSearchAndRescueYOLOEnvCfg
 
-    def __init__(self, cfg: YahboomSearchAndRescueEnvCfg, render_mode: str | None = None, headless: bool | None = None, debug: bool = False, **kwargs):
+    def __init__(self, cfg: YahboomSearchAndRescueYOLOEnvCfg, render_mode: str | None = None, headless: bool | None = None, debug: bool = False, **kwargs):
         self.debug = debug
         super().__init__(cfg, render_mode, **kwargs)
 
@@ -172,6 +167,12 @@ class YahboomSearchAndRescueEnv(DirectMARLEnv):
             ]
         }
 
+        self.image_processor = AutoImageProcessor.from_pretrained("hustvl/yolos-base")
+        self.yolo_detector = AutoModelForObjectDetection.from_pretrained("hustvl/yolos-base").to(self.device)
+
+        self.frame_counter = 0
+        self.inference_interval = 30
+        self.last_detection = torch.zeros(self.num_envs, dtype=torch.bool, device=self.device)
 
     def _setup_scene(self):
         self.wall_0 = RigidObject(self.cfg.wall_0)
@@ -209,21 +210,13 @@ class YahboomSearchAndRescueEnv(DirectMARLEnv):
         light_cfg = sim_utils.DomeLightCfg(intensity=2000.0, color=(0.75, 0.75, 0.75))
         light_cfg.func("/World/Light", light_cfg)
 
-
-        self.blocks = []
-        num_blocks_per_env = 10  # you can adjust this
-        for i in range(num_blocks_per_env):
-            block_cfg = self.cfg.block.replace(
-                prim_path=f"/World/envs/env_.*/Block_{i}"
-            )
-            block = RigidObject(block_cfg)
-            self.blocks.append(block)
-
         if self.debug:
             plt.ion()
-            fig, ax = plt.subplots(1, 2, figsize=(5, 5))
+            fig, ax = plt.subplots(1, 2)
             self.actual_depth_im = ax[0].imshow(torch.zeros((40, 40)), vmin=0, vmax=10, cmap='plasma')
-            self.image_slice = ax[1].imshow(torch.zeros((1,40)), vmin=0, vmax=10, cmap='plasma')
+            self.predicted_depth_im = ax[1].imshow(torch.zeros((40, 40)), vmin=0, vmax=1, cmap='plasma')
+            ax[0].set_title("Actual Depth")
+            ax[1].set_title("Predicted Depth")
 
     def _pre_physics_step(self, actions: dict) -> None:
         self._throttle_action = actions["robot_0"][:, 0].repeat_interleave(4).reshape((-1, 4)) * self.cfg.throttle_scale
@@ -239,35 +232,133 @@ class YahboomSearchAndRescueEnv(DirectMARLEnv):
         for robot_id in self.robots.keys():
             self.robots[robot_id].set_joint_velocity_target(self._throttle_state[robot_id], joint_ids=self._throttle_dof_idx)
             self.robots[robot_id].set_joint_position_target(self._steering_state[robot_id], joint_ids=self._steering_dof_idx)
+
+    def _tensor_to_PIL(self, img: torch.Tensor) -> Image.Image:
+        """
+        Convert a PyTorch tensor to a PIL RGB image.
+
+        Args:
+            img (torch.Tensor): Tensor of shape (3, H, W) or (H, W, 3), 
+                                dtype float32, values in [0, 1] or [0, 255].
+        Returns:
+            Image.Image: PIL RGB image.
+        """
+        # Ensure CPU and detach
+        img = img.detach().cpu()
+
+        # restrict to 480 height and 640 width, from the edge
+        img = img[:, 104:744, :]
+
+        # If channel-first, permute to (H, W, 3)
+        if img.ndim == 3 and img.shape[0] in (1, 3):
+            img = img.permute(1, 2, 0)
+
+        # Convert to NumPy
+        img_np = img.numpy()
+
+        # If image is float in [0, 1], scale to [0, 255]
+        if img_np.dtype != np.uint8:
+            img_np = np.clip(img_np * 255.0, 0, 255).astype(np.uint8)
+
+        # Convert to PIL
+        pil_img = Image.fromarray(img_np, mode='RGB')
+        return pil_img
     
     def _get_observations(self) -> dict:
+        if self.debug:
+            depth_img = self.camera.data.output["depth"][0].cpu().numpy()
+            self.actual_depth_im.set_data(depth_img)
+
+            with torch.no_grad():
+                rgb = self.camera.data.output["rgb"][0].cpu().numpy()
+                inputs = self.preprocess(rgb).unsqueeze(0).to(self.device)
+
+                outputs = self.depth_model(pixel_values=inputs)
+                predicted_depth = outputs.predicted_depth[0].cpu().numpy()
+
+                # Clean up and normalize for visualization
+                predicted_depth = np.nan_to_num(predicted_depth, nan=0.0, posinf=0.0, neginf=0.0)
+                predicted_depth = np.clip(predicted_depth, 0, self.depth_model.config.max_depth)
+                eps = 1e-8
+                predicted_depth = 1 / (predicted_depth + eps)  # Invert depth for better visualization
+                viz_depth = (predicted_depth - predicted_depth.min()) / (
+                    predicted_depth.max() - predicted_depth.min() + 1e-8
+                )
+
+                self.predicted_depth_im.set_data(viz_depth)
+                self.predicted_depth_im.set_cmap("plasma")
+
+            plt.draw()
+            plt.pause(0.001)
+
         img = self.camera.data.output["depth"]
-        img_slice = img[:, img.shape[1]//2, :].squeeze(-1).clone() 
+        img = torch.nan_to_num(img, nan=0.0, posinf=1e6, neginf=-1e6)
+        img_slice = img[:, img.shape[1]//2, :].squeeze(-1) 
         ball_pos, _ = subtract_frame_transforms(
             self.robots["robot_0"].data.root_state_w[:, :3], self.robots["robot_0"].data.root_state_w[:, 3:7],
             self.ball.data.root_pos_w
         )
-        final_obs = torch.cat([img_slice, ball_pos], dim=1)
-        final_obs = torch.nan_to_num(final_obs, nan=0.0, posinf=1e6, neginf=-1e6)
-
-        if self.debug:
-            self.actual_depth_im.set_data(self.camera.data.output["depth"][0].cpu().numpy())
-            self.image_slice.set_data(img_slice[0].unsqueeze(0).cpu().numpy())
-            plt.draw()
-            plt.pause(0.001)
-
+        obs = torch.nan_to_num(img_slice, nan=0.0, posinf=1e6, neginf=-1e6)
+        final_obs = torch.cat([obs, ball_pos], dim=1)
 
         return {"robot_0": final_obs}
     
     def _get_rewards(self) -> dict:
+        self.frame_counter += 1
+        detection_run = False
+
+        # --- Run detection every N frames ---
+        if self.frame_counter % self.inference_interval == 0:
+            detection_run = True
+            # Extract sampled RGBs (num_sample_envs, H, W, 3)
+            rgb_batch = self.camera.data.output["rgb"]
+
+            # Crop & resize each (vectorized)
+            rgb_batch = rgb_batch[:, :, 104:744, :]        # (N, 480, 640, 3)
+            rgb_batch = rgb_batch.permute(0, 3, 1, 2)      # (N, 3, H, W)
+
+            # Convert to float [0, 1]
+            rgb_batch = rgb_batch.float() / 255.0
+
+            imgs_cpu = [transforms.ToPILImage()(img.cpu()) for img in rgb_batch]
+
+            # Prepare inputs for the model
+            inputs = self.image_processor(images=imgs_cpu, return_tensors="pt").to(self.device)
+
+            # Run model
+            outputs = self.yolo_detector(**inputs)
+
+            # Postprocess
+            results = self.image_processor.post_process_object_detection(
+                outputs,
+                threshold=0.5,
+                target_sizes=torch.tensor([(480, 640)] * len(imgs_cpu), device=self.device)
+            )
+
+            # Check detections for "ball"
+            ball_detected = torch.zeros(self.num_envs, dtype=torch.bool, device=self.device)
+            for idx, res in enumerate(results):
+                labels = [self.yolo_detector.config.id2label[i.item()] for i in res["labels"]]
+                if any("ball" in lbl.lower() for lbl in labels):
+                    ball_detected[idx] = True
+
+            self.last_detection = ball_detected
+
         robot_pos = self.robots["robot_0"].data.root_pos_w[:, :3]
         ball_pos = self.ball.data.root_pos_w
         robot_distance_to_ball = torch.linalg.norm(robot_pos - ball_pos, dim=1)
         robot_distance_to_ball_mapped = 1 - torch.tanh(robot_distance_to_ball / 0.8)
-        robot_distance_to_ball_mapped = robot_distance_to_ball_mapped * self.cfg.dist_to_ball_reward_scale * self.step_dt
+        base_reward = robot_distance_to_ball_mapped * self.cfg.dist_to_ball_reward_scale * self.step_dt
 
-        self._episode_sums["dist_to_ball_reward"] += robot_distance_to_ball_mapped
-        return {"robot_0": robot_distance_to_ball_mapped}
+        if detection_run:
+            detection_bonus = self.last_detection.float() * self.cfg.goal_reward_scale
+        else:
+            detection_bonus = torch.zeros(self.num_envs, device=self.device)
+            
+        total_reward = base_reward + detection_bonus
+
+        self._episode_sums["dist_to_ball_reward"] += total_reward
+        return {"robot_0": total_reward}
 
     def _get_dones(self) -> tuple[dict, dict]:
         time_out = self.episode_length_buf >= self.max_episode_length - 1
@@ -286,17 +377,7 @@ class YahboomSearchAndRescueEnv(DirectMARLEnv):
                 self.episode_length_buf, high=int(self.max_episode_length)
             )
 
-        # sample random grid positions for blocks
-        num_blocks = len(self.blocks)
-        offsets = self._sample_positions_grid(env_ids, num_blocks + 2, min_dist=1.0, grid_spacing=1.0)
-
-        # set each block position
-        for i, block in enumerate(self.blocks):
-            block_state = block.data.default_root_state.clone()[env_ids]
-            block_state[:, :2] = self.scene.env_origins[env_ids][:, :2] + offsets[:, i]
-            block_state[:, 2] = 0.25  # fixed height
-            block.write_root_state_to_sim(block_state, env_ids)
-            block.reset(env_ids)
+        # sampled_grid_pos = self._sample_positions_grid(env_ids, 2, 1, 1)
 
         # Cache for convenience
         origins = self.scene.env_origins[env_ids]  # (N, 3)
@@ -306,7 +387,7 @@ class YahboomSearchAndRescueEnv(DirectMARLEnv):
 
         ball_default_state = self.ball.data.default_root_state.clone()[env_ids]
         ball_default_state[:, :2] = ball_default_state[:, :2] + self.scene.env_origins[env_ids][:,:2]\
-        + offsets[:, -2]
+        #+sampled_grid_pos[:, 1]
         self.ball.write_root_state_to_sim(ball_default_state, env_ids)
         self.ball.reset(env_ids)
 
@@ -322,7 +403,7 @@ class YahboomSearchAndRescueEnv(DirectMARLEnv):
 
             # Place robot
             default_root_state[:, :2] += origins[:, :2]
-            default_root_state[:, :2] += offsets[:, -1]
+            # default_root_state[:, :2] += sampled_grid_pos[:, 0]
 
             # Write to sim
             self.robots[robot_id].write_root_pose_to_sim(default_root_state[:, :7], env_ids)
@@ -338,39 +419,38 @@ class YahboomSearchAndRescueEnv(DirectMARLEnv):
 
         final_dist_to_ball = torch.mean(torch.linalg.norm(self.robots["robot_0"].data.root_pos_w[:, :3] - self.ball.data.root_pos_w, dim=1)[env_ids]).item()
         extras["Final_Dist_To_Ball"] = final_dist_to_ball
+        extras["Found_Ball_Rate"] = torch.mean(self.last_detection.float()[env_ids]).item()
         self.extras["log"] = dict()
         self.extras["log"].update(extras)
         extras = dict()
 
 
-    def _sample_positions_grid(self, env_ids, num_samples, min_dist=1.0, grid_spacing=2.0):
-        """
-        Samples well-separated 2D positions per environment using a coarse meshgrid
-        so blocks don't overlap. Super fast for large env counts.
-        """
+    def _sample_positions_grid(self, env_ids, num_samples, min_dist=1.0, grid_spacing=1.0):
         device = self.scene.env_origins.device
         N = len(env_ids)
 
         offsets = torch.zeros((N, num_samples, 2), device=device)
-        env_origins = self.scene.env_origins[env_ids][:, :2]
+        env_origins = self.scene.env_origins[env_ids][:, :2].clone()
 
-        # Use grid_spacing >= min_dist to guarantee spacing
+        all_valid_points = []  # collect per-env lists
+
         for i in range(N):
-            # define grid area (tight bounds)
-            xs = torch.arange(env_origins[i, 0] - 8, env_origins[i, 0] + 8, grid_spacing, device=device)
-            ys = torch.arange(env_origins[i, 1] - 4, env_origins[i, 1] + 4, grid_spacing, device=device)
+            xs = torch.arange(env_origins[i, 0] - 9, env_origins[i, 0] + 10,
+                            grid_spacing, device=device)
+            ys = torch.arange(env_origins[i, 1] - 4, env_origins[i, 1] + 5,
+                            grid_spacing, device=device)
             xv, yv = torch.meshgrid(xs, ys, indexing="ij")
-
             grid_points = torch.stack([xv.flatten(), yv.flatten()], dim=-1)
 
-            # randomly pick num_samples without replacement
-            perm = torch.randperm(grid_points.shape[0], device=device)
-            chosen = grid_points[perm[:num_samples]]
+            all_valid_points.append(grid_points)
+            idx = torch.randperm(grid_points.shape[0], device=device)[:num_samples]
+            offsets[i] = grid_points[idx] - env_origins[i]
 
-            offsets[i] = chosen - env_origins[i]
+        # save for visualization
+        self.valid_points = all_valid_points  
+        # self._draw_grid_markers()
 
         return offsets
-
     
 
     @torch.no_grad()

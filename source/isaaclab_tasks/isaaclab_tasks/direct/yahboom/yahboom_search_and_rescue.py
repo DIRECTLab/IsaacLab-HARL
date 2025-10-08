@@ -26,7 +26,7 @@ class YahboomSearchAndRescueEnvCfg(DirectMARLEnvCfg):
     decimation = 4
     episode_length_s = 20.0
     action_spaces = {f"robot_{i}": 2 for i in range(1)}
-    observation_spaces = {f"robot_{i}": 43 for i in range(1)}
+    observation_spaces = {f"robot_{i}": 1600 for i in range(1)}
     state_space = 0
     state_spaces = {f"robot_{i}": 0 for i in range(1)}
     possible_agents = ["robot_0"]
@@ -221,9 +221,9 @@ class YahboomSearchAndRescueEnv(DirectMARLEnv):
 
         if self.debug:
             plt.ion()
-            fig, ax = plt.subplots(1, 2, figsize=(5, 5))
-            self.actual_depth_im = ax[0].imshow(torch.zeros((40, 40)), vmin=0, vmax=10, cmap='plasma')
-            self.image_slice = ax[1].imshow(torch.zeros((1,40)), vmin=0, vmax=10, cmap='plasma')
+            fig, ax = plt.subplots(1, 1, figsize=(5, 5))
+            self.actual_depth_im = ax.imshow(torch.zeros((40, 40)), vmin=0, vmax=10, cmap='plasma')
+            # self.image_slice = ax[1].imshow(torch.zeros((1,40)), vmin=0, vmax=10, cmap='plasma')
 
     def _pre_physics_step(self, actions: dict) -> None:
         self._throttle_action = actions["robot_0"][:, 0].repeat_interleave(4).reshape((-1, 4)) * self.cfg.throttle_scale
@@ -242,29 +242,21 @@ class YahboomSearchAndRescueEnv(DirectMARLEnv):
     
     def _get_observations(self) -> dict:
         img = self.camera.data.output["depth"]
-        img_slice = img[:, img.shape[1]//2, :].squeeze(-1).clone() 
-        ball_pos, _ = subtract_frame_transforms(
-            self.robots["robot_0"].data.root_state_w[:, :3], self.robots["robot_0"].data.root_state_w[:, 3:7],
-            self.ball.data.root_pos_w
-        )
-        final_obs = torch.cat([img_slice, ball_pos], dim=1)
-        final_obs = torch.nan_to_num(final_obs, nan=0.0, posinf=1e6, neginf=-1e6)
-
         if self.debug:
             self.actual_depth_im.set_data(self.camera.data.output["depth"][0].cpu().numpy())
-            self.image_slice.set_data(img_slice[0].unsqueeze(0).cpu().numpy())
+            # self.image_slice.set_data(img_slice[0].unsqueeze(0).cpu().numpy())
             plt.draw()
             plt.pause(0.001)
 
-
-        return {"robot_0": final_obs}
+        return {"robot_0": torch.nan_to_num(img.reshape((self.num_envs, -1)).to(torch.float32), nan=0.0, posinf=1e6, neginf=-1e6)}
     
     def _get_rewards(self) -> dict:
         robot_pos = self.robots["robot_0"].data.root_pos_w[:, :3]
         ball_pos = self.ball.data.root_pos_w
         robot_distance_to_ball = torch.linalg.norm(robot_pos - ball_pos, dim=1)
-        robot_distance_to_ball_mapped = 1 - torch.tanh(robot_distance_to_ball / 0.8)
+        robot_distance_to_ball_mapped = robot_distance_to_ball
         robot_distance_to_ball_mapped = robot_distance_to_ball_mapped * self.cfg.dist_to_ball_reward_scale * self.step_dt
+        robot_distance_to_ball_mapped = -1 * torch.nan_to_num(robot_distance_to_ball_mapped, nan=0.0, posinf=1e6, neginf=-1e6)
 
         self._episode_sums["dist_to_ball_reward"] += robot_distance_to_ball_mapped
         return {"robot_0": robot_distance_to_ball_mapped}
@@ -289,6 +281,7 @@ class YahboomSearchAndRescueEnv(DirectMARLEnv):
         # sample random grid positions for blocks
         num_blocks = len(self.blocks)
         offsets = self._sample_positions_grid(env_ids, num_blocks + 2, min_dist=1.0, grid_spacing=1.0)
+        # offsets = self._sample_positions_grid(env_ids, 2, min_dist=1.0, grid_spacing=1.0)
 
         # set each block position
         for i, block in enumerate(self.blocks):

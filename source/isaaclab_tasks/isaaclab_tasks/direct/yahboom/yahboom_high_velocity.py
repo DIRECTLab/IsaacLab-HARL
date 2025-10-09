@@ -251,7 +251,7 @@ class YahboomHighVelocityEnv(DirectMARLEnv):
         return {"robot_0": torch.nan_to_num(img.reshape((self.num_envs, -1)).to(torch.float32), nan=0.0, posinf=1e6, neginf=-1e6)}
     
     def _get_rewards(self) -> dict:
-        robot_vel = torch.linalg.vector_norm(self.robots["robot_0"].data.root_lin_vel_b, dim=1) 
+        robot_vel = torch.linalg.vector_norm(self.robots["robot_0"].data.root_lin_vel_b, dim=1) * self.step_dt
 
         self._episode_sums["robot_vel_reward"] += robot_vel
         return {"robot_0": robot_vel}

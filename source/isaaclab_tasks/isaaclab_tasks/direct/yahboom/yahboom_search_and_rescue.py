@@ -21,6 +21,18 @@ def get_quaternion_tuple_from_xyz(x, y, z):
     quat_tensor = quat_from_euler_xyz(torch.tensor([x]), torch.tensor([y]), torch.tensor([z])).flatten()
     return (quat_tensor[0].item(), quat_tensor[1].item(), quat_tensor[2].item(), quat_tensor[3].item())
 
+def define_markers() -> VisualizationMarkers:
+    marker_cfg = VisualizationMarkersCfg(
+        prim_path="/Visuals/myMarkers",
+        markers={
+            "sphere1": sim_utils.SphereCfg(
+                radius=0.1,
+                visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(0.8, 0.0, 0.0)),
+            ),
+        },
+    )
+    return VisualizationMarkers(marker_cfg)
+
 @configclass
 class YahboomSearchAndRescueEnvCfg(DirectMARLEnvCfg):
     decimation = 4
@@ -33,7 +45,7 @@ class YahboomSearchAndRescueEnvCfg(DirectMARLEnvCfg):
 
     sim: SimulationCfg = SimulationCfg(dt=1 / 200, render_interval=decimation)
     robot_0: ArticulationCfg = LEATHERBACK_CFG.replace(prim_path="/World/envs/env_.*/Robot_0")
-    robot_0.init_state.pos = (-1.0, 0.0, .5)
+    robot_0.init_state.pos = (0.0, 0.0, .5)
 
     # Camera on the intel realsense D435 has a depth camera with w 848, h 480, and an rgb camera with w 480, h 640
     camera_0 = TiledCameraCfg(
@@ -122,9 +134,6 @@ class YahboomSearchAndRescueEnvCfg(DirectMARLEnvCfg):
         ),
     )
 
-    ball = SOCCERBALL_CFG.replace(prim_path="/World/envs/env_.*/Object4")
-    ball.init_state.pos = (1.0, 0.0, 0.5)
-
     throttle_dof_name = [
         "Wheel__Knuckle__Front_Left",
         "Wheel__Knuckle__Front_Right",
@@ -162,13 +171,14 @@ class YahboomSearchAndRescueEnv(DirectMARLEnv):
 
         self._throttle_state = {robot_id:torch.zeros((self.num_envs,4), device=self.device, dtype=torch.float32) for robot_id in self.robots.keys()}
         self._steering_state = {robot_id:torch.zeros((self.num_envs,2), device=self.device, dtype=torch.float32) for robot_id in self.robots.keys()}
+        self._desired_pos_w = torch.zeros(self.num_envs, 3, device=self.device)
 
         self.env_spacing = self.cfg.env_spacing
 
         self._episode_sums = {
             key: torch.zeros(self.num_envs, dtype=torch.float, device=self.device)
             for key in [
-                "dist_to_ball_reward",
+                "dist_to_goal_reward",
             ]
         }
 
@@ -178,7 +188,8 @@ class YahboomSearchAndRescueEnv(DirectMARLEnv):
         self.wall_1 = RigidObject(self.cfg.wall_1)
         self.wall_2 = RigidObject(self.cfg.wall_2)
         self.wall_3 = RigidObject(self.cfg.wall_3)
-        self.ball = RigidObject(self.cfg.ball)
+
+        self.my_visualizer = define_markers()
 
         spawn_ground_plane(
             prim_path="/World/ground",
@@ -225,6 +236,11 @@ class YahboomSearchAndRescueEnv(DirectMARLEnv):
             self.actual_depth_im = ax.imshow(torch.zeros((40, 40)), vmin=0, vmax=10, cmap='plasma')
             # self.image_slice = ax[1].imshow(torch.zeros((1,40)), vmin=0, vmax=10, cmap='plasma')
 
+    def _draw_markers(self):
+        self.my_visualizer.visualize(
+            self._desired_pos_w,
+        )
+
     def _pre_physics_step(self, actions: dict) -> None:
         self._throttle_action = actions["robot_0"][:, 0].repeat_interleave(4).reshape((-1, 4)) * self.cfg.throttle_scale
         self._throttle_action = torch.clamp(self._throttle_action, -self.cfg.throttle_max, self.cfg.throttle_max)
@@ -233,7 +249,6 @@ class YahboomSearchAndRescueEnv(DirectMARLEnv):
         self._steering_action = actions["robot_0"][:, 1].repeat_interleave(2).reshape((-1, 2)) * self.cfg.steering_scale
         self._steering_action = torch.clamp(self._steering_action, -self.cfg.steering_max, self.cfg.steering_max)
         self._steering_state["robot_0"] = self._steering_action
-        self.ball.update(self.step_dt)
 
     def _apply_action(self) -> None:
         for robot_id in self.robots.keys():
@@ -241,6 +256,8 @@ class YahboomSearchAndRescueEnv(DirectMARLEnv):
             self.robots[robot_id].set_joint_position_target(self._steering_state[robot_id], joint_ids=self._steering_dof_idx)
     
     def _get_observations(self) -> dict:
+        self._draw_markers()
+
         img = self.camera.data.output["depth"]
         if self.debug:
             self.actual_depth_im.set_data(self.camera.data.output["depth"][0].cpu().numpy())
@@ -252,18 +269,18 @@ class YahboomSearchAndRescueEnv(DirectMARLEnv):
     
     def _get_rewards(self) -> dict:
         robot_pos = self.robots["robot_0"].data.root_pos_w[:, :3]
-        ball_pos = self.ball.data.root_pos_w
-        robot_distance_to_ball = torch.linalg.norm(robot_pos - ball_pos, dim=1)
-        robot_distance_to_ball_mapped = robot_distance_to_ball
-        robot_distance_to_ball_mapped = robot_distance_to_ball_mapped * self.cfg.dist_to_ball_reward_scale * self.step_dt
-        robot_distance_to_ball_mapped = -1 * torch.nan_to_num(robot_distance_to_ball_mapped, nan=0.0, posinf=1e6, neginf=-1e6)
+        robot_distance_to_goal = torch.linalg.norm(robot_pos - self._desired_pos_w, dim=1)
+        robot_distance_to_goal_mapped = 1 - torch.tanh(robot_distance_to_goal / 5.0)
+        robot_distance_to_goal_mapped = robot_distance_to_goal_mapped * self.step_dt
+        robot_distance_to_goal_mapped = -1 * torch.nan_to_num(robot_distance_to_goal_mapped, nan=0.0, posinf=1e6, neginf=-1e6)
 
-        self._episode_sums["dist_to_ball_reward"] += robot_distance_to_ball_mapped
-        return {"robot_0": robot_distance_to_ball_mapped}
+        self._episode_sums["dist_to_goal_reward"] += robot_distance_to_goal_mapped
+        return {"robot_0": robot_distance_to_goal_mapped}
 
     def _get_dones(self) -> tuple[dict, dict]:
         time_out = self.episode_length_buf >= self.max_episode_length - 1
-        return {"robot_0": time_out}, {"robot_0": time_out}
+        dones = torch.norm(self.robots["robot_0"].data.root_pos_w[:, :3] - self._desired_pos_w, dim=1) < 0.5
+        return {"robot_0": dones}, {"robot_0": time_out}
 
     def _reset_idx(self, env_ids: torch.Tensor | None):
         if env_ids is None:
@@ -283,25 +300,21 @@ class YahboomSearchAndRescueEnv(DirectMARLEnv):
         offsets = self._sample_positions_grid(env_ids, num_blocks + 2, min_dist=1.0, grid_spacing=1.0)
         # offsets = self._sample_positions_grid(env_ids, 2, min_dist=1.0, grid_spacing=1.0)
 
+        origins = self.scene.env_origins[env_ids][:,:2].clone()
+
         # set each block position
         for i, block in enumerate(self.blocks):
             block_state = block.data.default_root_state.clone()[env_ids]
-            block_state[:, :2] = self.scene.env_origins[env_ids][:, :2] + offsets[:, i]
+            block_state[:, :2] = origins + offsets[i]
             block_state[:, 2] = 0.25  # fixed height
             block.write_root_state_to_sim(block_state, env_ids)
             block.reset(env_ids)
 
-        # Cache for convenience
-        origins = self.scene.env_origins[env_ids]  # (N, 3)
-
         # We’ll assign robots sequentially
         robot_ids = list(self.robots.keys())
-
-        ball_default_state = self.ball.data.default_root_state.clone()[env_ids]
-        ball_default_state[:, :2] = ball_default_state[:, :2] + self.scene.env_origins[env_ids][:,:2]\
-        + offsets[:, -2]
-        self.ball.write_root_state_to_sim(ball_default_state, env_ids)
-        self.ball.reset(env_ids)
+        self._desired_pos_w[env_ids] = torch.zeros_like(self._desired_pos_w[env_ids])
+        self._desired_pos_w[env_ids, :2] = self._desired_pos_w[env_ids][:, :2] + origins\
+        + offsets[-2]
 
         for i, robot_id in enumerate(robot_ids):
             # Reset robot internals
@@ -314,8 +327,7 @@ class YahboomSearchAndRescueEnv(DirectMARLEnv):
             default_root_state = self.robots[robot_id].data.default_root_state[env_ids].clone()
 
             # Place robot
-            default_root_state[:, :2] += origins[:, :2]
-            default_root_state[:, :2] += offsets[:, -1]
+            default_root_state[:, :2] = origins + offsets[-1]
 
             # Write to sim
             self.robots[robot_id].write_root_pose_to_sim(default_root_state[:, :7], env_ids)
@@ -329,7 +341,7 @@ class YahboomSearchAndRescueEnv(DirectMARLEnv):
             extras["Episode_Reward/"+key] = episodic_sum_avg
             self._episode_sums[key][env_ids] = 0.0
 
-        final_dist_to_ball = torch.mean(torch.linalg.norm(self.robots["robot_0"].data.root_pos_w[:, :3] - self.ball.data.root_pos_w, dim=1)[env_ids]).item()
+        final_dist_to_ball = torch.mean(torch.linalg.norm(self.robots["robot_0"].data.root_pos_w[env_ids, :3] - self._desired_pos_w[env_ids], dim=1)).item()
         extras["Final_Dist_To_Ball"] = final_dist_to_ball
         self.extras["log"] = dict()
         self.extras["log"].update(extras)
@@ -348,21 +360,17 @@ class YahboomSearchAndRescueEnv(DirectMARLEnv):
         env_origins = self.scene.env_origins[env_ids][:, :2]
 
         # Use grid_spacing >= min_dist to guarantee spacing
-        for i in range(N):
-            # define grid area (tight bounds)
-            xs = torch.arange(env_origins[i, 0] - 8, env_origins[i, 0] + 8, grid_spacing, device=device)
-            ys = torch.arange(env_origins[i, 1] - 4, env_origins[i, 1] + 4, grid_spacing, device=device)
-            xv, yv = torch.meshgrid(xs, ys, indexing="ij")
+        xs = torch.arange(-8, 8, grid_spacing, device=device)
+        ys = torch.arange(-4, 4, grid_spacing, device=device)
+        xv, yv = torch.meshgrid(xs, ys, indexing="ij")
 
-            grid_points = torch.stack([xv.flatten(), yv.flatten()], dim=-1)
+        grid_points = torch.stack([xv.flatten(), yv.flatten()], dim=-1)
 
-            # randomly pick num_samples without replacement
-            perm = torch.randperm(grid_points.shape[0], device=device)
-            chosen = grid_points[perm[:num_samples]]
+        # randomly pick num_samples without replacement
+        perm = torch.randperm(grid_points.shape[0], device=device)
+        chosen = grid_points[perm[:num_samples]]
 
-            offsets[i] = chosen - env_origins[i]
-
-        return offsets
+        return chosen
 
     
 

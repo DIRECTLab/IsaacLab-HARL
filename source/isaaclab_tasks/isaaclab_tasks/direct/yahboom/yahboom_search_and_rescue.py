@@ -38,7 +38,7 @@ class YahboomSearchAndRescueEnvCfg(DirectMARLEnvCfg):
     decimation = 4
     episode_length_s = 20.0
     action_spaces = {f"robot_{i}": 2 for i in range(1)}
-    observation_spaces = {f"robot_{i}": 1600 for i in range(1)}
+    observation_spaces = {f"robot_{i}": 1603 for i in range(1)}
     state_space = 0
     state_spaces = {f"robot_{i}": 0 for i in range(1)}
     possible_agents = ["robot_0"]
@@ -264,23 +264,32 @@ class YahboomSearchAndRescueEnv(DirectMARLEnv):
             # self.image_slice.set_data(img_slice[0].unsqueeze(0).cpu().numpy())
             plt.draw()
             plt.pause(0.001)
+        
+        img = torch.nan_to_num(img.reshape((self.num_envs, -1)).to(torch.float32), nan=0.0, posinf=1e6, neginf=-1e6)
+        desired_pos_b, _ = subtract_frame_transforms(
+            self.robots["robot_0"].data.root_state_w[:, :3], self.robots["robot_0"].data.root_state_w[:, 3:7], self._desired_pos_w
+        )
 
-        return {"robot_0": torch.nan_to_num(img.reshape((self.num_envs, -1)).to(torch.float32), nan=0.0, posinf=1e6, neginf=-1e6)}
+        obs = torch.cat([img, desired_pos_b], dim=1)
+
+        return {"robot_0": obs}
     
     def _get_rewards(self) -> dict:
         robot_pos = self.robots["robot_0"].data.root_pos_w[:, :3]
         robot_distance_to_goal = torch.linalg.norm(robot_pos - self._desired_pos_w, dim=1)
-        robot_distance_to_goal_mapped = 1 - torch.tanh(robot_distance_to_goal / 5.0)
+        robot_distance_to_goal_mapped = 1 - torch.tanh(robot_distance_to_goal / 0.8)
         robot_distance_to_goal_mapped = robot_distance_to_goal_mapped * self.step_dt
-        robot_distance_to_goal_mapped = -1 * torch.nan_to_num(robot_distance_to_goal_mapped, nan=0.0, posinf=1e6, neginf=-1e6)
+        robot_distance_to_goal_mapped = torch.nan_to_num(robot_distance_to_goal_mapped, nan=0.0, posinf=1e6, neginf=-1e6)
+
+        got_to_goal_reward = self.reached_goal * 10
 
         self._episode_sums["dist_to_goal_reward"] += robot_distance_to_goal_mapped
-        return {"robot_0": robot_distance_to_goal_mapped}
+        return {"robot_0": robot_distance_to_goal_mapped + got_to_goal_reward}
 
     def _get_dones(self) -> tuple[dict, dict]:
         time_out = self.episode_length_buf >= self.max_episode_length - 1
-        dones = torch.norm(self.robots["robot_0"].data.root_pos_w[:, :3] - self._desired_pos_w, dim=1) < 0.5
-        return {"robot_0": dones}, {"robot_0": time_out}
+        self.reached_goal = torch.norm(self.robots["robot_0"].data.root_pos_w[:, :3] - self._desired_pos_w, dim=1) < 0.5
+        return {"robot_0": self.reached_goal}, {"robot_0": time_out}
 
     def _reset_idx(self, env_ids: torch.Tensor | None):
         if env_ids is None:
@@ -327,7 +336,8 @@ class YahboomSearchAndRescueEnv(DirectMARLEnv):
             default_root_state = self.robots[robot_id].data.default_root_state[env_ids].clone()
 
             # Place robot
-            default_root_state[:, :2] = origins + offsets[-1]
+            default_root_state[:, :2] = origins \
+                + offsets[-1]
 
             # Write to sim
             self.robots[robot_id].write_root_pose_to_sim(default_root_state[:, :7], env_ids)
@@ -355,9 +365,6 @@ class YahboomSearchAndRescueEnv(DirectMARLEnv):
         """
         device = self.scene.env_origins.device
         N = len(env_ids)
-
-        offsets = torch.zeros((N, num_samples, 2), device=device)
-        env_origins = self.scene.env_origins[env_ids][:, :2]
 
         # Use grid_spacing >= min_dist to guarantee spacing
         xs = torch.arange(-8, 8, grid_spacing, device=device)

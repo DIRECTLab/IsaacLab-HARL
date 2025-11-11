@@ -36,7 +36,7 @@ def define_markers() -> VisualizationMarkers:
 @configclass
 class YahboomSearchAndRescueEnvCfg(DirectMARLEnvCfg):
     decimation = 4
-    episode_length_s = 20.0
+    episode_length_s = 60.0
     action_spaces = {f"robot_{i}": 2 for i in range(1)}
     observation_spaces = {f"robot_{i}": 1603 for i in range(1)}
     state_space = 0
@@ -271,6 +271,7 @@ class YahboomSearchAndRescueEnv(DirectMARLEnv):
         )
 
         obs = torch.cat([img, desired_pos_b], dim=1)
+        obs = torch.nan_to_num(obs, nan=0.0, posinf=1e6, neginf=-1e6)
 
         return {"robot_0": obs}
     
@@ -353,6 +354,7 @@ class YahboomSearchAndRescueEnv(DirectMARLEnv):
 
         final_dist_to_ball = torch.mean(torch.linalg.norm(self.robots["robot_0"].data.root_pos_w[env_ids, :3] - self._desired_pos_w[env_ids], dim=1)).item()
         extras["Final_Dist_To_Ball"] = final_dist_to_ball
+        extras["Reached_Goal_Rate"] = torch.mean(self.reached_goal[env_ids].to(torch.float32)).item() if "reached_goal" in dir(self) else 0.0
         self.extras["log"] = dict()
         self.extras["log"].update(extras)
         extras = dict()

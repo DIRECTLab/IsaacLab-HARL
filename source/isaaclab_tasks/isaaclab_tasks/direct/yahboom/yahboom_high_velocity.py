@@ -11,10 +11,7 @@ from isaaclab.utils import configclass
 from isaaclab_assets.robots.leatherback import LEATHERBACK_CFG  # isort: skip
 from isaaclab.markers import VisualizationMarkers, VisualizationMarkersCfg
 from isaaclab.sensors import Camera, CameraCfg, TiledCamera, TiledCameraCfg
-from isaaclab.utils.math import subtract_frame_transforms
-from isaaclab.utils.math import quat_from_angle_axis, quat_from_euler_xyz, quat_rotate_inverse
-from isaaclab_assets.custom.soccer_ball import SOCCERBALL_CFG  # isort: skip
-import numpy as np
+from isaaclab.utils.math import quat_from_euler_xyz
 import matplotlib.pyplot as plt
 
 def get_quaternion_tuple_from_xyz(x, y, z):
@@ -33,7 +30,7 @@ class YahboomHighVelocityEnvCfg(DirectMARLEnvCfg):
 
     sim: SimulationCfg = SimulationCfg(dt=1 / 200, render_interval=decimation)
     robot_0: ArticulationCfg = LEATHERBACK_CFG.replace(prim_path="/World/envs/env_.*/Robot_0")
-    robot_0.init_state.pos = (-1.0, 0.0, .5)
+    robot_0.init_state.pos = (0.0, 0.0, .5)
 
     # Camera on the intel realsense D435 has a depth camera with w 848, h 480, and an rgb camera with w 480, h 640
     camera_0 = TiledCameraCfg(
@@ -122,9 +119,6 @@ class YahboomHighVelocityEnvCfg(DirectMARLEnvCfg):
         ),
     )
 
-    ball = SOCCERBALL_CFG.replace(prim_path="/World/envs/env_.*/Object4")
-    ball.init_state.pos = (1.0, 0.0, 0.5)
-
     throttle_dof_name = [
         "Wheel__Knuckle__Front_Left",
         "Wheel__Knuckle__Front_Right",
@@ -140,13 +134,11 @@ class YahboomHighVelocityEnvCfg(DirectMARLEnvCfg):
     scene: InteractiveSceneCfg = InteractiveSceneCfg(num_envs=4096, env_spacing=env_spacing, replicate_physics=True)
 
     throttle_scale = 10
-    throttle_max = 50
+    throttle_max = 100
     steering_scale = 0.1
     steering_max = 10
 
     goal_reward_scale = 20
-    ball_to_goal_reward_scale = 1.0
-    dist_to_ball_reward_scale = 1.0
 
 class YahboomHighVelocityEnv(DirectMARLEnv):
     cfg: YahboomHighVelocityEnvCfg
@@ -178,7 +170,6 @@ class YahboomHighVelocityEnv(DirectMARLEnv):
         self.wall_1 = RigidObject(self.cfg.wall_1)
         self.wall_2 = RigidObject(self.cfg.wall_2)
         self.wall_3 = RigidObject(self.cfg.wall_3)
-        self.ball = RigidObject(self.cfg.ball)
 
         spawn_ground_plane(
             prim_path="/World/ground",
@@ -233,7 +224,6 @@ class YahboomHighVelocityEnv(DirectMARLEnv):
         self._steering_action = actions["robot_0"][:, 1].repeat_interleave(2).reshape((-1, 2)) * self.cfg.steering_scale
         self._steering_action = torch.clamp(self._steering_action, -self.cfg.steering_max, self.cfg.steering_max)
         self._steering_state["robot_0"] = self._steering_action
-        self.ball.update(self.step_dt)
 
     def _apply_action(self) -> None:
         for robot_id in self.robots.keys():
@@ -241,6 +231,7 @@ class YahboomHighVelocityEnv(DirectMARLEnv):
             self.robots[robot_id].set_joint_position_target(self._steering_state[robot_id], joint_ids=self._steering_dof_idx)
     
     def _get_observations(self) -> dict:
+        print(self.robots["robot_0"].data.root_lin_vel_b[0,0].item())
         img = self.camera.data.output["depth"]
         if self.debug:
             self.actual_depth_im.set_data(self.camera.data.output["depth"][0].cpu().numpy())
@@ -251,7 +242,7 @@ class YahboomHighVelocityEnv(DirectMARLEnv):
         return {"robot_0": torch.nan_to_num(img.reshape((self.num_envs, -1)).to(torch.float32), nan=0.0, posinf=1e6, neginf=-1e6)}
     
     def _get_rewards(self) -> dict:
-        robot_vel = torch.linalg.vector_norm(self.robots["robot_0"].data.root_lin_vel_b, dim=1) * self.step_dt
+        robot_vel = self.robots["robot_0"].data.root_lin_vel_b[:,0] * self.step_dt
         robot_vel = torch.nan_to_num(robot_vel, nan=0.0, posinf=1e6, neginf=-1e6)
 
         self._episode_sums["robot_vel_reward"] += robot_vel
@@ -276,28 +267,21 @@ class YahboomHighVelocityEnv(DirectMARLEnv):
 
         # sample random grid positions for blocks
         num_blocks = len(self.blocks)
-        offsets = self._sample_positions_grid(env_ids, num_blocks + 2, min_dist=1.0, grid_spacing=1.0)
+        offsets = self._sample_positions_grid(env_ids, num_blocks + 1, min_dist=1.0, grid_spacing=1.0)
         # offsets = self._sample_positions_grid(env_ids, 2, min_dist=1.0, grid_spacing=1.0)
+
+        origins = self.scene.env_origins[env_ids][:,:2].clone()
 
         # set each block position
         for i, block in enumerate(self.blocks):
             block_state = block.data.default_root_state.clone()[env_ids]
-            block_state[:, :2] = self.scene.env_origins[env_ids][:, :2] + offsets[:, i]
+            block_state[:, :2] = origins + offsets[i]
             block_state[:, 2] = 0.25  # fixed height
             block.write_root_state_to_sim(block_state, env_ids)
             block.reset(env_ids)
 
-        # Cache for convenience
-        origins = self.scene.env_origins[env_ids]  # (N, 3)
-
         # We’ll assign robots sequentially
         robot_ids = list(self.robots.keys())
-
-        ball_default_state = self.ball.data.default_root_state.clone()[env_ids]
-        ball_default_state[:, :2] = ball_default_state[:, :2] + self.scene.env_origins[env_ids][:,:2]\
-        + offsets[:, -2]
-        self.ball.write_root_state_to_sim(ball_default_state, env_ids)
-        self.ball.reset(env_ids)
 
         for i, robot_id in enumerate(robot_ids):
             # Reset robot internals
@@ -310,8 +294,8 @@ class YahboomHighVelocityEnv(DirectMARLEnv):
             default_root_state = self.robots[robot_id].data.default_root_state[env_ids].clone()
 
             # Place robot
-            default_root_state[:, :2] += origins[:, :2]
-            default_root_state[:, :2] += offsets[:, -1]
+            default_root_state[:, :2] = origins \
+                + offsets[-1]
 
             # Write to sim
             self.robots[robot_id].write_root_pose_to_sim(default_root_state[:, :7], env_ids)
@@ -338,26 +322,18 @@ class YahboomHighVelocityEnv(DirectMARLEnv):
         device = self.scene.env_origins.device
         N = len(env_ids)
 
-        offsets = torch.zeros((N, num_samples, 2), device=device)
-        env_origins = self.scene.env_origins[env_ids][:, :2]
-
         # Use grid_spacing >= min_dist to guarantee spacing
-        for i in range(N):
-            # define grid area (tight bounds)
-            xs = torch.arange(env_origins[i, 0] - 8, env_origins[i, 0] + 8, grid_spacing, device=device)
-            ys = torch.arange(env_origins[i, 1] - 4, env_origins[i, 1] + 4, grid_spacing, device=device)
-            xv, yv = torch.meshgrid(xs, ys, indexing="ij")
+        xs = torch.arange(-8, 8, grid_spacing, device=device)
+        ys = torch.arange(-4, 4, grid_spacing, device=device)
+        xv, yv = torch.meshgrid(xs, ys, indexing="ij")
 
-            grid_points = torch.stack([xv.flatten(), yv.flatten()], dim=-1)
+        grid_points = torch.stack([xv.flatten(), yv.flatten()], dim=-1)
 
-            # randomly pick num_samples without replacement
-            perm = torch.randperm(grid_points.shape[0], device=device)
-            chosen = grid_points[perm[:num_samples]]
+        # randomly pick num_samples without replacement
+        perm = torch.randperm(grid_points.shape[0], device=device)
+        chosen = grid_points[perm[:num_samples]]
 
-            offsets[i] = chosen - env_origins[i]
-
-        return offsets
-
+        return chosen
     
 
     @torch.no_grad()

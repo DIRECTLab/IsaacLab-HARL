@@ -30,7 +30,7 @@ class YahboomHighVelocityEnvCfg(DirectMARLEnvCfg):
 
     sim: SimulationCfg = SimulationCfg(dt=1 / 200, render_interval=decimation)
     robot_0: ArticulationCfg = LEATHERBACK_CFG.replace(prim_path="/World/envs/env_.*/Robot_0")
-    robot_0.init_state.pos = (0.0, 0.0, .5)
+    robot_0.init_state.pos = (0.0, 0.0, 0.01)
 
     # Camera on the intel realsense D435 has a depth camera with w 848, h 480, and an rgb camera with w 480, h 640
     camera_0 = TiledCameraCfg(
@@ -134,7 +134,7 @@ class YahboomHighVelocityEnvCfg(DirectMARLEnvCfg):
     scene: InteractiveSceneCfg = InteractiveSceneCfg(num_envs=4096, env_spacing=env_spacing, replicate_physics=True)
 
     throttle_scale = 10
-    throttle_max = 100
+    throttle_max = 50
     steering_scale = 0.1
     steering_max = 10
 
@@ -231,7 +231,6 @@ class YahboomHighVelocityEnv(DirectMARLEnv):
             self.robots[robot_id].set_joint_position_target(self._steering_state[robot_id], joint_ids=self._steering_dof_idx)
     
     def _get_observations(self) -> dict:
-        print(self.robots["robot_0"].data.root_lin_vel_b[0,0].item())
         img = self.camera.data.output["depth"]
         if self.debug:
             self.actual_depth_im.set_data(self.camera.data.output["depth"][0].cpu().numpy())
@@ -250,7 +249,8 @@ class YahboomHighVelocityEnv(DirectMARLEnv):
 
     def _get_dones(self) -> tuple[dict, dict]:
         time_out = self.episode_length_buf >= self.max_episode_length - 1
-        return {"robot_0": time_out}, {"robot_0": time_out}
+        flipped = self.robots["robot_0"].data.root_pos_w[:,2] > 0.1
+        return {"robot_0": flipped}, {"robot_0": time_out}
 
     def _reset_idx(self, env_ids: torch.Tensor | None):
         if env_ids is None:

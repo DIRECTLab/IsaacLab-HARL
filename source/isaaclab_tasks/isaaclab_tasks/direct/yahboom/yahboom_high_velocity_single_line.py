@@ -19,14 +19,15 @@ def get_quaternion_tuple_from_xyz(x, y, z):
     return (quat_tensor[0].item(), quat_tensor[1].item(), quat_tensor[2].item(), quat_tensor[3].item())
 
 @configclass
-class YahboomHighVelocityEnvCfg(DirectMARLEnvCfg):
+class YahboomHighVelocitySingleLineEnvCfg(DirectMARLEnvCfg):
     decimation = 4
     episode_length_s = 20.0
     action_spaces = {f"robot_{i}": 2 for i in range(1)}
-    observation_spaces = {f"robot_{i}": 1600 for i in range(1)}
+    observation_spaces = {f"robot_{i}": 40 for i in range(1)}
     state_space = 0
     state_spaces = {f"robot_{i}": 0 for i in range(1)}
     possible_agents = ["robot_0"]
+
 
     sim: SimulationCfg = SimulationCfg(dt=1 / 200, render_interval=decimation)
     robot_0: ArticulationCfg = LEATHERBACK_CFG.replace(prim_path="/World/envs/env_.*/Robot_0")
@@ -48,6 +49,7 @@ class YahboomHighVelocityEnvCfg(DirectMARLEnvCfg):
         # offset=CameraCfg.OffsetCfg(pos=(0, 0, .25), rot=(0,0,1,0), convention="opengl"),
         offset=CameraCfg.OffsetCfg(pos=(20, 0, 30), rot=get_quaternion_tuple_from_xyz(torch.pi/2,  0, -torch.pi/2), convention="opengl"),
     )
+    camera_row_index = camera_0.height // 2
 
     wall_0 = RigidObjectCfg(
         prim_path="/World/envs/env_.*/Object0",
@@ -140,10 +142,10 @@ class YahboomHighVelocityEnvCfg(DirectMARLEnvCfg):
 
     goal_reward_scale = 20
 
-class YahboomHighVelocityEnv(DirectMARLEnv):
-    cfg: YahboomHighVelocityEnvCfg
+class YahboomHighVelocitySingleLineEnv(DirectMARLEnv):
+    cfg: YahboomHighVelocitySingleLineEnvCfg
 
-    def __init__(self, cfg: YahboomHighVelocityEnvCfg, render_mode: str | None = None, headless: bool | None = None, debug: bool = False, **kwargs):
+    def __init__(self, cfg: YahboomHighVelocitySingleLineEnvCfg, render_mode: str | None = None, headless: bool | None = None, debug: bool = False, **kwargs):
         self.debug = debug
         super().__init__(cfg, render_mode, **kwargs)
 
@@ -212,7 +214,7 @@ class YahboomHighVelocityEnv(DirectMARLEnv):
         if self.debug:
             plt.ion()
             _, ax = plt.subplots(1, 1, figsize=(5, 5))
-            self.depth_im = ax.imshow(torch.zeros((40, 40)), vmin=0, vmax=10, cmap='plasma')
+            self.depth_im = ax.imshow(torch.zeros(1, self.cfg.camera_0.width), vmin=0, vmax=10, cmap='plasma')
 
     def _pre_physics_step(self, actions: dict) -> None:
         self._throttle_action = actions["robot_0"][:, 0].repeat_interleave(4).reshape((-1, 4)) * self.cfg.throttle_scale
@@ -229,9 +231,9 @@ class YahboomHighVelocityEnv(DirectMARLEnv):
             self.robots[robot_id].set_joint_position_target(self._steering_state[robot_id], joint_ids=self._steering_dof_idx)
     
     def _get_observations(self) -> dict:
-        img = self.camera.data.output["depth"]
+        img = self.camera.data.output["depth"][:, self.cfg.camera_row_index]
         if self.debug:
-            self.depth_im.set_data(self.camera.data.output["depth"][0].cpu().numpy())
+            self.depth_im.set_data(img[0].cpu().numpy())
             plt.draw()
             plt.pause(0.001)
 

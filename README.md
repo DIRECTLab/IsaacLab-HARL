@@ -98,15 +98,14 @@ IsaacLab-HARL/source/isaaclab_tasks/isaaclab_tasks/direct
 If you find this work useful in your research, please consider citing our paper:
 
 ```bibtex
-@inproceedings{haight2025heterogeneous,
+@inproceedings{haight2025harl,
   author    = {Haight, Jacob and Peterson, Isaac and Allred, Christopher and Harper, Mario},
+  booktitle = {2025 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS)},
   title     = {Heterogeneous Multi-Agent Learning in Isaac Lab: Scalable Simulation for Robotic Collaboration},
-  booktitle = {Proceedings of the IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS)},
   year      = {2025},
-  pages     = {xx--xx},
-  address   = {Hangzhou, China},
-  publisher = {IEEE},
-  doi       = {DOI_TBD_HERE},
+  pages     = {13446-13451},
+  keywords  = {Training;Autonomous systems;Robot kinematics;Scalability;Collaboration;Reinforcement learning;Robots;Physics;Optimization;Videos},
+  doi       = {10.1109/IROS60139.2025.11247098},
   url       = {https://directlab.github.io/IsaacLab-HARL/}
 }
 ```

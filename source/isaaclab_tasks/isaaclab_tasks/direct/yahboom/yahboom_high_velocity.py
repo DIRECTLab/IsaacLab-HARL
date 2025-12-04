@@ -317,7 +317,6 @@ class YahboomHighVelocityEnv(DirectMARLEnv):
         so blocks don't overlap. Super fast for large env counts.
         """
         device = self.scene.env_origins.device
-        N = len(env_ids)
 
         # Use grid_spacing >= min_dist to guarantee spacing
         xs = torch.arange(-8, 8, grid_spacing, device=device)

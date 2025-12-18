@@ -16,7 +16,7 @@ SOURCE_PATH = sim_path[: sim_path.index("source")] + "source"
 
 SOCCERBALL_CFG = ArticulationCfg(
     spawn=sim_utils.UsdFileCfg(
-        usd_path=f"{SOURCE_PATH}/isaaclab_assets/isaaclab_assets/custom/soccer_ball.usda",
+        usd_path=f"{SOURCE_PATH}/isaaclab_assets/isaaclab_assets/custom/assets/soccer_ball.usda",
         visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(0.0, 1.0, 0.0)),
     ),
     init_state=ArticulationCfg.InitialStateCfg(pos=(0.0, 0.0, 0.0)),

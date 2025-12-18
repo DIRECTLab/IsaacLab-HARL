@@ -10,12 +10,12 @@ Ant locomotion environment.
 import gymnasium as gym
 
 from . import agents
+from .anymal_c_soccer_ma_homo import AnymalSoccerMAHomoEnv, AnymalSoccerMAHomoEnvCfg
 from .anymal_c_soccer_running import AnymalSoccerRunningEnv, AnymalSoccerRunningEnvCfg
 from .anymal_c_soccer_stage_1 import AnymalStage1SoccerEnv, AnymalStage1SoccerEnvCfg
 from .anymal_c_soccer_stage_2 import AnymalStage2SoccerEnv, AnymalStage2SoccerEnvCfg
-from .anymal_c_soccer_ma_homo import AnymalSoccerMAHomoEnv, AnymalSoccerMAHomoEnvCfg
-from .anymals_vs_leatherbacks import AnymalSoccerHeteroByTeamEnv, AnymalSoccerHeteroByTeamEnvCfg
 from .anymal_leatherback_on_each_team import AnymalSoccerHeteroInTeamEnv, AnymalSoccerHeteroInTeamEnvCfg
+from .anymals_vs_leatherbacks import AnymalSoccerHeteroByTeamEnv, AnymalSoccerHeteroByTeamEnvCfg
 
 ##
 # Register Gym environments.
@@ -23,7 +23,7 @@ from .anymal_leatherback_on_each_team import AnymalSoccerHeteroInTeamEnv, Anymal
 
 gym.register(
     id="AnymalC_Soccer_Soccer_Running-v1",
-    entry_point=AnymalSoccerRunningEnv, 
+    entry_point=AnymalSoccerRunningEnv,
     disable_env_checker=True,
     kwargs={
         "env_cfg_entry_point": AnymalSoccerRunningEnvCfg,
@@ -36,7 +36,7 @@ gym.register(
 
 gym.register(
     id="AnymalC_Soccer_Stage1-v1",
-    entry_point=AnymalStage1SoccerEnv, 
+    entry_point=AnymalStage1SoccerEnv,
     disable_env_checker=True,
     kwargs={
         "env_cfg_entry_point": AnymalStage1SoccerEnvCfg,
@@ -49,7 +49,7 @@ gym.register(
 
 gym.register(
     id="AnymalC_Soccer_Stage2-v1",
-    entry_point=AnymalStage2SoccerEnv, 
+    entry_point=AnymalStage2SoccerEnv,
     disable_env_checker=True,
     kwargs={
         "env_cfg_entry_point": AnymalStage2SoccerEnvCfg,
@@ -62,7 +62,7 @@ gym.register(
 
 gym.register(
     id="AnymalC_Soccer_MA_Homo-v1",
-    entry_point=AnymalSoccerMAHomoEnv, 
+    entry_point=AnymalSoccerMAHomoEnv,
     disable_env_checker=True,
     kwargs={
         "env_cfg_entry_point": AnymalSoccerMAHomoEnvCfg,
@@ -76,7 +76,7 @@ gym.register(
 
 gym.register(
     id="AnymalC_Soccer_Hetero_By_Team-v0",
-    entry_point=AnymalSoccerHeteroByTeamEnv, 
+    entry_point=AnymalSoccerHeteroByTeamEnv,
     disable_env_checker=True,
     kwargs={
         "env_cfg_entry_point": AnymalSoccerHeteroByTeamEnvCfg,
@@ -90,7 +90,7 @@ gym.register(
 
 gym.register(
     id="AnymalC_Soccer_Hetero_In_Team-v0",
-    entry_point=AnymalSoccerHeteroInTeamEnv, 
+    entry_point=AnymalSoccerHeteroInTeamEnv,
     disable_env_checker=True,
     kwargs={
         "env_cfg_entry_point": AnymalSoccerHeteroInTeamEnvCfg,

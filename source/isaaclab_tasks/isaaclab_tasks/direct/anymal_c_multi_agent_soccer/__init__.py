@@ -11,11 +11,11 @@ import gymnasium as gym
 
 from . import agents
 from .anymal_c_soccer_find_ball_teacher import AnymalCFindBallHappoEnv, AnymalCHappoFindBallEnvCfg
-from .leatherback_anymal_soccer_stage_2 import AnymalCPlaySoccer, AnymalCSoccerCfg
+from .anymal_c_soccer_ma_homo import AnymalSoccerMAHomoEnv, AnymalSoccerMAHomoEnvCfg
 from .anymal_c_soccer_running import AnymalSoccerRunningEnv, AnymalSoccerRunningEnvCfg
 from .anymal_c_soccer_stage_1 import AnymalStage1SoccerEnv, AnymalStage1SoccerEnvCfg
 from .anymal_c_soccer_stage_2 import AnymalStage2SoccerEnv, AnymalStage2SoccerEnvCfg
-from .anymal_c_soccer_ma_homo import AnymalSoccerMAHomoEnv, AnymalSoccerMAHomoEnvCfg
+from .leatherback_anymal_soccer_stage_2 import AnymalCPlaySoccer, AnymalCSoccerCfg
 
 ##
 # Register Gym environments.
@@ -23,7 +23,7 @@ from .anymal_c_soccer_ma_homo import AnymalSoccerMAHomoEnv, AnymalSoccerMAHomoEn
 
 gym.register(
     id="Flat_AnymalC_Find_Ball_Teacher-v0",
-    entry_point=AnymalCFindBallHappoEnv, 
+    entry_point=AnymalCFindBallHappoEnv,
     disable_env_checker=True,
     kwargs={
         "env_cfg_entry_point": AnymalCHappoFindBallEnvCfg,
@@ -36,7 +36,7 @@ gym.register(
 
 gym.register(
     id="Flat_AnymalC_Play_Soccer_Direct-v0",
-    entry_point=AnymalCPlaySoccer, 
+    entry_point=AnymalCPlaySoccer,
     disable_env_checker=True,
     kwargs={
         "env_cfg_entry_point": AnymalCSoccerCfg,
@@ -49,7 +49,7 @@ gym.register(
 
 gym.register(
     id="AnymalC_Soccer_Soccer_Running-v0",
-    entry_point=AnymalSoccerRunningEnv, 
+    entry_point=AnymalSoccerRunningEnv,
     disable_env_checker=True,
     kwargs={
         "env_cfg_entry_point": AnymalSoccerRunningEnvCfg,
@@ -62,7 +62,7 @@ gym.register(
 
 gym.register(
     id="AnymalC_Soccer_Stage1-v0",
-    entry_point=AnymalStage1SoccerEnv, 
+    entry_point=AnymalStage1SoccerEnv,
     disable_env_checker=True,
     kwargs={
         "env_cfg_entry_point": AnymalStage1SoccerEnvCfg,
@@ -75,7 +75,7 @@ gym.register(
 
 gym.register(
     id="AnymalC_Soccer_Stage2-v0",
-    entry_point=AnymalStage2SoccerEnv, 
+    entry_point=AnymalStage2SoccerEnv,
     disable_env_checker=True,
     kwargs={
         "env_cfg_entry_point": AnymalStage2SoccerEnvCfg,
@@ -88,7 +88,7 @@ gym.register(
 
 gym.register(
     id="AnymalC_Soccer_MA_Homo-v0",
-    entry_point=AnymalSoccerMAHomoEnv, 
+    entry_point=AnymalSoccerMAHomoEnv,
     disable_env_checker=True,
     kwargs={
         "env_cfg_entry_point": AnymalSoccerMAHomoEnvCfg,

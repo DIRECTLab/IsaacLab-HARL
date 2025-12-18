@@ -121,7 +121,7 @@ class AnymalCMultiAgentFlatSameTeamBarEnvCfg(DirectMARLEnvCfg):
     state_spaces = {f"robot_{i}": 0 for i in range(2)}
     possible_agents = ["robot_0", "robot_1"]
 
-    teams = {"team_0":["robot_0", "robot_1"]}
+    teams = {"team_0": ["robot_0", "robot_1"]}
 
     # simulation
     sim: SimulationCfg = SimulationCfg(
@@ -189,7 +189,7 @@ class AnymalCMultiAgentFlatSameTeamBarEnvCfg(DirectMARLEnvCfg):
     lin_vel_reward_scale = 1.0
     yaw_rate_reward_scale = 1.0
 
-    bar_z_min_pos = .6
+    bar_z_min_pos = 0.6
 
     anymal_min_z_pos = 0.1
     max_bar_roll_angle_rad = 1
@@ -198,9 +198,7 @@ class AnymalCMultiAgentFlatSameTeamBarEnvCfg(DirectMARLEnvCfg):
 class AnymalCMultiAgentFlatSameTeamBarEnv(DirectMARLEnv):
     cfg: AnymalCMultiAgentFlatSameTeamBarEnvCfg
 
-    def __init__(
-        self, cfg: AnymalCMultiAgentFlatSameTeamBarEnvCfg, render_mode: str | None = None, **kwargs
-    ):
+    def __init__(self, cfg: AnymalCMultiAgentFlatSameTeamBarEnvCfg, render_mode: str | None = None, **kwargs):
         super().__init__(cfg, render_mode, **kwargs)
         # Joint position command (deviation from default joint positions)
 
@@ -374,9 +372,7 @@ class AnymalCMultiAgentFlatSameTeamBarEnv(DirectMARLEnv):
         self._draw_markers(bar_commands)
 
         # xy linear velocity tracking
-        lin_vel_error = torch.sum(
-            torch.square(bar_commands[:, :2] - self.object.data.root_com_lin_vel_b[:, :2]), dim=1
-        )
+        lin_vel_error = torch.sum(torch.square(bar_commands[:, :2] - self.object.data.root_com_lin_vel_b[:, :2]), dim=1)
         lin_vel_error_mapped = torch.exp(-lin_vel_error)
 
         # yaw rate tracking
@@ -393,7 +389,7 @@ class AnymalCMultiAgentFlatSameTeamBarEnv(DirectMARLEnv):
         for key, value in rewards.items():
             self._episode_sums[key] += value
 
-        return {"team_0":reward}
+        return {"team_0": reward}
 
     def _get_anymal_fallen(self):
         agent_dones = []
@@ -465,5 +461,3 @@ class AnymalCMultiAgentFlatSameTeamBarEnv(DirectMARLEnv):
             self._episode_sums[key][env_ids] = 0.0
         self.extras["log"] = dict()
         self.extras["log"].update(extras)
-
-

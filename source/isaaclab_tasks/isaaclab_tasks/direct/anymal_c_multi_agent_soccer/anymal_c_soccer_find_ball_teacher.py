@@ -21,7 +21,7 @@ from isaaclab.sim import SimulationCfg
 from isaaclab.terrains import TerrainImporterCfg
 from isaaclab.utils import configclass
 from isaaclab.utils.assets import ISAAC_NUCLEUS_DIR
-from isaaclab.utils.math import quat_from_angle_axis, quat_apply, euler_xyz_from_quat
+from isaaclab.utils.math import euler_xyz_from_quat, quat_apply, quat_from_angle_axis
 
 ##
 # Pre-defined configs
@@ -146,10 +146,7 @@ class AnymalCHappoFindBallEnvCfg(DirectMARLEnvCfg):
                 restitution=0.3,
             ),
         ),
-        init_state=RigidObjectCfg.InitialStateCfg(
-            pos=(2.0, 0.0, 1.0),
-            rot=(1.0, 0.0, 0.0, 0.0)
-        )
+        init_state=RigidObjectCfg.InitialStateCfg(pos=(2.0, 0.0, 1.0), rot=(1.0, 0.0, 0.0, 0.0)),
     )
 
     # reward scales (override from flat config)
@@ -170,16 +167,13 @@ class AnymalCHappoFindBallEnvCfg(DirectMARLEnvCfg):
     flat_orientation_reward_scale = -5.0
 
 
-
 class AnymalCFindBallHappoEnv(DirectMARLEnv):
     cfg: AnymalCHappoFindBallEnvCfg
 
-    def __init__(
-        self, cfg: AnymalCHappoFindBallEnvCfg, render_mode: str | None = None, debug=False, **kwargs
-    ):
+    def __init__(self, cfg: AnymalCHappoFindBallEnvCfg, render_mode: str | None = None, debug=False, **kwargs):
         self.debug = debug
         super().__init__(cfg, render_mode, **kwargs)
-        
+
         # Joint position command (deviation from default joint positions)
 
         self.actions = {
@@ -290,14 +284,13 @@ class AnymalCFindBallHappoEnv(DirectMARLEnv):
             )
 
         return obs
-    
+
     def _draw_markers(self, robot_pos, orientation_desired, orientation_forward):
         """
         Visualizes two orientation markers at the robot's position:
         - One pointing in the direction of the desired target
         - One showing the current velocity direction of the robot
         """
-        
 
         # Marker metadata
         marker_ids = torch.concat(
@@ -324,9 +317,7 @@ class AnymalCFindBallHappoEnv(DirectMARLEnv):
             dim=0,
         )
 
-        self.my_visualizer.visualize(
-            marker_locations, orientations, marker_indices=marker_ids
-        )
+        self.my_visualizer.visualize(marker_locations, orientations, marker_indices=marker_ids)
 
     def _get_rewards(self) -> dict:
         robot_pos = self.robots["robot_0"].data.root_pos_w
@@ -394,14 +385,17 @@ class AnymalCFindBallHappoEnv(DirectMARLEnv):
         # undesired contacts
         net_contact_forces = self.contact_sensors["robot_0"].data.net_forces_w_history
         is_contact = (
-            torch.max(torch.norm(net_contact_forces[:, :, self.undesired_body_contact_ids["robot_0"]], dim=-1), dim=1)[0] > 1.0
+            torch.max(torch.norm(net_contact_forces[:, :, self.undesired_body_contact_ids["robot_0"]], dim=-1), dim=1)[
+                0
+            ]
+            > 1.0
         )
         contacts = torch.sum(is_contact, dim=1)
         # flat orientation
         flat_orientation = torch.sum(torch.square(self.robots["robot_0"].data.projected_gravity_b[:, :2]), dim=1)
 
         rewards = {
-            "direction_reward":  direction_reward * self.cfg.direction_reward_scale * self.step_dt,
+            "direction_reward": direction_reward * self.cfg.direction_reward_scale * self.step_dt,
             "distance_to_ball_reward": distance_to_ball_mapped * self.cfg.dist_to_ball_reward_scale * self.step_dt,
             "lin_vel_z_l2": z_vel_error * self.cfg.z_vel_reward_scale * self.step_dt,
             "ang_vel_xy_l2": ang_vel_error * self.cfg.ang_vel_reward_scale * self.step_dt,
@@ -417,12 +411,14 @@ class AnymalCFindBallHappoEnv(DirectMARLEnv):
         for key, value in rewards.items():
             self._episode_sums[key] += value
 
-        return {"robot_0":reward}
+        return {"robot_0": reward}
 
     def _get_dones(self) -> tuple[dict, dict]:
         time_out = self.episode_length_buf >= self.max_episode_length - 1
         net_contact_forces = self.contact_sensors["robot_0"].data.net_forces_w_history
-        died = torch.any(torch.max(torch.norm(net_contact_forces[:, :, self.base_ids["robot_0"]], dim=-1), dim=1)[0] > 1.0, dim=1)
+        died = torch.any(
+            torch.max(torch.norm(net_contact_forces[:, :, self.base_ids["robot_0"]], dim=-1), dim=1)[0] > 1.0, dim=1
+        )
         return {"robot_0": died}, {"robot_0": time_out}
 
     def _reset_idx(self, env_ids: torch.Tensor):
@@ -432,7 +428,9 @@ class AnymalCFindBallHappoEnv(DirectMARLEnv):
 
         object_default_state2 = self.soccer_ball.data.default_root_state.clone()[env_ids]
         object_default_state2[:, 0:3] = object_default_state2[:, 0:3] + self.scene.env_origins[env_ids]
-        object_default_state2[:, :2] += torch.zeros_like(object_default_state2[:, :2], device=self.device).uniform_(-10, 10)
+        object_default_state2[:, :2] += torch.zeros_like(object_default_state2[:, :2], device=self.device).uniform_(
+            -10, 10
+        )
         mask1 = (object_default_state2[:, :2] < min_dist_to_ball) & (object_default_state2[:, :2] > 0.0)
         mask2 = (object_default_state2[:, :2] > -min_dist_to_ball) & (object_default_state2[:, :2] < 0.0)
 
@@ -465,7 +463,6 @@ class AnymalCFindBallHappoEnv(DirectMARLEnv):
             robot.write_root_velocity_to_sim(default_root_state[:, 7:], env_ids)
             robot.write_joint_state_to_sim(joint_pos, joint_vel, None, env_ids)
 
-        
         self.previous_anymal_pos = self.robots["robot_0"].data.root_pos_w.clone()
         self.previous_ball_pos = self.soccer_ball.data.root_link_pos_w.clone()
         self.curr_anymal_pos = self.robots["robot_0"].data.root_pos_w.clone()
@@ -478,9 +475,13 @@ class AnymalCFindBallHappoEnv(DirectMARLEnv):
             extras["Episode_Reward/" + key] = episodic_sum_avg / self.max_episode_length_s
             self._episode_sums[key][env_ids] = 0.0
 
-        extras["final_distance_to_ball"] = torch.linalg.norm(
-            self.robots["robot_0"].data.root_pos_w[env_ids] - self.soccer_ball.data.root_pos_w[env_ids], dim=-1
-        ).mean().item()
+        extras["final_distance_to_ball"] = (
+            torch.linalg.norm(
+                self.robots["robot_0"].data.root_pos_w[env_ids] - self.soccer_ball.data.root_pos_w[env_ids], dim=-1
+            )
+            .mean()
+            .item()
+        )
         self.extras["log"] = dict()
         self.extras["log"].update(extras)
         extras = dict()

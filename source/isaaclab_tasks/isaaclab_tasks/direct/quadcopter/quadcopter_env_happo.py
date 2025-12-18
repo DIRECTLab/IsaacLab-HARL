@@ -179,7 +179,6 @@ class QuadcopterMARLEnv(DirectMARLEnv):
         # self.scene.sensors["robot_0_camera"] = self.cameras["robot_0"]
         ### SETUP CAMERAS ###
 
-
         self.cfg.terrain.num_envs = self.scene.cfg.num_envs
         self.cfg.terrain.env_spacing = self.scene.cfg.env_spacing
         self._terrain = self.cfg.terrain.class_type(self.cfg.terrain)
@@ -191,7 +190,9 @@ class QuadcopterMARLEnv(DirectMARLEnv):
 
     def _pre_physics_step(self, actions: torch.Tensor):
         self.actions["robot_0"] = actions["robot_0"].clone().clamp(-1.0, 1.0)
-        self._thrust[:, 0, 2] = self.cfg.thrust_to_weight * self._robot_weight * (self.actions["robot_0"][:, 0] + 1.0) / 2.0
+        self._thrust[:, 0, 2] = (
+            self.cfg.thrust_to_weight * self._robot_weight * (self.actions["robot_0"][:, 0] + 1.0) / 2.0
+        )
         self._moment[:, 0, :] = self.cfg.moment_scale * self.actions["robot_0"][:, 1:]
 
     def _apply_action(self):
@@ -199,7 +200,9 @@ class QuadcopterMARLEnv(DirectMARLEnv):
 
     def _get_observations(self) -> dict:
         desired_pos_b, _ = subtract_frame_transforms(
-            self.robots["robot_0"].data.root_state_w[:, :3], self.robots["robot_0"].data.root_state_w[:, 3:7], self._desired_pos_w
+            self.robots["robot_0"].data.root_state_w[:, :3],
+            self.robots["robot_0"].data.root_state_w[:, 3:7],
+            self._desired_pos_w,
         )
         obs = torch.cat(
             [
@@ -234,7 +237,7 @@ class QuadcopterMARLEnv(DirectMARLEnv):
         died = self.robots["robot_0"].data.root_pos_w[:, 2] < 0.1
         dones = {}
         dones["robot_0"] = died.to(self.device)
-        time_out = {robot_id:time_out for robot_id in self.robots.keys()}
+        time_out = {robot_id: time_out for robot_id in self.robots.keys()}
 
         # dones = {robot_id: torch.zeros(self.num_envs).to(torch.int8).to(self.device) for robot_id in self.robots.keys()}
 

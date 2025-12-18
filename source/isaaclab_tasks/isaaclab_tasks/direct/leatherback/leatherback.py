@@ -1,16 +1,25 @@
+# Copyright (c) 2022-2025, The Isaac Lab Project Developers.
+# All rights reserved.
+#
+# SPDX-License-Identifier: BSD-3-Clause
+
 from __future__ import annotations
 
 import torch
+
 import isaaclab.sim as sim_utils
 from isaaclab.assets import Articulation, ArticulationCfg
 from isaaclab.envs import DirectMARLEnv, DirectMARLEnvCfg
+from isaaclab.markers import VisualizationMarkers
 from isaaclab.scene import InteractiveSceneCfg
 from isaaclab.sim import SimulationCfg
 from isaaclab.sim.spawners.from_files import GroundPlaneCfg, spawn_ground_plane
 from isaaclab.utils import configclass
+
 from .waypoint import WAYPOINT_CFG
+
 from isaaclab_assets.robots.leatherback import LEATHERBACK_CFG  # isort: skip
-from isaaclab.markers import VisualizationMarkers
+
 
 @configclass
 class LeatherbackEnvCfg(DirectMARLEnvCfg):
@@ -29,7 +38,7 @@ class LeatherbackEnvCfg(DirectMARLEnvCfg):
         "Wheel__Knuckle__Front_Left",
         "Wheel__Knuckle__Front_Right",
         "Wheel__Upright__Rear_Right",
-        "Wheel__Upright__Rear_Left"
+        "Wheel__Upright__Rear_Left",
     ]
     steering_dof_name = [
         "Knuckle__Upright__Front_Right",
@@ -39,6 +48,7 @@ class LeatherbackEnvCfg(DirectMARLEnvCfg):
     env_spacing = 32.0
     scene: InteractiveSceneCfg = InteractiveSceneCfg(num_envs=4096, env_spacing=env_spacing, replicate_physics=True)
 
+
 class LeatherbackEnv(DirectMARLEnv):
     cfg: LeatherbackEnvCfg
 
@@ -47,12 +57,14 @@ class LeatherbackEnv(DirectMARLEnv):
         self.headless = headless
         self._throttle_dof_idx, _ = self.leatherback.find_joints(self.cfg.throttle_dof_name)
         self._steering_dof_idx, _ = self.leatherback.find_joints(self.cfg.steering_dof_name)
-        self._throttle_state = torch.zeros((self.num_envs,4), device=self.device, dtype=torch.float32)
-        self._steering_state = torch.zeros((self.num_envs,2), device=self.device, dtype=torch.float32)
+        self._throttle_state = torch.zeros((self.num_envs, 4), device=self.device, dtype=torch.float32)
+        self._steering_state = torch.zeros((self.num_envs, 2), device=self.device, dtype=torch.float32)
         self._goal_reached = torch.zeros((self.num_envs), device=self.device, dtype=torch.int32)
         self.task_completed = {"robot_0": torch.zeros((self.num_envs), device=self.device, dtype=torch.bool)}
         self._num_goals = 10
-        self._target_positions = torch.zeros((self.num_envs, self._num_goals, 2), device=self.device, dtype=torch.float32)
+        self._target_positions = torch.zeros(
+            (self.num_envs, self._num_goals, 2), device=self.device, dtype=torch.float32
+        )
         self._markers_pos = torch.zeros((self.num_envs, self._num_goals, 3), device=self.device, dtype=torch.float32)
         self.env_spacing = self.cfg.env_spacing
         self.course_length_coefficient = 2.5
@@ -65,12 +77,7 @@ class LeatherbackEnv(DirectMARLEnv):
         self._target_index = torch.zeros((self.num_envs), device=self.device, dtype=torch.int32)
         self._episode_sums = {
             key: torch.zeros(self.num_envs, dtype=torch.float, device=self.device)
-            for key in [
-                "position_progress",
-                "heading_reward",
-                "goal_reached_reward",
-                "total_reward"
-            ]
+            for key in ["position_progress", "heading_reward", "goal_reached_reward", "total_reward"]
         }
 
     def _setup_scene(self):
@@ -95,7 +102,7 @@ class LeatherbackEnv(DirectMARLEnv):
         self.leatherback = Articulation(self.cfg.robot_0)
         self.waypoints = VisualizationMarkers(self.cfg.waypoint_cfg)
         self.object_state = []
-        
+
         self.scene.clone_environments(copy_from_source=False)
         self.scene.filter_collisions(global_prim_paths=[])
         self.scene.articulations["leatherback"] = self.leatherback
@@ -113,7 +120,7 @@ class LeatherbackEnv(DirectMARLEnv):
         self._throttle_action = actions["robot_0"][:, 0].repeat_interleave(4).reshape((-1, 4)) * throttle_scale
         self.throttle_action = torch.clamp(self._throttle_action, -throttle_max, throttle_max)
         self._throttle_state = self._throttle_action
-        
+
         self._steering_action = actions["robot_0"][:, 1].repeat_interleave(2).reshape((-1, 2)) * steering_scale
         self._steering_action = torch.clamp(self._steering_action, -steering_max, steering_max)
         self._steering_state = self._steering_action
@@ -130,10 +137,14 @@ class LeatherbackEnv(DirectMARLEnv):
 
         heading = self.leatherback.data.heading_w
         target_heading_w = torch.atan2(
-            self._target_positions[self.leatherback._ALL_INDICES, self._target_index, 1] - self.leatherback.data.root_link_pos_w[:, 1],
-            self._target_positions[self.leatherback._ALL_INDICES, self._target_index, 0] - self.leatherback.data.root_link_pos_w[:, 0],
+            self._target_positions[self.leatherback._ALL_INDICES, self._target_index, 1]
+            - self.leatherback.data.root_link_pos_w[:, 1],
+            self._target_positions[self.leatherback._ALL_INDICES, self._target_index, 0]
+            - self.leatherback.data.root_link_pos_w[:, 0],
         )
-        self.target_heading_error = torch.atan2(torch.sin(target_heading_w - heading), torch.cos(target_heading_w - heading))
+        self.target_heading_error = torch.atan2(
+            torch.sin(target_heading_w - heading), torch.cos(target_heading_w - heading)
+        )
 
         obs = torch.cat(
             (
@@ -148,24 +159,24 @@ class LeatherbackEnv(DirectMARLEnv):
             ),
             dim=-1,
         )
-        
+
         if torch.any(obs.isnan()):
             raise ValueError("Observations cannot be NAN")
 
         return {"robot_0": obs}
-    
+
     def _get_rewards(self) -> torch.Tensor:
         position_progress_rew = self._previous_position_error - self._position_error
         target_heading_rew = torch.exp(-torch.abs(self.target_heading_error) / self.heading_coefficient)
         goal_reached = self._position_error < self.position_tolerance
         self._target_index = self._target_index + goal_reached
-        self.task_completed["robot_0"] = self._target_index > (self._num_goals -1)
+        self.task_completed["robot_0"] = self._target_index > (self._num_goals - 1)
         self._target_index = self._target_index % self._num_goals
 
         rewards = {
             "position_progress": position_progress_rew * self.position_progress_weight,
             "heading_reward": target_heading_rew * self.heading_progress_weight,
-            "goal_reached_reward": goal_reached * self.goal_reached_bonus
+            "goal_reached_reward": goal_reached * self.goal_reached_bonus,
         }
         composite_reward = torch.sum(torch.stack(list(rewards.values())), dim=0)
 
@@ -202,7 +213,7 @@ class LeatherbackEnv(DirectMARLEnv):
         self.extras["log"].update(extras)
         extras = dict()
 
-        num_reset = len(env_ids) # type:ignore
+        num_reset = len(env_ids)  # type:ignore
         default_state = self.leatherback.data.default_root_state[env_ids]
         leatherback_pose = default_state[:, :7]
         leatherback_velocities = default_state[:, 7:]
@@ -211,7 +222,9 @@ class LeatherbackEnv(DirectMARLEnv):
 
         leatherback_pose[:, :3] += self.scene.env_origins[env_ids]
         leatherback_pose[:, 0] -= self.env_spacing / 2
-        leatherback_pose[:, 1] += 2.0 * torch.rand((num_reset), dtype=torch.float32, device=self.device) * self.course_width_coefficient
+        leatherback_pose[:, 1] += (
+            2.0 * torch.rand((num_reset), dtype=torch.float32, device=self.device) * self.course_width_coefficient
+        )
 
         angles = torch.pi / 6.0 * torch.rand((num_reset), dtype=torch.float32, device=self.device)
         leatherback_pose[:, 3] = torch.cos(angles * 0.5)
@@ -225,9 +238,14 @@ class LeatherbackEnv(DirectMARLEnv):
         self._markers_pos[env_ids, :, :] = 0.0
 
         spacing = 2 / self._num_goals
-        target_positions = torch.arange(-0.8, 1.1, spacing, device=self.device) * self.env_spacing / self.course_length_coefficient
-        self._target_positions[env_ids, :len(target_positions), 0] = target_positions
-        self._target_positions[env_ids, :, 1] = torch.rand((num_reset, self._num_goals), dtype=torch.float32, device=self.device) + self.course_length_coefficient
+        target_positions = (
+            torch.arange(-0.8, 1.1, spacing, device=self.device) * self.env_spacing / self.course_length_coefficient
+        )
+        self._target_positions[env_ids, : len(target_positions), 0] = target_positions
+        self._target_positions[env_ids, :, 1] = (
+            torch.rand((num_reset, self._num_goals), dtype=torch.float32, device=self.device)
+            + self.course_length_coefficient
+        )
         self._target_positions[env_ids, :] += self.scene.env_origins[env_ids, :2].unsqueeze(1)
 
         self._target_index[env_ids] = 0
@@ -241,7 +259,7 @@ class LeatherbackEnv(DirectMARLEnv):
         self._previous_position_error = self._position_error.clone()
 
         heading = self.leatherback.data.heading_w[:]
-        target_heading_w = torch.atan2( 
+        target_heading_w = torch.atan2(
             self._target_positions[:, 0, 1] - self.leatherback.data.root_pos_w[:, 1],
             self._target_positions[:, 0, 0] - self.leatherback.data.root_pos_w[:, 0],
         )

@@ -187,13 +187,10 @@ class AnymalCAdversarialSameTeamEnvCfg(DirectMARLEnvCfg):
     flat_orientation_reward_scale = -5.0
 
 
-
 class AnymalCAdversarialSameTeamEnv(DirectMARLEnv):
     cfg: AnymalCAdversarialSameTeamEnvCfg
 
-    def __init__(
-        self, cfg: AnymalCAdversarialSameTeamEnvCfg, render_mode: str | None = None, debug=False, **kwargs
-    ):
+    def __init__(self, cfg: AnymalCAdversarialSameTeamEnvCfg, render_mode: str | None = None, debug=False, **kwargs):
         self.debug = debug
         super().__init__(cfg, render_mode, **kwargs)
         # Joint position command (deviation from default joint positions)
@@ -280,22 +277,22 @@ class AnymalCAdversarialSameTeamEnv(DirectMARLEnv):
         self.previous_actions = copy.deepcopy(self.actions)
 
         robot_0_obs = torch.cat(
-                [
-                    tensor
-                    for tensor in (
-                        self.robots["robot_0"].data.root_lin_vel_b,
-                        self.robots["robot_0"].data.root_ang_vel_b,
-                        self.robots["robot_0"].data.projected_gravity_b,
-                        self._commands,
-                        self.robots["robot_0"].data.joint_pos - self.robots["robot_0"].data.default_joint_pos,
-                        self.robots["robot_0"].data.joint_vel,
-                        self.actions["robot_0"],
-                    )
-                    if tensor is not None
-                ],
-                dim=-1,
-            )
-            
+            [
+                tensor
+                for tensor in (
+                    self.robots["robot_0"].data.root_lin_vel_b,
+                    self.robots["robot_0"].data.root_ang_vel_b,
+                    self.robots["robot_0"].data.projected_gravity_b,
+                    self._commands,
+                    self.robots["robot_0"].data.joint_pos - self.robots["robot_0"].data.default_joint_pos,
+                    self.robots["robot_0"].data.joint_vel,
+                    self.actions["robot_0"],
+                )
+                if tensor is not None
+            ],
+            dim=-1,
+        )
+
         robot_1_obs = torch.cat(
             [
                 tensor
@@ -313,8 +310,7 @@ class AnymalCAdversarialSameTeamEnv(DirectMARLEnv):
             dim=-1,
         )
 
-
-        return {"team_0": {"robot_0": robot_0_obs, "robot_1":robot_1_obs}}
+        return {"team_0": {"robot_0": robot_0_obs, "robot_1": robot_1_obs}}
 
     def _draw_markers(self, command):
         xy_commands = command.clone()
@@ -386,7 +382,9 @@ class AnymalCAdversarialSameTeamEnv(DirectMARLEnv):
 
         for robot_id in self.robots.keys():
             # linear velocity tracking
-            lin_vel_error = torch.sum(torch.square(self._commands[:, :2] - self.robots[robot_id].data.root_lin_vel_b[:, :2]), dim=1)
+            lin_vel_error = torch.sum(
+                torch.square(self._commands[:, :2] - self.robots[robot_id].data.root_lin_vel_b[:, :2]), dim=1
+            )
             lin_vel_error_mapped = torch.exp(-lin_vel_error / 0.25)
             # yaw rate tracking
             yaw_rate_error = torch.square(self._commands[:, 2] - self.robots[robot_id].data.root_ang_vel_b[:, 2])
@@ -402,7 +400,9 @@ class AnymalCAdversarialSameTeamEnv(DirectMARLEnv):
             # action rate
             action_rate = torch.sum(torch.square(self.actions[robot_id] - self.previous_actions[robot_id]), dim=1)
             # feet air time
-            first_contact = self.contact_sensors[robot_id].compute_first_contact(self.step_dt)[:, self.feet_ids[robot_id]]
+            first_contact = self.contact_sensors[robot_id].compute_first_contact(self.step_dt)[
+                :, self.feet_ids[robot_id]
+            ]
             last_air_time = self.contact_sensors[robot_id].data.last_air_time[:, self.feet_ids[robot_id]]
             air_time = torch.sum((last_air_time - 0.5) * first_contact, dim=1) * (
                 torch.norm(self._commands[:, :2], dim=1) > 0.1
@@ -410,7 +410,10 @@ class AnymalCAdversarialSameTeamEnv(DirectMARLEnv):
             # undesired contacts
             net_contact_forces = self.contact_sensors[robot_id].data.net_forces_w_history
             is_contact = (
-                torch.max(torch.norm(net_contact_forces[:, :, self.undesired_body_contact_ids[robot_id]], dim=-1), dim=1)[0] > 1.0
+                torch.max(
+                    torch.norm(net_contact_forces[:, :, self.undesired_body_contact_ids[robot_id]], dim=-1), dim=1
+                )[0]
+                > 1.0
             )
             contacts = torch.sum(is_contact, dim=1)
             # flat orientation
@@ -434,7 +437,7 @@ class AnymalCAdversarialSameTeamEnv(DirectMARLEnv):
             for key, value in rewards.items():
                 self._episode_sums[key] += value
 
-        return {"team_0" : (all_rewards["robot_0"] + all_rewards["robot_1"]) / 2}
+        return {"team_0": (all_rewards["robot_0"] + all_rewards["robot_1"]) / 2}
 
     def _get_dones(self) -> tuple[dict, dict]:
         # anymal_died = []
@@ -446,10 +449,9 @@ class AnymalCAdversarialSameTeamEnv(DirectMARLEnv):
         # anymal_died = torch.any(torch.stack(anymal_died), dim=1)
 
         time_out = self.episode_length_buf >= self.max_episode_length - 1
-        time_out = {team:time_out for team in self.cfg.teams.keys()}
+        time_out = {team: time_out for team in self.cfg.teams.keys()}
         # died = torch.any(torch.max(torch.norm(net_contact_forces[:, :, self.base_ids["robot_0"]], dim=-1), dim=1)[0] > 1.0, dim=1)
         # died = {team:died for team in self.cfg.teams.keys()}
-
 
         return time_out, time_out
 
@@ -459,7 +461,7 @@ class AnymalCAdversarialSameTeamEnv(DirectMARLEnv):
         super()._reset_idx(env_ids)  # once
 
         # spread out resets
-        if len(env_ids) == self.num_envs: # type: ignore
+        if len(env_ids) == self.num_envs:  # type: ignore
             self.episode_length_buf[:] = torch.randint_like(self.episode_length_buf, high=int(self.max_episode_length))
 
         # sample commands once

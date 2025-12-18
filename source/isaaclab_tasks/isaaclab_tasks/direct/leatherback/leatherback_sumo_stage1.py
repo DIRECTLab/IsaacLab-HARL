@@ -1,21 +1,29 @@
+# Copyright (c) 2022-2025, The Isaac Lab Project Developers.
+# All rights reserved.
+#
+# SPDX-License-Identifier: BSD-3-Clause
+
 from __future__ import annotations
 
 import torch
+
 import isaaclab.sim as sim_utils
 from isaaclab.assets import Articulation, ArticulationCfg, RigidObject, RigidObjectCfg
 from isaaclab.envs import DirectMARLEnv, DirectMARLEnvCfg
+from isaaclab.markers import VisualizationMarkers, VisualizationMarkersCfg
 from isaaclab.scene import InteractiveSceneCfg
 from isaaclab.sim import SimulationCfg
 from isaaclab.sim.spawners.from_files import GroundPlaneCfg, spawn_ground_plane
 from isaaclab.utils import configclass
+from isaaclab.utils.math import quat_from_angle_axis, quat_from_euler_xyz, subtract_frame_transforms
+
 from isaaclab_assets.robots.leatherback import LEATHERBACK_CFG  # isort: skip
-from isaaclab.markers import VisualizationMarkers, VisualizationMarkersCfg
-from isaaclab.utils.math import subtract_frame_transforms
-from isaaclab.utils.math import quat_from_angle_axis, quat_from_euler_xyz
+
 
 def get_quaternion_tuple_from_xyz(x, y, z):
     quat_tensor = quat_from_euler_xyz(torch.tensor([x]), torch.tensor([y]), torch.tensor([z])).flatten()
     return (quat_tensor[0].item(), quat_tensor[1].item(), quat_tensor[2].item(), quat_tensor[3].item())
+
 
 @configclass
 class LeatherbackSumoStage1EnvCfg(DirectMARLEnvCfg):
@@ -28,23 +36,23 @@ class LeatherbackSumoStage1EnvCfg(DirectMARLEnvCfg):
     possible_agents = ["robot_0", "robot_1"]
 
     teams = {
-        "team_0":["robot_0"],
-        "team_1":["robot_1"],
+        "team_0": ["robot_0"],
+        "team_1": ["robot_1"],
     }
 
     sim: SimulationCfg = SimulationCfg(dt=1 / 200, render_interval=decimation)
     robot_0: ArticulationCfg = LEATHERBACK_CFG.replace(prim_path="/World/envs/env_.*/Robot_0")
-    robot_0.init_state.rot = get_quaternion_tuple_from_xyz(0,0,-torch.pi/2)
-    robot_0.init_state.pos = (0.0, .25, .1)
+    robot_0.init_state.rot = get_quaternion_tuple_from_xyz(0, 0, -torch.pi / 2)
+    robot_0.init_state.pos = (0.0, 0.25, 0.1)
     robot_1: ArticulationCfg = LEATHERBACK_CFG.replace(prim_path="/World/envs/env_.*/Robot_1")
-    robot_1.init_state.rot = get_quaternion_tuple_from_xyz(0,0,torch.pi/2)
-    robot_1.init_state.pos = (0.0, -.25, .1)
+    robot_1.init_state.rot = get_quaternion_tuple_from_xyz(0, 0, torch.pi / 2)
+    robot_1.init_state.pos = (0.0, -0.25, 0.1)
 
     throttle_dof_name = [
         "Wheel__Knuckle__Front_Left",
         "Wheel__Knuckle__Front_Right",
         "Wheel__Upright__Rear_Right",
-        "Wheel__Upright__Rear_Left"
+        "Wheel__Upright__Rear_Left",
     ]
     steering_dof_name = [
         "Knuckle__Upright__Front_Right",
@@ -65,34 +73,47 @@ class LeatherbackSumoStage1EnvCfg(DirectMARLEnvCfg):
     # time penalty
     time_penalty = -0.01
 
+
 class LeatherbackSumoStage1Env(DirectMARLEnv):
     cfg: LeatherbackSumoStage1EnvCfg
 
-    def __init__(self, cfg: LeatherbackSumoStage1EnvCfg, render_mode: str | None = None, headless: bool | None = None, **kwargs):
+    def __init__(
+        self, cfg: LeatherbackSumoStage1EnvCfg, render_mode: str | None = None, headless: bool | None = None, **kwargs
+    ):
         super().__init__(cfg, render_mode, **kwargs)
         self.headless = headless
-        
+
         self._throttle_dof_idx, _ = self.robots["robot_0"].find_joints(self.cfg.throttle_dof_name)
         self._steering_dof_idx, _ = self.robots["robot_0"].find_joints(self.cfg.steering_dof_name)
 
-        self._throttle_state = {robot_id:torch.zeros((self.num_envs,4), device=self.device, dtype=torch.float32) for robot_id in self.robots.keys()}
-        self._steering_state = {robot_id:torch.zeros((self.num_envs,2), device=self.device, dtype=torch.float32) for robot_id in self.robots.keys()}
+        self._throttle_state = {
+            robot_id: torch.zeros((self.num_envs, 4), device=self.device, dtype=torch.float32)
+            for robot_id in self.robots.keys()
+        }
+        self._steering_state = {
+            robot_id: torch.zeros((self.num_envs, 2), device=self.device, dtype=torch.float32)
+            for robot_id in self.robots.keys()
+        }
 
         self.env_spacing = self.cfg.env_spacing
 
-        self.ring_radius = torch.full((self.num_envs,), (self.cfg.ring_radius_min + self.cfg.ring_radius_max) * 0.5,
-                                      dtype=torch.float32, device=self.device)
+        self.ring_radius = torch.full(
+            (self.num_envs,),
+            (self.cfg.ring_radius_min + self.cfg.ring_radius_max) * 0.5,
+            dtype=torch.float32,
+            device=self.device,
+        )
 
         self._ring_segments = 64
-        markers = {f"ring_{i}":sim_utils.SphereCfg(
-                    radius=.05,
-                    visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(0.8, 0.0, 0.0)),
-                ) for i in range(self._ring_segments)}
+        markers = {
+            f"ring_{i}": sim_utils.SphereCfg(
+                radius=0.05,
+                visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(0.8, 0.0, 0.0)),
+            )
+            for i in range(self._ring_segments)
+        }
 
-        ring_marker_cfg = VisualizationMarkersCfg(
-            prim_path="/World/RingMarkers",
-            markers=markers
-        )
+        ring_marker_cfg = VisualizationMarkersCfg(prim_path="/World/RingMarkers", markers=markers)
         self.ring_markers = VisualizationMarkers(ring_marker_cfg)
 
         self._episode_sums = {
@@ -103,11 +124,9 @@ class LeatherbackSumoStage1Env(DirectMARLEnv):
                 "other_dist_from_center",
                 "dist_to_other_robot",
                 "time_out_reward",
-                "push_out_reward"
+                "push_out_reward",
             ]
         }
-
-
 
     @torch.no_grad()
     def _draw_ring_markers(self):
@@ -127,8 +146,8 @@ class LeatherbackSumoStage1Env(DirectMARLEnv):
         sn = torch.sin(theta)  # (N,)
 
         # Env centers and radii
-        origins_xy = self.scene.env_origins[:, :2].to(device)          # (E, 2)
-        radii = self.ring_radius.view(E, 1)                             # (E, 1)
+        origins_xy = self.scene.env_origins[:, :2].to(device)  # (E, 2)
+        radii = self.ring_radius.view(E, 1)  # (E, 1)
 
         # Build batched positions: stack per marker index (ring_k) across all envs.
         # For marker k, we place E positions at angle theta[k].
@@ -141,13 +160,13 @@ class LeatherbackSumoStage1Env(DirectMARLEnv):
 
         for k in range(N):
             dir_k = torch.tensor([cs[k].item(), sn[k].item()], device=device)  # (2,)
-            xy_k = origins_xy + radii * dir_k                                  # (E, 2)
-            pos_k = torch.cat([xy_k, z_col], dim=1)                            # (E, 3)
+            xy_k = origins_xy + radii * dir_k  # (E, 2)
+            pos_k = torch.cat([xy_k, z_col], dim=1)  # (E, 3)
             pos_chunks.append(pos_k)
             idx_chunks.append(k * torch.ones(E, dtype=torch.long, device=device))
 
-        marker_positions = torch.cat(pos_chunks, dim=0)   # (N*E, 3)
-        marker_indices  = torch.cat(idx_chunks, dim=0)    # (N*E,)
+        marker_positions = torch.cat(pos_chunks, dim=0)  # (N*E, 3)
+        marker_indices = torch.cat(idx_chunks, dim=0)  # (N*E,)
 
         marker_scales = torch.ones((marker_positions.shape[0], 3), device=device)
 
@@ -163,9 +182,8 @@ class LeatherbackSumoStage1Env(DirectMARLEnv):
             marker_indices=marker_indices,
         )
 
-
     def _setup_scene(self):
-        
+
         spawn_ground_plane(
             prim_path="/World/ground",
             cfg=GroundPlaneCfg(
@@ -197,7 +215,7 @@ class LeatherbackSumoStage1Env(DirectMARLEnv):
         self._throttle_action = actions["robot_0"][:, 0].repeat_interleave(4).reshape((-1, 4)) * self.cfg.throttle_scale
         self._throttle_action = torch.clamp(self._throttle_action, -self.cfg.throttle_max, self.cfg.throttle_max)
         self._throttle_state["robot_0"] = self._throttle_action
-        
+
         self._steering_action = actions["robot_0"][:, 1].repeat_interleave(2).reshape((-1, 2)) * self.cfg.steering_scale
         self._steering_action = torch.clamp(self._steering_action, -self.cfg.steering_max, self.cfg.steering_max)
         self._steering_state["robot_0"] = self._steering_action
@@ -205,18 +223,24 @@ class LeatherbackSumoStage1Env(DirectMARLEnv):
     def _apply_action(self) -> None:
         for robot_id in self.robots.keys():
             # self._throttle_state[robot_id] = -5*torch.ones_like(self._throttle_state[robot_id], device=self.device)
-            self.robots[robot_id].set_joint_velocity_target(self._throttle_state[robot_id], joint_ids=self._throttle_dof_idx)
-            self.robots[robot_id].set_joint_position_target(self._steering_state[robot_id], joint_ids=self._steering_dof_idx)
+            self.robots[robot_id].set_joint_velocity_target(
+                self._throttle_state[robot_id], joint_ids=self._throttle_dof_idx
+            )
+            self.robots[robot_id].set_joint_position_target(
+                self._steering_state[robot_id], joint_ids=self._steering_dof_idx
+            )
 
     def _get_observations(self) -> dict:
         # Relative positions in each robot's frame
         robot_0_desired_pos, _ = subtract_frame_transforms(
-            self.robots["robot_0"].data.root_state_w[:, :3], self.robots["robot_0"].data.root_state_w[:, 3:7],
-            self.robots["robot_1"].data.root_pos_w
+            self.robots["robot_0"].data.root_state_w[:, :3],
+            self.robots["robot_0"].data.root_state_w[:, 3:7],
+            self.robots["robot_1"].data.root_pos_w,
         )
         robot_1_desired_pos, _ = subtract_frame_transforms(
-            self.robots["robot_1"].data.root_state_w[:, :3], self.robots["robot_1"].data.root_state_w[:, 3:7],
-            self.robots["robot_0"].data.root_pos_w
+            self.robots["robot_1"].data.root_state_w[:, :3],
+            self.robots["robot_1"].data.root_state_w[:, 3:7],
+            self.robots["robot_0"].data.root_pos_w,
         )
 
         # Ring radius
@@ -239,13 +263,11 @@ class LeatherbackSumoStage1Env(DirectMARLEnv):
         obs1 = torch.cat([robot_1_desired_pos, rcol, robot_1_dist_center, robot_1_vel], dim=1)
 
         return {"team_0": {"robot_0": obs0}, "team_1": {"robot_1": obs1}}
-    
+
     def _get_rewards(self) -> dict:
         circle_centers = self.scene.env_origins
 
-        dist_from_center = torch.norm(
-            self.robots["robot_1"].data.root_pos_w - circle_centers, dim=-1
-        )
+        dist_from_center = torch.norm(self.robots["robot_1"].data.root_pos_w - circle_centers, dim=-1)
         dist_from_center_mapped = torch.tanh(dist_from_center / 0.8)
 
         close_to_other_robot = torch.norm(
@@ -282,10 +304,10 @@ class LeatherbackSumoStage1Env(DirectMARLEnv):
         }
 
     def _robots_out_of_ring(self) -> dict[str, torch.Tensor]:
-        env_xy = self.scene.env_origins[:, :2].to(self.device)  
+        env_xy = self.scene.env_origins[:, :2].to(self.device)
         out = {}
         for robot_id in self.robots.keys():
-            pos_xy = self.robots[robot_id].data.root_pos_w[:, :2]  
+            pos_xy = self.robots[robot_id].data.root_pos_w[:, :2]
             dist = torch.linalg.norm(pos_xy - env_xy, dim=1)
             out[robot_id] = dist > self.ring_radius
         return out
@@ -307,9 +329,7 @@ class LeatherbackSumoStage1Env(DirectMARLEnv):
 
         # Sample a per-env maximum radius
         low, high = self.cfg.ring_radius_min, self.cfg.ring_radius_max
-        self.ring_radius[env_ids] = (
-            torch.empty(env_ids.shape[0], device=self.device).uniform_(low, high)
-        )
+        self.ring_radius[env_ids] = torch.empty(env_ids.shape[0], device=self.device).uniform_(low, high)
 
         # Cache for convenience
         origins = self.scene.env_origins[env_ids]  # (N, 3)

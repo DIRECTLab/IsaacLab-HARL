@@ -10,10 +10,7 @@ Ant locomotion environment.
 import gymnasium as gym
 
 from . import agents
-from .drones import (
-    DronesEnv,
-    DronesEnvCfg,
-)
+from .drones import DronesEnv, DronesEnvCfg
 
 ##
 # Register Gym environments.

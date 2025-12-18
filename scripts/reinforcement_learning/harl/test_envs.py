@@ -1,6 +1,11 @@
-import subprocess
+# Copyright (c) 2022-2025, The Isaac Lab Project Developers.
+# All rights reserved.
+#
+# SPDX-License-Identifier: BSD-3-Clause
+
 import json
 import re
+import subprocess
 
 # ANSI color codes
 RED = "\033[91m"
@@ -9,13 +14,15 @@ YELLOW = "\033[93m"
 BOLD = "\033[1m"
 RESET = "\033[0m"
 
-ANSI_ESCAPE = re.compile(r'\x1B[@-_][0-?]*[ -/]*[@-~]')
+ANSI_ESCAPE = re.compile(r"\x1B[@-_][0-?]*[ -/]*[@-~]")
 
 LOG_FILE = "test_output.log"
 
+
 def load_configs(json_path="test_envs.json"):
-    with open(json_path, "r") as f:
+    with open(json_path) as f:
         return json.load(f)
+
 
 def run_config(name, script_path, args, successes, failures):
     command = ["python3", script_path] + args
@@ -38,7 +45,7 @@ def run_config(name, script_path, args, successes, failures):
         except subprocess.CalledProcessError as e:
             # Also log the error for reference
             log_file.write("\n[ERROR OCCURRED]\n")
-            clean_err = ANSI_ESCAPE.sub('', e.stderr if e.stderr else "")
+            clean_err = ANSI_ESCAPE.sub("", e.stderr if e.stderr else "")
             log_file.write(clean_err + "\n")
             failure_str = f"FAILURE, ENV: {name}"
             len_str = len(failure_str)
@@ -47,6 +54,7 @@ def run_config(name, script_path, args, successes, failures):
             print(failure_str)
             print("=" * len_str + RESET)
             failures.append((name, clean_err))
+
 
 def print_summary(successes, failures):
     print(f"\n{BOLD}===== SUMMARY =====")
@@ -58,7 +66,8 @@ def print_summary(successes, failures):
     for name, _ in failures:
         print(f"  - {name}")
     print(RESET)
-    
+
+
 def main():
     # Clear old log
     open(LOG_FILE, "w").close()
@@ -71,6 +80,7 @@ def main():
         run_config(config["name"], config["script"], config["args"], successes, failures)
 
     print_summary(successes, failures)
+
 
 if __name__ == "__main__":
     main()

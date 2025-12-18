@@ -10,25 +10,11 @@ Ant locomotion environment.
 import gymnasium as gym
 
 from . import agents
-from .three_dim_gal import (
-    ThreeDimGalEnvCfg,
-    ThreeDimGalEnv
-)
+from .minitank import MinitankEnv, MinitankEnvCfg
+from .minitank_adversarial import MinitankAdversarialEnv, MinitankAdversarialEnvCfg
+from .three_dim_gal import ThreeDimGalEnv, ThreeDimGalEnvCfg
+from .three_dim_gal_cameras import ThreeDimGalCamerasEnv, ThreeDimGalCamerasEnvCfg
 
-from .minitank import (
-    MinitankEnvCfg,
-    MinitankEnv
-)
-
-from .three_dim_gal_cameras import (
-    ThreeDimGalCamerasEnvCfg,
-    ThreeDimGalCamerasEnv
-)
-
-from .minitank_adversarial import (
-    MinitankAdversarialEnvCfg,
-    MinitankAdversarialEnv
-)
 ##
 # Register Gym environments.
 ##

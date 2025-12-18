@@ -21,13 +21,14 @@ from isaaclab.sim import SimulationCfg
 from isaaclab.terrains import TerrainImporterCfg
 from isaaclab.utils import configclass
 from isaaclab.utils.assets import ISAAC_NUCLEUS_DIR
-from isaaclab.utils.math import quat_from_angle_axis, subtract_frame_transforms, quat_from_euler_xyz
+from isaaclab.utils.math import quat_from_angle_axis, quat_from_euler_xyz, subtract_frame_transforms
 
 ##
 # Pre-defined configs
 ##
 from isaaclab_assets.robots.anymal import ANYMAL_C_CFG  # isort: skip
 from isaaclab.terrains.config.rough import ROUGH_TERRAINS_CFG  # isort: skip
+
 
 @configclass
 class EventCfg:
@@ -55,14 +56,17 @@ class EventCfg:
         },
     )
 
+
 def get_distance_to_center(arena_center: torch.tensor, robot: Articulation):
-    robot_pos_w = robot.data.root_state_w[:, :3]                # (num_envs, 3)
-    robot_delta_xy = robot_pos_w[:, :2] - arena_center          # (num_envs, 2)
+    robot_pos_w = robot.data.root_state_w[:, :3]  # (num_envs, 3)
+    robot_delta_xy = robot_pos_w[:, :2] - arena_center  # (num_envs, 2)
     return torch.norm(robot_delta_xy, dim=1, keepdim=True)
+
 
 def get_quaternion_tuple_from_xyz(x, y, z):
     quat_tensor = quat_from_euler_xyz(torch.tensor([x]), torch.tensor([y]), torch.tensor([z])).flatten()
     return (quat_tensor[0].item(), quat_tensor[1].item(), quat_tensor[2].item(), quat_tensor[3].item())
+
 
 @configclass
 class AnymalSoccerRunningEnvCfg(DirectMARLEnvCfg):
@@ -117,17 +121,20 @@ class AnymalSoccerRunningEnvCfg(DirectMARLEnvCfg):
     # robot
     robot_0: ArticulationCfg = ANYMAL_C_CFG.replace(prim_path="/World/envs/env_.*/Robot_0")
     contact_sensor_0: ContactSensorCfg = ContactSensorCfg(
-        prim_path="/World/envs/env_.*/Robot_0/.*", history_length=3, update_period=0.005, track_air_time=True,
+        prim_path="/World/envs/env_.*/Robot_0/.*",
+        history_length=3,
+        update_period=0.005,
+        track_air_time=True,
     )
-    
-    robot_0.init_state.rot = get_quaternion_tuple_from_xyz(0,0,torch.pi/2)
+
+    robot_0.init_state.rot = get_quaternion_tuple_from_xyz(0, 0, torch.pi / 2)
     robot_0.init_state.pos = (0.0, 1.0, 0.3)
 
     # --- NEW: goal params (visual + sampling) ---
-    goal_reach_radius: float = 0.35          # within this distance counts as "reached"
+    goal_reach_radius: float = 0.35  # within this distance counts as "reached"
     goal_spawn_radius_min: float = 3
     goal_spawn_radius_max: float = 5
-    goal_min_separation: float = 1.0    
+    goal_min_separation: float = 1.0
 
     # reward scales
     reached_goal_reward = 10.0
@@ -143,6 +150,7 @@ class AnymalSoccerRunningEnvCfg(DirectMARLEnvCfg):
     feet_air_time_reward_scale = 0.5
     undesired_contact_reward_scale = -1.0
     flat_orientation_reward_scale = -5.0
+
 
 def define_markers() -> VisualizationMarkers:
     marker_cfg = VisualizationMarkersCfg(
@@ -162,9 +170,7 @@ def define_markers() -> VisualizationMarkers:
 class AnymalSoccerRunningEnv(DirectMARLEnv):
     cfg: AnymalSoccerRunningEnvCfg
 
-    def __init__(
-        self, cfg: AnymalSoccerRunningEnvCfg, render_mode: str | None = None, debug=False, **kwargs
-    ):
+    def __init__(self, cfg: AnymalSoccerRunningEnvCfg, render_mode: str | None = None, debug=False, **kwargs):
         self.debug = debug
         super().__init__(cfg, render_mode, **kwargs)
         self.actions = {
@@ -176,12 +182,10 @@ class AnymalSoccerRunningEnv(DirectMARLEnv):
             for agent, action_space in self.cfg.action_spaces.items()
         }
         self._prev_min_goal_dist = {
-            robot_id: torch.zeros(self.num_envs, device=self.device)
-            for robot_id in self.robots.keys()
+            robot_id: torch.zeros(self.num_envs, device=self.device) for robot_id in self.robots.keys()
         }
         self._min_goal_dist = {
-            robot_id: torch.zeros(self.num_envs, device=self.device)
-            for robot_id in self.robots.keys()
+            robot_id: torch.zeros(self.num_envs, device=self.device) for robot_id in self.robots.keys()
         }
         self.my_visualizer = define_markers()
         self._desired_pos = torch.zeros((self.num_envs, 3), device=self.device)
@@ -251,9 +255,7 @@ class AnymalSoccerRunningEnv(DirectMARLEnv):
         self.processed_actions = {}
         self.actions = copy.deepcopy(actions)
         for robot_id, robot in self.robots.items():
-            self.processed_actions[robot_id] = (
-                self.cfg.action_scale * actions[robot_id] + robot.data.default_joint_pos
-            )
+            self.processed_actions[robot_id] = self.cfg.action_scale * actions[robot_id] + robot.data.default_joint_pos
 
     def _apply_action(self):
         for robot_id, robot in self.robots.items():
@@ -273,12 +275,12 @@ class AnymalSoccerRunningEnv(DirectMARLEnv):
 
         obs = {}
         for i, robot_id in enumerate(self.robots.keys()):
-                
+
             goal_pos, _ = subtract_frame_transforms(
-                    self.robots[robot_id].data.root_state_w[:, :3],
-                    self.robots[robot_id].data.root_state_w[:, 3:7],
-                    self._desired_pos
-                )
+                self.robots[robot_id].data.root_state_w[:, :3],
+                self.robots[robot_id].data.root_state_w[:, 3:7],
+                self._desired_pos,
+            )
 
             zero_buffer = torch.zeros((self.num_envs, 52), device=self.device)
 
@@ -291,7 +293,7 @@ class AnymalSoccerRunningEnv(DirectMARLEnv):
                     self.robots[robot_id].data.joint_vel,
                     self.actions[robot_id],
                     goal_pos,
-                    zero_buffer
+                    zero_buffer,
                 ],
                 dim=-1,
             )
@@ -304,7 +306,7 @@ class AnymalSoccerRunningEnv(DirectMARLEnv):
         all_rewards = {}
         reach_r = self.cfg.goal_reach_radius
         goals_xy = self._desired_pos[:, :2]
-        
+
         for robot_id in self.robots.keys():
             # goal reached reward
             robot_xy = self.robots[robot_id].data.root_pos_w[:, :2]
@@ -323,13 +325,18 @@ class AnymalSoccerRunningEnv(DirectMARLEnv):
             # action rate
             action_rate = torch.sum(torch.square(self.actions[robot_id] - self.previous_actions[robot_id]), dim=1)
             # feet air time
-            first_contact = self.contact_sensors[robot_id].compute_first_contact(self.step_dt)[:, self.feet_ids[robot_id]]
+            first_contact = self.contact_sensors[robot_id].compute_first_contact(self.step_dt)[
+                :, self.feet_ids[robot_id]
+            ]
             last_air_time = self.contact_sensors[robot_id].data.last_air_time[:, self.feet_ids[robot_id]]
             air_time = torch.sum((last_air_time - 0.5) * first_contact, dim=1)
             # undesired contacts
             net_contact_forces = self.contact_sensors[robot_id].data.net_forces_w_history
             is_contact = (
-                torch.max(torch.norm(net_contact_forces[:, :, self.undesired_body_contact_ids[robot_id]], dim=-1), dim=1)[0] > 1.0
+                torch.max(
+                    torch.norm(net_contact_forces[:, :, self.undesired_body_contact_ids[robot_id]], dim=-1), dim=1
+                )[0]
+                > 1.0
             )
             contacts = torch.sum(is_contact, dim=1)
             # flat orientation
@@ -355,8 +362,8 @@ class AnymalSoccerRunningEnv(DirectMARLEnv):
             # Logging
             for key, value in rewards.items():
                 self._episode_sums[key] += value
-            
-        return {"robot_0" : all_rewards["robot_0"]}
+
+        return {"robot_0": all_rewards["robot_0"]}
 
     def _get_dones(self) -> tuple[dict, dict]:
         reach_r = self.cfg.goal_reach_radius
@@ -367,15 +374,16 @@ class AnymalSoccerRunningEnv(DirectMARLEnv):
         goals_xy = self._desired_pos[:, :2]
         for robot_id, robot in self.robots.items():
             net_contact_forces = self.contact_sensors[robot_id].data.net_forces_w_history
-            died = torch.any(torch.max(torch.norm(net_contact_forces[:, :, self.base_ids[robot_id]], dim=-1), dim=1)[0] > 1.0, dim=1)
+            died = torch.any(
+                torch.max(torch.norm(net_contact_forces[:, :, self.base_ids[robot_id]], dim=-1), dim=1)[0] > 1.0, dim=1
+            )
             # robot base XY: (N, 2)
             robot_xy = robot.data.root_pos_w[:, :2]
             # pairwise dists to both goals: (N, 2)
             dists = torch.norm(goals_xy - robot_xy, dim=-1)
             # did this robot hit any goal? (N,)
-            hit = (dists <= reach_r)
+            hit = dists <= reach_r
             any_robot_reached |= hit
-
 
         dones = {"robot_0": torch.logical_or(died.clone(), any_robot_reached.clone())}
 
@@ -390,18 +398,18 @@ class AnymalSoccerRunningEnv(DirectMARLEnv):
         super()._reset_idx(env_ids)  # once
 
         # spread out resets
-        if len(env_ids) == self.num_envs: # type:ignore
+        if len(env_ids) == self.num_envs:  # type:ignore
             self.episode_length_buf[:] = torch.randint_like(self.episode_length_buf, high=int(self.max_episode_length))
 
         # --- Reset robots & states ---
         origins = self.scene.env_origins[env_ids]  # (N, 3)
-        N = env_ids.shape[0] # type:ignore
+        N = env_ids.shape[0]  # type:ignore
 
-        min_separation = 1            
+        min_separation = 1
         spawn_radius_max = 2
         max_tries = 10
 
-        sampled_offsets = {}            # per robot (N, 3)
+        sampled_offsets = {}  # per robot (N, 3)
         robot_ids = list(self.robots.keys())
 
         for robot_id, robot in self.robots.items():
@@ -422,8 +430,9 @@ class AnymalSoccerRunningEnv(DirectMARLEnv):
             robot.write_root_velocity_to_sim(default_root_state[:, 7:], env_ids)
             robot.write_joint_state_to_sim(joint_pos, joint_vel, None, env_ids)
 
-        self._desired_pos[env_ids, :2] = self.robots["robot_0"].data.root_pos_w[env_ids, :2] + \
-            torch.zeros_like(self._desired_pos[env_ids, :2]).uniform_(-10.0, 10.0)
+        self._desired_pos[env_ids, :2] = self.robots["robot_0"].data.root_pos_w[env_ids, :2] + torch.zeros_like(
+            self._desired_pos[env_ids, :2]
+        ).uniform_(-10.0, 10.0)
         self._desired_pos[env_ids, 2] = 0.25
 
         final_distance_to_goal = torch.linalg.norm(

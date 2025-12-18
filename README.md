@@ -16,7 +16,7 @@ Once the script is installed, follow the prompts until conda is install and then
 
 # Install
 
-Install the conda environment 
+Install the conda environment
 
 ```
 ./isaaclab.sh -c
@@ -28,9 +28,9 @@ conda activate env_isaaclab
 ./isaaclab.sh -i
 ```
 
-This will automatically install the modified HARL package that works with isaaclab that we developed located at [https://github.com/some45bucks/HARL](https://github.com/some45bucks/HARL).  
+This will automatically install the modified HARL package that works with isaaclab that we developed located at [https://github.com/some45bucks/HARL](https://github.com/some45bucks/HARL).
 
-Install isaacsim 
+Install isaacsim
 
 ```
 pip install isaacsim[all]==4.5.0 --extra-index-url https://pypi.nvidia.com

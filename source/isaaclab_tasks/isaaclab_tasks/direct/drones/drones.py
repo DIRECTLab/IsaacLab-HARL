@@ -7,13 +7,15 @@ from __future__ import annotations
 
 import copy
 import torch
+import torch.nn as nn
+import torchvision.transforms as transforms
+from torch import nn
 
 import isaacsim.core.utils.torch as torch_utils
 from isaacsim.core.utils.torch.rotations import compute_heading_and_up, compute_rot, quat_conjugate
 
 import isaaclab.envs.mdp as mdp
 import isaaclab.sim as sim_utils
-import torchvision.transforms as transforms
 from isaaclab.assets import Articulation, ArticulationCfg, RigidObject, RigidObjectCfg
 from isaaclab.envs import DirectMARLEnv, DirectMARLEnvCfg
 from isaaclab.managers import EventTermCfg as EventTerm
@@ -25,9 +27,14 @@ from isaaclab.sim import SimulationCfg
 from isaaclab.terrains import TerrainImporterCfg
 from isaaclab.utils import configclass
 from isaaclab.utils.assets import ISAAC_NUCLEUS_DIR
-from isaaclab.utils.math import subtract_frame_transforms, quat_from_angle_axis, quat_from_euler_xyz, quat_mul, euler_xyz_from_quat, normalize
-from torch import nn
-
+from isaaclab.utils.math import (
+    euler_xyz_from_quat,
+    normalize,
+    quat_from_angle_axis,
+    quat_from_euler_xyz,
+    quat_mul,
+    subtract_frame_transforms,
+)
 
 ##
 # Pre-defined configs
@@ -39,12 +46,9 @@ from isaaclab.terrains.config.rough import ROUGH_TERRAINS_CFG  # isort: skip
 from isaaclab_assets import CRAZYFLIE_CFG  # isort: skip
 
 
-import torch
-import torch.nn as nn
-
 class SimpleCNN(nn.Module):
     def __init__(self, in_channels: int, out_channels: int, input_height: int, input_width: int):
-        super(SimpleCNN, self).__init__()
+        super().__init__()
         self.conv1 = nn.Conv2d(in_channels, 16, kernel_size=3, stride=1, padding=1)
         self.bn1 = nn.BatchNorm2d(16)
         self.conv2 = nn.Conv2d(16, 32, kernel_size=3, stride=1, padding=1)
@@ -80,7 +84,6 @@ class SimpleCNN(nn.Module):
         x = x.reshape(x.size(0), -1)
         x = self.fc(x)
         return x
-
 
 
 def normalize_angle(x):
@@ -207,6 +210,7 @@ def define_markers() -> VisualizationMarkers:
 
 class DronesEnv(DirectMARLEnv):
     cfg: DronesEnvCfg
+
     def __init__(
         self,
         cfg: DronesEnvCfg,
@@ -257,15 +261,16 @@ class DronesEnv(DirectMARLEnv):
         if not self.headless:
             self.my_visualizer = define_markers()
 
-
     def _draw_markers(self):
 
-        marker_ids = torch.concat([
-            torch.zeros(self.num_envs, dtype=torch.int32).to(self.device),
-        ], dim=0)
+        marker_ids = torch.concat(
+            [
+                torch.zeros(self.num_envs, dtype=torch.int32).to(self.device),
+            ],
+            dim=0,
+        )
 
         orientations = torch.zeros(self.num_envs, 4, device=self.device)
-
 
         self.my_visualizer.visualize(self._desired_pos_w, orientations, marker_indices=marker_ids)
 
@@ -285,7 +290,6 @@ class DronesEnv(DirectMARLEnv):
         # self.scene.sensors["robot_0_camera"] = self.cameras["robot_0"]
         ### SETUP CAMERAS ###
 
-
         self.cfg.terrain.num_envs = self.scene.cfg.num_envs
         self.cfg.terrain.env_spacing = self.scene.cfg.env_spacing
         self._terrain = self.cfg.terrain.class_type(self.cfg.terrain)
@@ -300,22 +304,26 @@ class DronesEnv(DirectMARLEnv):
         ### PREPHYSICS FOR CRAZYFLIE ###
 
         self.processed_actions["robot_0"] = self.processed_actions["robot_0"].clamp(-1.0, 1.0)
-        self._thrust[:, 0, 2] = self.cfg.thrust_to_weight * self._crazyflie_weight * (self.processed_actions["robot_0"][:, 0] + 1.0) / 2.0
+        self._thrust[:, 0, 2] = (
+            self.cfg.thrust_to_weight * self._crazyflie_weight * (self.processed_actions["robot_0"][:, 0] + 1.0) / 2.0
+        )
         self._moment[:, 0, :] = self.cfg.moment_scale * self.processed_actions["robot_0"][:, 1:]
 
         ### PREPHYSICS FOR CRAZYFLIE ###
 
-
     def _apply_action(self):
-        self.robots["robot_0"].set_external_force_and_torque(self._thrust, self._moment, body_ids=self._crazyflie_body_ids)
-
+        self.robots["robot_0"].set_external_force_and_torque(
+            self._thrust, self._moment, body_ids=self._crazyflie_body_ids
+        )
 
     def _get_observations(self) -> dict:
         # drone_camera = self.cameras["robot_0"].data.output["depth"].to(self.device)
         # drone_camera_feat = self.cnnModel(drone_camera)
 
         desired_pos_b, _ = subtract_frame_transforms(
-            self.robots["robot_0"].data.root_state_w[:, :3], self.robots["robot_0"].data.root_state_w[:, 3:7], self._desired_pos_w
+            self.robots["robot_0"].data.root_state_w[:, :3],
+            self.robots["robot_0"].data.root_state_w[:, 3:7],
+            self._desired_pos_w,
         )
 
         drone_obs = torch.cat(
@@ -329,8 +337,8 @@ class DronesEnv(DirectMARLEnv):
             dim=-1,
         )
         self.previous_actions = copy.deepcopy(self.actions)
-        obs = {"robot_0":drone_obs.to(self.device)}
-        
+        obs = {"robot_0": drone_obs.to(self.device)}
+
         return obs
 
     def get_y_euler_from_quat(self, quaternion):
@@ -355,14 +363,14 @@ class DronesEnv(DirectMARLEnv):
         # Logging
         for key, value in rewards.items():
             self._episode_sums[key] += value
-        return {"robot_0":reward}
+        return {"robot_0": reward}
 
     def _get_dones(self) -> tuple[dict, dict]:
         time_out = (self.episode_length_buf >= self.max_episode_length - 1).to(self.device)
         died = self.robots["robot_0"].data.root_pos_w[:, 2] < 0.1
         dones = {}
         dones["robot_0"] = died.to(self.device)
-        time_out = {robot_id:time_out for robot_id in self.robots.keys()}
+        time_out = {robot_id: time_out for robot_id in self.robots.keys()}
 
         # dones = {robot_id: torch.zeros(self.num_envs).to(torch.int8).to(self.device) for robot_id in self.robots.keys()}
 
@@ -398,8 +406,9 @@ class DronesEnv(DirectMARLEnv):
 
         self.actions["robot_0"][env_ids] = 0.0
         # Sample new commands
-        self._desired_pos_w[env_ids, :2] = self.robots["robot_0"].data.root_pos_w[env_ids, :2] + \
-            torch.zeros_like(self._desired_pos_w[env_ids, :2]).uniform_(-5.0, 5.0)
+        self._desired_pos_w[env_ids, :2] = self.robots["robot_0"].data.root_pos_w[env_ids, :2] + torch.zeros_like(
+            self._desired_pos_w[env_ids, :2]
+        ).uniform_(-5.0, 5.0)
         # self._desired_pos_w[env_ids, :2] += self._terrain.env_origins[env_ids, :2]
         self._desired_pos_w[env_ids, 2] = torch.zeros_like(self._desired_pos_w[env_ids, 2]).uniform_(0.5, 5.0)
         # Reset robot state
@@ -410,5 +419,3 @@ class DronesEnv(DirectMARLEnv):
         self.robots["robot_0"].write_root_pose_to_sim(default_root_state[:, :7], env_ids)
         self.robots["robot_0"].write_root_velocity_to_sim(default_root_state[:, 7:], env_ids)
         self.robots["robot_0"].write_joint_state_to_sim(joint_pos, joint_vel, None, env_ids)
-
-            

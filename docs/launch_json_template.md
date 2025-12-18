@@ -1,7 +1,7 @@
 # Launch Json Template
 This is a template to build your `launch.json` file to use the VS code debugger when training and playing with different policies.
 
-### Example `__init__.py` containing the registered gym environment for H1 
+### Example `__init__.py` containing the registered gym environment for H1
 * [`__init__.py`](../source/isaaclab_tasks/isaaclab_tasks/direct/humanoid/__init__.py)
 ```python
 gym.register(
@@ -22,7 +22,7 @@ gym.register(
 ### Example `launch.json`
 * The example below has two configurations, one for `play.py` and one for `train,py` with the harl policy.
 * Note:
-    * In `args`, you need to pass in the `id` you registered with the gym environment to the `--task` option. 
+    * In `args`, you need to pass in the `id` you registered with the gym environment to the `--task` option.
     * For the play config, you need to update the argument for the `--dir` option to be the directory that contains the `.pt` files of the trained model.
 
 

@@ -1,12 +1,12 @@
+# Copyright (c) 2022-2025, The Isaac Lab Project Developers.
+# All rights reserved.
+#
+# SPDX-License-Identifier: BSD-3-Clause
+
 import torch
 
-def gait_reward(
-    env,
-    period: float,
-    offset: list[float],
-    threshold: float = 0.5,
-    commands=None
-) -> torch.Tensor:
+
+def gait_reward(env, period: float, offset: list[float], threshold: float = 0.5, commands=None) -> torch.Tensor:
 
     contact_sensor = env.contact_sensors["robot_0"]
     is_contact = contact_sensor.data.current_contact_time[:, env.feet_ids] > 0
@@ -28,9 +28,8 @@ def gait_reward(
         reward *= cmd_norm > 0.1
     return reward
 
-def feet_slide_reward(
-        env
-    ) -> torch.Tensor:
+
+def feet_slide_reward(env) -> torch.Tensor:
     """Penalize feet sliding.
 
     This function penalizes the agent for sliding its feet on the ground. The reward is computed as the

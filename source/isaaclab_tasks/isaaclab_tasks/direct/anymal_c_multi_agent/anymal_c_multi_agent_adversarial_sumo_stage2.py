@@ -6,13 +6,14 @@
 from __future__ import annotations
 
 import copy
-import torch
 import math
+import torch
 
 import isaaclab.envs.mdp as mdp
 import isaaclab.sim as sim_utils
 from isaaclab.assets import Articulation, ArticulationCfg, RigidObject, RigidObjectCfg
 from isaaclab.envs import DirectMARLEnv, DirectMARLEnvCfg
+from isaaclab.envs.common import ViewerCfg
 from isaaclab.managers import EventTermCfg as EventTerm
 from isaaclab.managers import SceneEntityCfg
 from isaaclab.markers import VisualizationMarkers, VisualizationMarkersCfg
@@ -22,8 +23,7 @@ from isaaclab.sim import SimulationCfg
 from isaaclab.terrains import TerrainImporterCfg
 from isaaclab.utils import configclass
 from isaaclab.utils.assets import ISAAC_NUCLEUS_DIR
-from isaaclab.utils.math import quat_from_angle_axis, subtract_frame_transforms, quat_from_euler_xyz
-from isaaclab.envs.common import ViewerCfg
+from isaaclab.utils.math import quat_from_angle_axis, quat_from_euler_xyz, subtract_frame_transforms
 
 ##
 # Pre-defined configs
@@ -31,34 +31,34 @@ from isaaclab.envs.common import ViewerCfg
 from isaaclab_assets.robots.anymal import ANYMAL_C_CFG  # isort: skip
 from isaaclab.terrains.config.rough import ROUGH_TERRAINS_CFG  # isort: skip
 
+
 def chase_commands_holonomic(rel_pos_b, v_max=1.5, w_max=2.5, k_v=1.0, k_w=1.5, eps=1e-6):
     # rel_pos_b: [N, 3] = opponent position in robot body frame
-    planar = rel_pos_b[:, :2]                               # [N, 2] (dx, dy)
+    planar = rel_pos_b[:, :2]  # [N, 2] (dx, dy)
     dist = torch.linalg.norm(planar, dim=-1, keepdim=True)  # [N, 1]
-    dir_xy = planar / (dist + eps)                          # unit direction
+    dir_xy = planar / (dist + eps)  # unit direction
 
     # speed that grows with distance and saturates
-    speed = v_max * torch.tanh(k_v * dist)                  # [N, 1]
+    speed = v_max * torch.tanh(k_v * dist)  # [N, 1]
 
     # linear vel toward opponent
-    x_cmd = (speed * dir_xy[:, [0]])        # [N]
-    y_cmd = (speed * dir_xy[:, [1]])          # [N]
+    x_cmd = speed * dir_xy[:, [0]]  # [N]
+    y_cmd = speed * dir_xy[:, [1]]  # [N]
 
     # yaw rate to bias facing the opponent
-    heading_err = torch.atan2(planar[:, 1], planar[:, 0]).unsqueeze(-1)   # [N]
-    z_cmd = w_max * torch.tanh(k_w * heading_err)           # [N]
+    heading_err = torch.atan2(planar[:, 1], planar[:, 0]).unsqueeze(-1)  # [N]
+    z_cmd = w_max * torch.tanh(k_w * heading_err)  # [N]
 
     return torch.cat([x_cmd, y_cmd, z_cmd], dim=-1)
 
+
 def get_commands(robot_0, robot_1):
     robot_0_desired_pos, _ = subtract_frame_transforms(
-        robot_0.data.root_state_w[:, :3], robot_0.data.root_state_w[:, 3:7], \
-            robot_1.data.root_pos_w
+        robot_0.data.root_state_w[:, :3], robot_0.data.root_state_w[:, 3:7], robot_1.data.root_pos_w
     )
 
     robot_1_desired_pos, _ = subtract_frame_transforms(
-        robot_1.data.root_state_w[:, :3], robot_1.data.root_state_w[:, 3:7], \
-            robot_0.data.root_pos_w
+        robot_1.data.root_state_w[:, :3], robot_1.data.root_state_w[:, 3:7], robot_0.data.root_pos_w
     )
 
     robot_0_commands = chase_commands_holonomic(robot_0_desired_pos)
@@ -66,12 +66,14 @@ def get_commands(robot_0, robot_1):
 
     return robot_0_commands, robot_1_commands
 
+
 def get_distance_to_center(arena_center: torch.tensor, robot: Articulation):
-    robot_pos_w = robot.data.root_state_w[:, :3]                # (num_envs, 3)
+    robot_pos_w = robot.data.root_state_w[:, :3]  # (num_envs, 3)
     # XY deltas to arena center
-    robot_delta_xy = robot_pos_w[:, :2] - arena_center          # (num_envs, 2)
+    robot_delta_xy = robot_pos_w[:, :2] - arena_center  # (num_envs, 2)
     # Distances (keepdim=True so we get (num_envs, 1) for concat)
     return torch.norm(robot_delta_xy, dim=1, keepdim=True)
+
 
 @configclass
 class EventCfg:
@@ -96,7 +98,7 @@ class EventCfg:
             "asset_cfg": SceneEntityCfg("robot_0", body_names=".*"),
             # scale each link's mass by a factor in this range
             "mass_distribution_params": (0.90, 1.30),  # widen if you want more asymmetry
-            "operation": "scale",                      # use multiplicative scaling
+            "operation": "scale",  # use multiplicative scaling
             # "scale_inertia": True,  # if your Isaac Lab version supports this flag
         },
     )
@@ -130,7 +132,7 @@ class EventCfg:
             "asset_cfg": SceneEntityCfg("robot_1", body_names=".*"),
             # scale each link's mass by a factor in this range
             "mass_distribution_params": (0.90, 1.30),  # widen if you want more asymmetry
-            "operation": "scale",                      # use multiplicative scaling
+            "operation": "scale",  # use multiplicative scaling
             # "scale_inertia": True,  # if your Isaac Lab version supports this flag
         },
     )
@@ -172,9 +174,11 @@ def define_markers() -> VisualizationMarkers:
     )
     return VisualizationMarkers(marker_cfg)
 
+
 def get_quaternion_tuple_from_xyz(x, y, z):
     quat_tensor = quat_from_euler_xyz(torch.tensor([x]), torch.tensor([y]), torch.tensor([z])).flatten()
     return (quat_tensor[0].item(), quat_tensor[1].item(), quat_tensor[2].item(), quat_tensor[3].item())
+
 
 @configclass
 class AnymalCAdversarialSumoStage2EnvCfg(DirectMARLEnvCfg):
@@ -193,10 +197,7 @@ class AnymalCAdversarialSumoStage2EnvCfg(DirectMARLEnvCfg):
     ring_radius_min = 1.75
     ring_radius_max = 3.00
 
-    teams = {
-        "team_0": ["robot_0"],
-        "team_1": ["robot_1"]
-    }
+    teams = {"team_0": ["robot_0"], "team_1": ["robot_1"]}
 
     # simulation
     sim: SimulationCfg = SimulationCfg(
@@ -233,19 +234,24 @@ class AnymalCAdversarialSumoStage2EnvCfg(DirectMARLEnvCfg):
     # robot
     robot_0: ArticulationCfg = ANYMAL_C_CFG.replace(prim_path="/World/envs/env_.*/Robot_0")
     contact_sensor_0: ContactSensorCfg = ContactSensorCfg(
-        prim_path="/World/envs/env_.*/Robot_0/.*", history_length=3, update_period=0.005, track_air_time=True,
+        prim_path="/World/envs/env_.*/Robot_0/.*",
+        history_length=3,
+        update_period=0.005,
+        track_air_time=True,
     )
-    
-    robot_0.init_state.rot = get_quaternion_tuple_from_xyz(0,0,-torch.pi/2)
+
+    robot_0.init_state.rot = get_quaternion_tuple_from_xyz(0, 0, -torch.pi / 2)
     robot_0.init_state.pos = (0.0, 1.0, 0.3)
 
     robot_1: ArticulationCfg = ANYMAL_C_CFG.replace(prim_path="/World/envs/env_.*/Robot_1")
     contact_sensor_1: ContactSensorCfg = ContactSensorCfg(
-        prim_path="/World/envs/env_.*/Robot_1/.*", history_length=3, update_period=0.005, track_air_time=True,
+        prim_path="/World/envs/env_.*/Robot_1/.*",
+        history_length=3,
+        update_period=0.005,
+        track_air_time=True,
     )
-    robot_1.init_state.rot = get_quaternion_tuple_from_xyz(0,0,torch.pi/2)
+    robot_1.init_state.rot = get_quaternion_tuple_from_xyz(0, 0, torch.pi / 2)
     robot_1.init_state.pos = (0.0, -1.0, 0.3)
-
 
     # viewer = ViewerCfg(eye=(10.0, 10.0, 10.0), origin_type="asset_root", asset_name="robot_0", env_index=0)
 
@@ -269,9 +275,7 @@ class AnymalCAdversarialSumoStage2EnvCfg(DirectMARLEnvCfg):
 class AnymalCAdversarialSumoStage2Env(DirectMARLEnv):
     cfg: AnymalCAdversarialSumoStage2EnvCfg
 
-    def __init__(
-        self, cfg: AnymalCAdversarialSumoStage2EnvCfg, render_mode: str | None = None, debug=False, **kwargs
-    ):
+    def __init__(self, cfg: AnymalCAdversarialSumoStage2EnvCfg, render_mode: str | None = None, debug=False, **kwargs):
         self.debug = debug
         super().__init__(cfg, render_mode, **kwargs)
         # Joint position command (deviation from default joint positions)
@@ -320,25 +324,31 @@ class AnymalCAdversarialSumoStage2Env(DirectMARLEnv):
             self.feet_ids[robot_id] = _feet_ids
             self.undesired_body_contact_ids[robot_id] = _undesired_contact_body_ids
 
-        self.model = torch.load("/home/jacobmorrey/Downloads/actor_agent_robot_0_full.pt", map_location=self.device, weights_only=False)
+        self.model = torch.load(
+            "/home/jacobmorrey/Downloads/actor_agent_robot_0_full.pt", map_location=self.device, weights_only=False
+        )
         self.model.eval()
 
         self.curr_step = 0
         self.max_steps = 1_000_000_000
 
-        self.ring_radius = torch.full((self.num_envs,), (self.cfg.ring_radius_min + self.cfg.ring_radius_max) * 0.5,
-                                      dtype=torch.float32, device=self.device)
+        self.ring_radius = torch.full(
+            (self.num_envs,),
+            (self.cfg.ring_radius_min + self.cfg.ring_radius_max) * 0.5,
+            dtype=torch.float32,
+            device=self.device,
+        )
 
         self._ring_segments = 64
-        markers = {f"ring_{i}":sim_utils.SphereCfg(
-                    radius=.05,
-                    visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(0.8, 0.0, 0.0)),
-                ) for i in range(self._ring_segments)}
+        markers = {
+            f"ring_{i}": sim_utils.SphereCfg(
+                radius=0.05,
+                visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(0.8, 0.0, 0.0)),
+            )
+            for i in range(self._ring_segments)
+        }
 
-        ring_marker_cfg = VisualizationMarkersCfg(
-            prim_path="/World/RingMarkers",
-            markers=markers
-        )
+        ring_marker_cfg = VisualizationMarkersCfg(prim_path="/World/RingMarkers", markers=markers)
         self.ring_markers = VisualizationMarkers(ring_marker_cfg)
 
     @torch.no_grad()
@@ -359,8 +369,8 @@ class AnymalCAdversarialSumoStage2Env(DirectMARLEnv):
         sn = torch.sin(theta)  # (N,)
 
         # Env centers and radii
-        origins_xy = self.scene.env_origins[:, :2].to(device)          # (E, 2)
-        radii = self.ring_radius.view(E, 1)                             # (E, 1)
+        origins_xy = self.scene.env_origins[:, :2].to(device)  # (E, 2)
+        radii = self.ring_radius.view(E, 1)  # (E, 1)
 
         # Build batched positions: stack per marker index (ring_k) across all envs.
         # For marker k, we place E positions at angle theta[k].
@@ -373,13 +383,13 @@ class AnymalCAdversarialSumoStage2Env(DirectMARLEnv):
 
         for k in range(N):
             dir_k = torch.tensor([cs[k].item(), sn[k].item()], device=device)  # (2,)
-            xy_k = origins_xy + radii * dir_k                                  # (E, 2)
-            pos_k = torch.cat([xy_k, z_col], dim=1)                            # (E, 3)
+            xy_k = origins_xy + radii * dir_k  # (E, 2)
+            pos_k = torch.cat([xy_k, z_col], dim=1)  # (E, 3)
             pos_chunks.append(pos_k)
             idx_chunks.append(k * torch.ones(E, dtype=torch.long, device=device))
 
-        marker_positions = torch.cat(pos_chunks, dim=0)   # (N*E, 3)
-        marker_indices  = torch.cat(idx_chunks, dim=0)    # (N*E,)
+        marker_positions = torch.cat(pos_chunks, dim=0)  # (N*E, 3)
+        marker_indices = torch.cat(idx_chunks, dim=0)  # (N*E,)
 
         marker_scales = torch.ones((marker_positions.shape[0], 3), device=device)
 
@@ -424,9 +434,7 @@ class AnymalCAdversarialSumoStage2Env(DirectMARLEnv):
 
         self.processed_actions = {}
         for robot_id, robot in self.robots.items():
-            self.processed_actions[robot_id] = (
-                self.cfg.action_scale * actions[robot_id] + robot.data.default_joint_pos
-            )
+            self.processed_actions[robot_id] = self.cfg.action_scale * actions[robot_id] + robot.data.default_joint_pos
 
     def _apply_action(self):
         for robot_id, robot in self.robots.items():
@@ -437,43 +445,49 @@ class AnymalCAdversarialSumoStage2Env(DirectMARLEnv):
         self.previous_actions = copy.deepcopy(self.actions)
 
         robot_0_desired_pos, _ = subtract_frame_transforms(
-            self.robots["robot_0"].data.root_state_w[:, :3], self.robots["robot_0"].data.root_state_w[:, 3:7], \
-                self.robots["robot_1"].data.root_pos_w
+            self.robots["robot_0"].data.root_state_w[:, :3],
+            self.robots["robot_0"].data.root_state_w[:, 3:7],
+            self.robots["robot_1"].data.root_pos_w,
         )
 
         robot_1_desired_pos, _ = subtract_frame_transforms(
-            self.robots["robot_1"].data.root_state_w[:, :3], self.robots["robot_1"].data.root_state_w[:, 3:7], \
-                self.robots["robot_0"].data.root_pos_w
+            self.robots["robot_1"].data.root_state_w[:, :3],
+            self.robots["robot_1"].data.root_state_w[:, 3:7],
+            self.robots["robot_0"].data.root_pos_w,
         )
         time_remaining = (self.max_episode_length - self.episode_length_buf).unsqueeze(-1)
 
-        robot_0_dist_to_center = get_distance_to_center(self.scene.env_origins[:, :2].to(self.device), self.robots["robot_0"])
-        robot_1_dist_to_center = get_distance_to_center(self.scene.env_origins[:, :2].to(self.device), self.robots["robot_1"])
+        robot_0_dist_to_center = get_distance_to_center(
+            self.scene.env_origins[:, :2].to(self.device), self.robots["robot_0"]
+        )
+        robot_1_dist_to_center = get_distance_to_center(
+            self.scene.env_origins[:, :2].to(self.device), self.robots["robot_1"]
+        )
 
         self.robot_0_prev_distance = robot_0_dist_to_center.clone()
 
         arena_radius = self.ring_radius.view(-1, 1)
 
         robot_0_obs = torch.cat(
-                [
-                    tensor
-                    for tensor in (
-                        self.robots["robot_0"].data.root_lin_vel_b,
-                        self.robots["robot_0"].data.root_ang_vel_b,
-                        self.robots["robot_0"].data.projected_gravity_b,
-                        self.robots["robot_0"].data.joint_pos - self.robots["robot_0"].data.default_joint_pos,
-                        self.robots["robot_0"].data.joint_vel,
-                        self.actions["robot_0"],
-                        robot_0_desired_pos,
-                        # time_remaining,
-                        robot_0_dist_to_center,
-                        robot_1_dist_to_center,
-                        arena_radius
-                    )
-                    if tensor is not None
-                ],
-                dim=-1,
-            )
+            [
+                tensor
+                for tensor in (
+                    self.robots["robot_0"].data.root_lin_vel_b,
+                    self.robots["robot_0"].data.root_ang_vel_b,
+                    self.robots["robot_0"].data.projected_gravity_b,
+                    self.robots["robot_0"].data.joint_pos - self.robots["robot_0"].data.default_joint_pos,
+                    self.robots["robot_0"].data.joint_vel,
+                    self.actions["robot_0"],
+                    robot_0_desired_pos,
+                    # time_remaining,
+                    robot_0_dist_to_center,
+                    robot_1_dist_to_center,
+                    arena_radius,
+                )
+                if tensor is not None
+            ],
+            dim=-1,
+        )
 
         robot_1_obs = torch.cat(
             [
@@ -489,7 +503,7 @@ class AnymalCAdversarialSumoStage2Env(DirectMARLEnv):
                     # time_remaining,
                     robot_1_dist_to_center,
                     robot_0_dist_to_center,
-                    arena_radius
+                    arena_radius,
                 )
                 if tensor is not None
             ],
@@ -562,10 +576,10 @@ class AnymalCAdversarialSumoStage2Env(DirectMARLEnv):
         )
 
     def _robots_out_of_ring(self) -> dict[str, torch.Tensor]:
-        env_xy = self.scene.env_origins[:, :2].to(self.device)  
+        env_xy = self.scene.env_origins[:, :2].to(self.device)
         out = {}
         for robot_id in self.robots.keys():
-            pos_xy = self.robots[robot_id].data.root_pos_w[:, :2]  
+            pos_xy = self.robots[robot_id].data.root_pos_w[:, :2]
             dist = torch.linalg.norm(pos_xy - env_xy, dim=1)
             out[robot_id] = dist > self.ring_radius
         return out
@@ -577,9 +591,13 @@ class AnymalCAdversarialSumoStage2Env(DirectMARLEnv):
         t = self.curr_step / self.max_steps
         t = max(0.0, min(1.0, t))
         self.cfg.opponent_dist_to_center_reward_scale = 0.5 * (1.0 - math.cos(math.pi * t))
-        
-        dist_from_center_r0 = get_distance_to_center(self.scene.env_origins[:, :2].to(self.device), self.robots["robot_0"])
-        dist_from_center_r1 = get_distance_to_center(self.scene.env_origins[:, :2].to(self.device), self.robots["robot_1"])
+
+        dist_from_center_r0 = get_distance_to_center(
+            self.scene.env_origins[:, :2].to(self.device), self.robots["robot_0"]
+        )
+        dist_from_center_r1 = get_distance_to_center(
+            self.scene.env_origins[:, :2].to(self.device), self.robots["robot_1"]
+        )
         dist_from_center_mapped_r0 = torch.tanh(dist_from_center_r0 / 0.8)
         dist_from_center_mapped_r1 = torch.tanh(dist_from_center_r1 / 0.8)
 
@@ -589,38 +607,48 @@ class AnymalCAdversarialSumoStage2Env(DirectMARLEnv):
             dim=-1,
         )
         close_to_other_robot_mapped = 1 - torch.tanh(close_to_other_robot / 0.8)
-        close_enough_this_step = close_to_other_robot < .30 # Contact is hard so just say contact if they're close enough
+        close_enough_this_step = (
+            close_to_other_robot < 0.30
+        )  # Contact is hard so just say contact if they're close enough
         self.close_enough = torch.logical_or(self.close_enough, close_enough_this_step)
         out = self._robots_out_of_ring()
         r0_lost_b = out["robot_0"]
-        r1_lost_b = out["robot_1"] 
+        r1_lost_b = out["robot_1"]
         contact = self.close_enough
         scale = self.cfg.push_out_reward_scale
 
-        push_out_reward_r0 = (
-            (r1_lost_b & contact & ~r0_lost_b).to(torch.float32) * scale    # + if opp lost AND contact AND you didn't lose
-            - r0_lost_b.to(torch.float32) * scale                            # - if you lost (always)
-        )
+        push_out_reward_r0 = (r1_lost_b & contact & ~r0_lost_b).to(
+            torch.float32
+        ) * scale - r0_lost_b.to(  # + if opp lost AND contact AND you didn't lose
+            torch.float32
+        ) * scale  # - if you lost (always)
 
-        push_out_reward_r1 = (
-            (r0_lost_b & contact & ~r1_lost_b).to(torch.float32) * scale
-            - r1_lost_b.to(torch.float32) * scale
-        )
+        push_out_reward_r1 = (r0_lost_b & contact & ~r1_lost_b).to(torch.float32) * scale - r1_lost_b.to(
+            torch.float32
+        ) * scale
 
-        sumo_rewards = {"robot_0": 
-            {
+        sumo_rewards = {
+            "robot_0": {
                 "push_out_reward": push_out_reward_r0,
                 "time_penalty_reward": time_penalty,
-                "dist_from_center_reward": dist_from_center_mapped_r1.squeeze(-1) * self.cfg.opponent_dist_to_center_reward_scale * self.step_dt,
+                "dist_from_center_reward": (
+                    dist_from_center_mapped_r1.squeeze(-1)
+                    * self.cfg.opponent_dist_to_center_reward_scale
+                    * self.step_dt
+                ),
                 "closeness_reward": close_to_other_robot_mapped * self.cfg.closeness_reward_scale * self.step_dt,
-            }, 
-                "robot_1": 
-            {
+            },
+            "robot_1": {
                 "push_out_reward": push_out_reward_r1,
                 "time_penalty_reward": time_penalty,
-                "dist_from_center_reward": dist_from_center_mapped_r0.squeeze(-1) * self.cfg.opponent_dist_to_center_reward_scale * self.step_dt,
+                "dist_from_center_reward": (
+                    dist_from_center_mapped_r0.squeeze(-1)
+                    * self.cfg.opponent_dist_to_center_reward_scale
+                    * self.step_dt
+                ),
                 "closeness_reward": close_to_other_robot_mapped * self.cfg.closeness_reward_scale * self.step_dt,
-            },}
+            },
+        }
 
         for robot_id in self.robots.keys():
             # z velocity tracking
@@ -634,7 +662,9 @@ class AnymalCAdversarialSumoStage2Env(DirectMARLEnv):
             # action rate
             action_rate = torch.sum(torch.square(self.actions[robot_id] - self.previous_actions[robot_id]), dim=1)
             # feet air time
-            first_contact = self.contact_sensors[robot_id].compute_first_contact(self.step_dt)[:, self.feet_ids[robot_id]]
+            first_contact = self.contact_sensors[robot_id].compute_first_contact(self.step_dt)[
+                :, self.feet_ids[robot_id]
+            ]
             last_air_time = self.contact_sensors[robot_id].data.last_air_time[:, self.feet_ids[robot_id]]
             air_time = torch.sum((last_air_time - 0.5) * first_contact, dim=1) * (
                 torch.norm(self._commands[:, :2], dim=1) > 0.1
@@ -647,7 +677,6 @@ class AnymalCAdversarialSumoStage2Env(DirectMARLEnv):
             # contacts = torch.sum(is_contact, dim=1)
             # flat orientation
             flat_orientation = torch.sum(torch.square(self.robots[robot_id].data.projected_gravity_b[:, :2]), dim=1)
-
 
             rewards = {
                 "lin_vel_z_l2": z_vel_error * self.cfg.z_vel_reward_scale * self.step_dt,
@@ -665,17 +694,19 @@ class AnymalCAdversarialSumoStage2Env(DirectMARLEnv):
             # Logging
             for key, value in rewards.items():
                 self._episode_sums[key] += value
-            
+
         self.steps_spent_touching += close_enough_this_step
 
-        return {"team_0" : all_rewards["robot_0"], "team_1" : all_rewards["robot_1"]}
+        return {"team_0": all_rewards["robot_0"], "team_1": all_rewards["robot_1"]}
 
     def _get_dones(self) -> tuple[dict, dict]:
 
         anymal_left = []
         anymal_fell = []
         for robot_id in self.robots.keys():
-            dist_to_center = get_distance_to_center(self.scene.env_origins[:, :2].to(self.device), self.robots[robot_id])
+            dist_to_center = get_distance_to_center(
+                self.scene.env_origins[:, :2].to(self.device), self.robots[robot_id]
+            )
             left_arena = dist_to_center.squeeze(-1) > self.ring_radius
             fell = self.robots[robot_id].data.root_pos_w[:, 2] < 0.17
             anymal_left.append(left_arena)
@@ -685,10 +716,10 @@ class AnymalCAdversarialSumoStage2Env(DirectMARLEnv):
         anymal_fell = torch.any(torch.stack(anymal_fell), dim=0)
 
         lost = torch.logical_or(anymal_left, anymal_fell)
-        lost = {team:anymal_left for team in self.cfg.teams.keys()}
+        lost = {team: anymal_left for team in self.cfg.teams.keys()}
 
         time_out = self.episode_length_buf >= self.max_episode_length - 1
-        time_out = {team:time_out for team in self.cfg.teams.keys()}
+        time_out = {team: time_out for team in self.cfg.teams.keys()}
 
         return lost, time_out
 
@@ -698,13 +729,12 @@ class AnymalCAdversarialSumoStage2Env(DirectMARLEnv):
         super()._reset_idx(env_ids)  # once
 
         # spread out resets
-        if len(env_ids) == self.num_envs: # type:ignore
+        if len(env_ids) == self.num_envs:  # type:ignore
             self.episode_length_buf[:] = torch.randint_like(self.episode_length_buf, high=int(self.max_episode_length))
-
 
         self.close_enough[env_ids] = False
         low, high = self.cfg.ring_radius_min, self.cfg.ring_radius_max
-    
+
         self.ring_radius[env_ids] = torch.empty(env_ids.shape[0], device=self.device).uniform_(low, high)
 
         origins = self.scene.env_origins[env_ids]  # (N, 3)
@@ -722,7 +752,6 @@ class AnymalCAdversarialSumoStage2Env(DirectMARLEnv):
             joint_vel = self.robots[robot_id].data.default_joint_vel[env_ids]
             default_root_state = self.robots[robot_id].data.default_root_state[env_ids]
             default_root_state[:, :3] += self._terrain.env_origins[env_ids]
-
 
             # Sample until min separation is satisfied
             max_tries = 10
@@ -744,7 +773,7 @@ class AnymalCAdversarialSumoStage2Env(DirectMARLEnv):
                 else:
                     # Distance from previously placed robot(s)
                     prev_offsets = sampled_positions[robot_ids[0]]  # (N, 3)
-                    dist = torch.norm(offsets[:, :2] - prev_offsets[:, :2], dim=-1) # type:ignore
+                    dist = torch.norm(offsets[:, :2] - prev_offsets[:, :2], dim=-1)  # type:ignore
 
                     mask_valid = dist > min_separation
                     if torch.all(mask_valid):
@@ -759,7 +788,6 @@ class AnymalCAdversarialSumoStage2Env(DirectMARLEnv):
             default_root_state[:, 0:2] += final_offsets[:, 0:2]
             default_root_state[:, 2] += self.robots[robot_id].data.default_root_state[env_ids][:, 2]
 
-
             self.robots[robot_id].write_root_pose_to_sim(default_root_state[:, :7], env_ids)
             self.robots[robot_id].write_root_velocity_to_sim(default_root_state[:, 7:], env_ids)
             self.robots[robot_id].write_joint_state_to_sim(joint_pos, joint_vel, None, env_ids)
@@ -772,6 +800,6 @@ class AnymalCAdversarialSumoStage2Env(DirectMARLEnv):
             episodic_sum_avg = torch.mean(self._episode_sums[key][env_ids])
             extras["Episode_Reward/" + key] = episodic_sum_avg / self.max_episode_length_s
             self._episode_sums[key][env_ids] = 0.0
-        extras["seconds_touching_per_episode"] = torch.mean((self.steps_spent_touching * self.step_dt))
+        extras["seconds_touching_per_episode"] = torch.mean(self.steps_spent_touching * self.step_dt)
         self.steps_spent_touching[env_ids] = 0.0
         self.extras["log"] = extras

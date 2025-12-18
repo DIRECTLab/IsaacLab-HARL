@@ -155,13 +155,10 @@ class AnymalCHappoEnvCfg(DirectMARLEnvCfg):
     flat_orientation_reward_scale = -5.0
 
 
-
 class AnymalCHappoEnv(DirectMARLEnv):
     cfg: AnymalCHappoEnvCfg
 
-    def __init__(
-        self, cfg: AnymalCHappoEnvCfg, render_mode: str | None = None, **kwargs
-    ):
+    def __init__(self, cfg: AnymalCHappoEnvCfg, render_mode: str | None = None, **kwargs):
         super().__init__(cfg, render_mode, **kwargs)
         # Joint position command (deviation from default joint positions)
 
@@ -332,7 +329,9 @@ class AnymalCHappoEnv(DirectMARLEnv):
     def _get_rewards(self) -> dict:
         self._draw_markers(self._commands)
         # linear velocity tracking
-        lin_vel_error = torch.sum(torch.square(self._commands[:, :2] - self.robots["robot_0"].data.root_lin_vel_b[:, :2]), dim=1)
+        lin_vel_error = torch.sum(
+            torch.square(self._commands[:, :2] - self.robots["robot_0"].data.root_lin_vel_b[:, :2]), dim=1
+        )
         lin_vel_error_mapped = torch.exp(-lin_vel_error / 0.25)
         # yaw rate tracking
         yaw_rate_error = torch.square(self._commands[:, 2] - self.robots["robot_0"].data.root_ang_vel_b[:, 2])
@@ -356,7 +355,10 @@ class AnymalCHappoEnv(DirectMARLEnv):
         # undesired contacts
         net_contact_forces = self.contact_sensors["robot_0"].data.net_forces_w_history
         is_contact = (
-            torch.max(torch.norm(net_contact_forces[:, :, self.undesired_body_contact_ids["robot_0"]], dim=-1), dim=1)[0] > 1.0
+            torch.max(torch.norm(net_contact_forces[:, :, self.undesired_body_contact_ids["robot_0"]], dim=-1), dim=1)[
+                0
+            ]
+            > 1.0
         )
         contacts = torch.sum(is_contact, dim=1)
         # flat orientation
@@ -378,12 +380,14 @@ class AnymalCHappoEnv(DirectMARLEnv):
         # Logging
         for key, value in rewards.items():
             self._episode_sums[key] += value
-        return {"robot_0":reward}
+        return {"robot_0": reward}
 
     def _get_dones(self) -> tuple[dict, dict]:
         time_out = self.episode_length_buf >= self.max_episode_length - 1
         net_contact_forces = self.contact_sensors["robot_0"].data.net_forces_w_history
-        died = torch.any(torch.max(torch.norm(net_contact_forces[:, :, self.base_ids["robot_0"]], dim=-1), dim=1)[0] > 1.0, dim=1)
+        died = torch.any(
+            torch.max(torch.norm(net_contact_forces[:, :, self.base_ids["robot_0"]], dim=-1), dim=1)[0] > 1.0, dim=1
+        )
         return {"robot_0": died}, {"robot_0": time_out}
 
     def _reset_idx(self, env_ids: torch.Tensor | None):

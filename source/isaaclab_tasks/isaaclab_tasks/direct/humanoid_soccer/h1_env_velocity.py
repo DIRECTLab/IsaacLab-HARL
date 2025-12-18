@@ -28,7 +28,6 @@ class H1VelocityEnvCfg(DirectMARLEnvCfg):
     observation_space = 69
     state_space = 0
 
-
     # env
     action_spaces = {f"robot_{i}": 19 for i in range(1)}
     # observation_space = 48

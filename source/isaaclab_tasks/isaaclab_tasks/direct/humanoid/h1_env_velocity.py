@@ -11,10 +11,10 @@ import isaaclab.sim as sim_utils
 from isaaclab.assets import ArticulationCfg
 from isaaclab.envs import DirectMARLEnvCfg
 from isaaclab.scene import InteractiveSceneCfg
+from isaaclab.sensors import ContactSensor, ContactSensorCfg, TiledCamera, TiledCameraCfg
 from isaaclab.sim import SimulationCfg
 from isaaclab.terrains import TerrainImporterCfg
 from isaaclab.utils import configclass
-from isaaclab.sensors import ContactSensor, ContactSensorCfg, TiledCamera, TiledCameraCfg
 
 from isaaclab_tasks.direct.locomotion.locomotion_velocity_control import LocomotionVelocityEnv
 
@@ -28,7 +28,6 @@ class H1VelocityEnvCfg(DirectMARLEnvCfg):
     action_space = 19
     observation_space = 69
     state_space = 0
-
 
     # env
     action_spaces = {f"robot_{i}": 19 for i in range(1)}
@@ -60,7 +59,10 @@ class H1VelocityEnvCfg(DirectMARLEnvCfg):
     # robot
     robot_0: ArticulationCfg = H1_CFG.replace(prim_path="/World/envs/env_.*/Robot_0")
     contact_sensor_0: ContactSensorCfg = ContactSensorCfg(
-        prim_path="/World/envs/env_.*/Robot_0/.*_ankle_link", history_length=3, update_period=(1/120), track_air_time=True,
+        prim_path="/World/envs/env_.*/Robot_0/.*_ankle_link",
+        history_length=3,
+        update_period=(1 / 120),
+        track_air_time=True,
     )
     joint_gears: list = [
         50.0,  # left_hip_yaw
@@ -85,7 +87,7 @@ class H1VelocityEnvCfg(DirectMARLEnvCfg):
     ]
 
     period = 2
-    
+
     # Reward Scales
     gait_weight = 0.5
     feet_slide_weight = -0.2

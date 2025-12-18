@@ -10,17 +10,17 @@ Leatherback Rover locomotion environment.
 import gymnasium as gym
 
 from . import agents
-from .leatherback import (
-    LeatherbackEnvCfg
-)
-
-from .leatherback_sumo_stage1 import LeatherbackSumoStage1Env, LeatherbackSumoStage1EnvCfg
-from .leatherback_sumo_stage2 import LeatherbackSumoStage2Env, LeatherbackSumoStage2EnvCfg
-from .leatherback_sumo_ma_stage1 import LeatherbackSumoMAStage1Env, LeatherbackSumoMAStage1EnvCfg
-from .leatherback_sumo_ma_stage2 import LeatherbackSumoMAStage2Env, LeatherbackSumoMAStage2EnvCfg
+from .leatherback import LeatherbackEnvCfg
 from .leatherback_soccer_stage_1 import LeatherbackStage1SoccerEnv, LeatherbackStage1SoccerEnvCfg
 from .leatherback_soccer_stage_2 import LeatherbackStage2AdversarialSoccerEnv, LeatherbackStage2AdversarialSoccerEnvCfg
-from .leatherback_sumo_ma_stage1_same_team import LeatherbackSumoMAStage1SameTeamEnv, LeatherbackSumoMAStage1SameTeamEnvCfg
+from .leatherback_sumo_ma_stage1 import LeatherbackSumoMAStage1Env, LeatherbackSumoMAStage1EnvCfg
+from .leatherback_sumo_ma_stage1_same_team import (
+    LeatherbackSumoMAStage1SameTeamEnv,
+    LeatherbackSumoMAStage1SameTeamEnvCfg,
+)
+from .leatherback_sumo_ma_stage2 import LeatherbackSumoMAStage2Env, LeatherbackSumoMAStage2EnvCfg
+from .leatherback_sumo_stage1 import LeatherbackSumoStage1Env, LeatherbackSumoStage1EnvCfg
+from .leatherback_sumo_stage2 import LeatherbackSumoStage2Env, LeatherbackSumoStage2EnvCfg
 
 ##
 # Register Gym environments.
@@ -103,7 +103,7 @@ gym.register(
 
 gym.register(
     id="Leatherback-Stage1-Soccer-v0",
-    entry_point=LeatherbackStage1SoccerEnv, 
+    entry_point=LeatherbackStage1SoccerEnv,
     disable_env_checker=True,
     kwargs={
         "env_cfg_entry_point": LeatherbackStage1SoccerEnvCfg,
@@ -116,7 +116,7 @@ gym.register(
 
 gym.register(
     id="Leatherback-Stage1-Soccer-v0-Same-Team",
-    entry_point=LeatherbackSumoMAStage1SameTeamEnv, 
+    entry_point=LeatherbackSumoMAStage1SameTeamEnv,
     disable_env_checker=True,
     kwargs={
         "env_cfg_entry_point": LeatherbackSumoMAStage1SameTeamEnvCfg,
@@ -130,7 +130,7 @@ gym.register(
 
 gym.register(
     id="Leatherback-Stage2-Soccer-v0",
-    entry_point=LeatherbackStage2AdversarialSoccerEnv, 
+    entry_point=LeatherbackStage2AdversarialSoccerEnv,
     disable_env_checker=True,
     kwargs={
         "env_cfg_entry_point": LeatherbackStage2AdversarialSoccerEnvCfg,

@@ -176,7 +176,9 @@ class DirectMARLAdvEnv(gym.Env):
         self.common_step_counter = 0
         # -- init buffers
 
-        self.episode_length_bufs = {team: torch.zeros(self.num_envs, device=self.device, dtype=torch.long) for team in self.cfg.teams}
+        self.episode_length_bufs = {
+            team: torch.zeros(self.num_envs, device=self.device, dtype=torch.long) for team in self.cfg.teams
+        }
         # self.episode_length_buf = torch.zeros(self.num_envs, device=self.device, dtype=torch.long)
         self.reset_buf = torch.zeros(self.num_envs, dtype=torch.bool, device=self.sim.device)
 
@@ -398,8 +400,9 @@ class DirectMARLAdvEnv(gym.Env):
         self.common_step_counter += 1  # total step (common for all envs)
 
         self.terminated_dict, self.time_out_dict = self._get_dones()
-        self.reset_buf[:] = torch.logical_or(torch.stack(list(self.terminated_dict.values())), \
-                                             torch.stack(list(self.time_out_dict.values()))).any(dim=0)
+        self.reset_buf[:] = torch.logical_or(
+            torch.stack(list(self.terminated_dict.values())), torch.stack(list(self.time_out_dict.values()))
+        ).any(dim=0)
         self.reward_dict = self._get_rewards()
 
         # -- reset envs that terminated/timed-out and log the episode information

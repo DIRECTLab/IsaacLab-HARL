@@ -696,6 +696,7 @@ class HeterogeneousPushMultiAgent(DirectMARLEnv):
         self.extras["log"].update(extras)
         extras = dict()
 
+
 @torch.jit.script
 def compute_intermediate_values(
     targets: torch.Tensor,

@@ -1,27 +1,35 @@
+# Copyright (c) 2022-2025, The Isaac Lab Project Developers.
+# All rights reserved.
+#
+# SPDX-License-Identifier: BSD-3-Clause
+
 from __future__ import annotations
 
-import torch
 import copy
-import isaaclab.sim as sim_utils
+import torch
+
 import isaaclab.envs.mdp as mdp
+import isaaclab.sim as sim_utils
 from isaaclab.assets import Articulation, ArticulationCfg, RigidObject, RigidObjectCfg
 from isaaclab.envs import DirectMARLEnv, DirectMARLEnvCfg
-from isaaclab.scene import InteractiveSceneCfg
 from isaaclab.managers import EventTermCfg as EventTerm
 from isaaclab.managers import SceneEntityCfg
+from isaaclab.markers import VisualizationMarkers, VisualizationMarkersCfg
+from isaaclab.scene import InteractiveSceneCfg
+from isaaclab.sensors import ContactSensor, ContactSensorCfg
 from isaaclab.sim import SimulationCfg
 from isaaclab.sim.spawners.from_files import GroundPlaneCfg, spawn_ground_plane
 from isaaclab.utils import configclass
+from isaaclab.utils.math import quat_from_angle_axis, quat_from_euler_xyz, subtract_frame_transforms
+
 from isaaclab_assets.robots.leatherback import LEATHERBACK_CFG  # isort: skip
 from isaaclab_assets.robots.anymal import ANYMAL_C_CFG  # isort: skip
-from isaaclab.sensors import ContactSensor, ContactSensorCfg
-from isaaclab.markers import VisualizationMarkers, VisualizationMarkersCfg
-from isaaclab.utils.math import subtract_frame_transforms
-from isaaclab.utils.math import quat_from_angle_axis, quat_from_euler_xyz
+
 
 def get_quaternion_tuple_from_xyz(x, y, z):
     quat_tensor = quat_from_euler_xyz(torch.tensor([x]), torch.tensor([y]), torch.tensor([z])).flatten()
     return (quat_tensor[0].item(), quat_tensor[1].item(), quat_tensor[2].item(), quat_tensor[3].item())
+
 
 @configclass
 class EventCfg:
@@ -115,6 +123,7 @@ class EventCfg:
         },
     )
 
+
 @configclass
 class SumoStage2EnvCfg(DirectMARLEnvCfg):
     decimation = 4
@@ -142,35 +151,47 @@ class SumoStage2EnvCfg(DirectMARLEnvCfg):
 
     # Robot configs (prim paths unique per robot)
     robot_0: ArticulationCfg = ANYMAL_C_CFG.replace(prim_path="/World/envs/env_.*/Robot_0")
-    robot_0.init_state.rot = get_quaternion_tuple_from_xyz(0,0,torch.pi/2)
+    robot_0.init_state.rot = get_quaternion_tuple_from_xyz(0, 0, torch.pi / 2)
     robot_0.init_state.pos = (0.0, 1.0, 0.3)
 
     robot_1: ArticulationCfg = ANYMAL_C_CFG.replace(prim_path="/World/envs/env_.*/Robot_1")
-    robot_1.init_state.rot = get_quaternion_tuple_from_xyz(0,0,torch.pi/2)
+    robot_1.init_state.rot = get_quaternion_tuple_from_xyz(0, 0, torch.pi / 2)
     robot_1.init_state.pos = (0.0, -1.0, 0.3)
 
     robot_2: ArticulationCfg = ANYMAL_C_CFG.replace(prim_path="/World/envs/env_.*/Robot_2")
-    robot_2.init_state.rot = get_quaternion_tuple_from_xyz(0,0,torch.pi/2)
+    robot_2.init_state.rot = get_quaternion_tuple_from_xyz(0, 0, torch.pi / 2)
     robot_2.init_state.pos = (0.0, -1.0, 0.3)
 
     robot_3: ArticulationCfg = ANYMAL_C_CFG.replace(prim_path="/World/envs/env_.*/Robot_3")
-    robot_3.init_state.rot = get_quaternion_tuple_from_xyz(0,0,torch.pi/2)
+    robot_3.init_state.rot = get_quaternion_tuple_from_xyz(0, 0, torch.pi / 2)
     robot_3.init_state.pos = (0.0, -1.0, 0.3)
 
     contact_sensor_0: ContactSensorCfg = ContactSensorCfg(
-        prim_path="/World/envs/env_.*/Robot_0/base", history_length=3, update_period=0.005, track_air_time=True,
+        prim_path="/World/envs/env_.*/Robot_0/base",
+        history_length=3,
+        update_period=0.005,
+        track_air_time=True,
         # filter_prim_paths_expr=["/World/ground"]
     )
     contact_sensor_1: ContactSensorCfg = ContactSensorCfg(
-        prim_path="/World/envs/env_.*/Robot_1/base", history_length=3, update_period=0.005, track_air_time=True,
+        prim_path="/World/envs/env_.*/Robot_1/base",
+        history_length=3,
+        update_period=0.005,
+        track_air_time=True,
         # filter_prim_paths_expr=["/World/ground"]
     )
     contact_sensor_2: ContactSensorCfg = ContactSensorCfg(
-        prim_path="/World/envs/env_.*/Robot_2/base", history_length=3, update_period=0.005, track_air_time=True,
+        prim_path="/World/envs/env_.*/Robot_2/base",
+        history_length=3,
+        update_period=0.005,
+        track_air_time=True,
         # filter_prim_paths_expr=["/World/ground"]
     )
     contact_sensor_3: ContactSensorCfg = ContactSensorCfg(
-        prim_path="/World/envs/env_.*/Robot_3/base", history_length=3, update_period=0.005, track_air_time=True,
+        prim_path="/World/envs/env_.*/Robot_3/base",
+        history_length=3,
+        update_period=0.005,
+        track_air_time=True,
         # filter_prim_paths_expr=["/World/ground"]
     )
 
@@ -187,12 +208,22 @@ class SumoStage2EnvCfg(DirectMARLEnvCfg):
     time_penalty = -0.01
 
     env_spacing = 10.0
-    scene: InteractiveSceneCfg = InteractiveSceneCfg(num_envs=4096, env_spacing=ring_radius_max * 2, replicate_physics=True)
+    scene: InteractiveSceneCfg = InteractiveSceneCfg(
+        num_envs=4096, env_spacing=ring_radius_max * 2, replicate_physics=True
+    )
+
 
 class SumoStage2Env(DirectMARLEnv):
     cfg: SumoStage2EnvCfg
 
-    def __init__(self, cfg: SumoStage2EnvCfg, render_mode: str | None = None, headless: bool | None = None, debug: bool | None = False, **kwargs):
+    def __init__(
+        self,
+        cfg: SumoStage2EnvCfg,
+        render_mode: str | None = None,
+        headless: bool | None = None,
+        debug: bool | None = False,
+        **kwargs,
+    ):
         super().__init__(cfg, render_mode, **kwargs)
         self.headless = headless
         self.debug = debug
@@ -204,19 +235,23 @@ class SumoStage2Env(DirectMARLEnv):
 
         self.env_spacing = self.cfg.env_spacing
 
-        self.ring_radius = torch.full((self.num_envs,), (self.cfg.ring_radius_min + self.cfg.ring_radius_max) * 0.5,
-                                      dtype=torch.float32, device=self.device)
+        self.ring_radius = torch.full(
+            (self.num_envs,),
+            (self.cfg.ring_radius_min + self.cfg.ring_radius_max) * 0.5,
+            dtype=torch.float32,
+            device=self.device,
+        )
 
         self._ring_segments = 64
-        markers = {f"ring_{i}":sim_utils.SphereCfg(
-                    radius=.05,
-                    visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(0.8, 0.0, 0.0)),
-                ) for i in range(self._ring_segments)}
+        markers = {
+            f"ring_{i}": sim_utils.SphereCfg(
+                radius=0.05,
+                visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(0.8, 0.0, 0.0)),
+            )
+            for i in range(self._ring_segments)
+        }
 
-        ring_marker_cfg = VisualizationMarkersCfg(
-            prim_path="/World/RingMarkers",
-            markers=markers
-        )
+        ring_marker_cfg = VisualizationMarkersCfg(prim_path="/World/RingMarkers", markers=markers)
         self.ring_markers = VisualizationMarkers(ring_marker_cfg)
 
         team_dot_markers = {
@@ -233,13 +268,9 @@ class SumoStage2Env(DirectMARLEnv):
             VisualizationMarkersCfg(prim_path="/World/TeamDots", markers=team_dot_markers)
         )
 
-
         self._episode_sums = {
             key: torch.zeros(self.num_envs, dtype=torch.float, device=self.device)
-            for key in [
-                "team_0_push_out_reward",
-                "team_1_push_out_reward"
-            ]
+            for key in ["team_0_push_out_reward", "team_1_push_out_reward"]
         }
 
         self.base_ids = {}
@@ -247,7 +278,6 @@ class SumoStage2Env(DirectMARLEnv):
         for robot_id, contact_sensor in self.contact_sensors.items():
             _base_id, _ = contact_sensor.find_bodies("base")
             self.base_ids[robot_id] = _base_id
-
 
     @torch.no_grad()
     def _draw_team_dots(self):
@@ -258,14 +288,17 @@ class SumoStage2Env(DirectMARLEnv):
             positions.append(pos)
 
             team = "blue" if "0" in robot_id or "1" in robot_id else "red"
-            indices.append(torch.full((self.num_envs,), 0 if team=="blue" else 1, device=self.device))
+            indices.append(torch.full((self.num_envs,), 0 if team == "blue" else 1, device=self.device))
 
         marker_positions = torch.cat(positions, dim=0)
         marker_indices = torch.cat(indices, dim=0)
-        marker_orientations = torch.zeros((marker_positions.shape[0], 4), device=self.device); marker_orientations[:,0]=1.0
+        marker_orientations = torch.zeros((marker_positions.shape[0], 4), device=self.device)
+        marker_orientations[:, 0] = 1.0
         marker_scales = torch.ones((marker_positions.shape[0], 3), device=self.device)
 
-        self.team_markers.visualize(marker_positions, marker_orientations, scales=marker_scales, marker_indices=marker_indices)
+        self.team_markers.visualize(
+            marker_positions, marker_orientations, scales=marker_scales, marker_indices=marker_indices
+        )
 
     @torch.no_grad()
     def _draw_ring_markers(self):
@@ -285,8 +318,8 @@ class SumoStage2Env(DirectMARLEnv):
         sn = torch.sin(theta)  # (N,)
 
         # Env centers and radii
-        origins_xy = self.scene.env_origins[:, :2].to(device)          # (E, 2)
-        radii = self.ring_radius.view(E, 1)                             # (E, 1)
+        origins_xy = self.scene.env_origins[:, :2].to(device)  # (E, 2)
+        radii = self.ring_radius.view(E, 1)  # (E, 1)
 
         # Build batched positions: stack per marker index (ring_k) across all envs.
         # For marker k, we place E positions at angle theta[k].
@@ -299,13 +332,13 @@ class SumoStage2Env(DirectMARLEnv):
 
         for k in range(N):
             dir_k = torch.tensor([cs[k].item(), sn[k].item()], device=device)  # (2,)
-            xy_k = origins_xy + radii * dir_k                                  # (E, 2)
-            pos_k = torch.cat([xy_k, z_col], dim=1)                            # (E, 3)
+            xy_k = origins_xy + radii * dir_k  # (E, 2)
+            pos_k = torch.cat([xy_k, z_col], dim=1)  # (E, 3)
             pos_chunks.append(pos_k)
             idx_chunks.append(k * torch.ones(E, dtype=torch.long, device=device))
 
-        marker_positions = torch.cat(pos_chunks, dim=0)   # (N*E, 3)
-        marker_indices  = torch.cat(idx_chunks, dim=0)    # (N*E,)
+        marker_positions = torch.cat(pos_chunks, dim=0)  # (N*E, 3)
+        marker_indices = torch.cat(idx_chunks, dim=0)  # (N*E,)
 
         marker_scales = torch.ones((marker_positions.shape[0], 3), device=device)
 
@@ -321,9 +354,8 @@ class SumoStage2Env(DirectMARLEnv):
             marker_indices=marker_indices,
         )
 
-
     def _setup_scene(self):
-        
+
         spawn_ground_plane(
             prim_path="/World/ground",
             cfg=GroundPlaneCfg(
@@ -358,9 +390,7 @@ class SumoStage2Env(DirectMARLEnv):
         self.processed_actions = {}
         self.actions = copy.deepcopy(actions)
         for robot_id, robot in self.robots.items():
-            self.processed_actions[robot_id] = (
-                self.cfg.action_scale * actions[robot_id] + robot.data.default_joint_pos
-            )
+            self.processed_actions[robot_id] = self.cfg.action_scale * actions[robot_id] + robot.data.default_joint_pos
 
     def _apply_action(self) -> None:
         for robot_id, robot in self.robots.items():
@@ -381,18 +411,21 @@ class SumoStage2Env(DirectMARLEnv):
                 enemy_1_id = enemies[1]
 
                 enemy_0_pos, _ = subtract_frame_transforms(
-                    self.robots[robot_id].data.root_state_w[:, :3], self.robots[robot_id].data.root_state_w[:, 3:7],
-                    self.robots[enemy_0_id].data.root_pos_w
+                    self.robots[robot_id].data.root_state_w[:, :3],
+                    self.robots[robot_id].data.root_state_w[:, 3:7],
+                    self.robots[enemy_0_id].data.root_pos_w,
                 )
 
                 teammate_pos, _ = subtract_frame_transforms(
-                    self.robots[robot_id].data.root_state_w[:, :3], self.robots[robot_id].data.root_state_w[:, 3:7],
-                    self.robots[teammate_id].data.root_pos_w
+                    self.robots[robot_id].data.root_state_w[:, :3],
+                    self.robots[robot_id].data.root_state_w[:, 3:7],
+                    self.robots[teammate_id].data.root_pos_w,
                 )
 
                 enemy_1_pos, _ = subtract_frame_transforms(
-                    self.robots[robot_id].data.root_state_w[:, :3], self.robots[robot_id].data.root_state_w[:, 3:7],
-                    self.robots[enemy_1_id].data.root_pos_w
+                    self.robots[robot_id].data.root_state_w[:, :3],
+                    self.robots[robot_id].data.root_state_w[:, 3:7],
+                    self.robots[enemy_1_id].data.root_pos_w,
                 )
 
                 dist_center = torch.norm(
@@ -420,7 +453,7 @@ class SumoStage2Env(DirectMARLEnv):
                 obs[team][robot_id] = robot_obs
 
         return obs
-    
+
     def _get_rewards(self) -> dict:
         self._draw_team_dots()
 
@@ -430,7 +463,7 @@ class SumoStage2Env(DirectMARLEnv):
             if not team in fallen.keys():
                 fallen[team] = torch.zeros(self.num_envs, dtype=torch.bool, device=self.device)
             for robot_id in agents:
-                died = self.robots[robot_id].data.root_com_pos_w[:, 2] < .1
+                died = self.robots[robot_id].data.root_com_pos_w[:, 2] < 0.1
                 fallen[team] |= died
 
         out = self._robots_out_of_ring()
@@ -443,8 +476,8 @@ class SumoStage2Env(DirectMARLEnv):
         team0_lost = team0_out.to(torch.int8) | fallen["team_0"].to(torch.int8)
         team1_lost = team1_out.to(torch.int8) | fallen["team_1"].to(torch.int8)
         time_out = (self.episode_length_buf >= self.max_episode_length - 1).to(torch.int8)
-        
-        push_out_reward_0 =  tie * (team1_lost - team0_lost - time_out) * self.cfg.reward_scale 
+
+        push_out_reward_0 = tie * (team1_lost - team0_lost - time_out) * self.cfg.reward_scale
         push_out_reward_1 = tie * (team0_lost - team1_lost - time_out) * self.cfg.reward_scale
 
         self._episode_sums["team_0_push_out_reward"] += push_out_reward_0
@@ -456,10 +489,10 @@ class SumoStage2Env(DirectMARLEnv):
         }
 
     def _robots_out_of_ring(self) -> dict[str, torch.Tensor]:
-        env_xy = self.scene.env_origins[:, :2].to(self.device)  
+        env_xy = self.scene.env_origins[:, :2].to(self.device)
         out = {}
         for robot_id in self.robots.keys():
-            pos_xy = self.robots[robot_id].data.root_pos_w[:, :2]  
+            pos_xy = self.robots[robot_id].data.root_pos_w[:, :2]
             dist = torch.linalg.norm(pos_xy - env_xy, dim=1)
             out[robot_id] = dist > self.ring_radius
         return out
@@ -472,7 +505,7 @@ class SumoStage2Env(DirectMARLEnv):
         for robot_id, robot in self.robots.items():
             # net_contact_forces = self.contact_sensors[robot_id].data.net_forces_w_history
             # died = torch.any(torch.max(torch.norm(net_contact_forces[:, :, self.base_ids[robot_id]], dim=-1), dim=1)[0] > 1.0, dim=1)
-            died = robot.data.root_com_pos_w[:, 2] < .1
+            died = robot.data.root_com_pos_w[:, 2] < 0.1
             fallen |= died
 
         done = team0_out | team1_out | fallen
@@ -485,7 +518,7 @@ class SumoStage2Env(DirectMARLEnv):
     def _reset_idx(self, env_ids: torch.Tensor | None):
         episode_lengths = self.episode_length_buf[env_ids].to(torch.float32) + 1
         out_map = self._robots_out_of_ring()
-        N = env_ids.shape[0] # type: ignore
+        N = env_ids.shape[0]  # type: ignore
 
         team0_out = torch.any(torch.stack([out_map["robot_0"], out_map["robot_1"]]), dim=0)
         team1_out = torch.any(torch.stack([out_map["robot_2"], out_map["robot_3"]]), dim=0)
@@ -497,14 +530,16 @@ class SumoStage2Env(DirectMARLEnv):
 
         # spread out the updates
         if not self.debug:
-            if len(env_ids) == self.num_envs: # type: ignore
-                self.episode_length_buf[:] = torch.randint_like(self.episode_length_buf, high=int(self.max_episode_length))
+            if len(env_ids) == self.num_envs:  # type: ignore
+                self.episode_length_buf[:] = torch.randint_like(
+                    self.episode_length_buf, high=int(self.max_episode_length)
+                )
 
         # Randomize ring radius per env
         low, high = self.cfg.ring_radius_min, self.cfg.ring_radius_max
-        self.ring_radius[env_ids] = (
-            torch.empty(env_ids.shape[0], device=self.device).uniform_(low, high) # type: ignore
-        )
+        self.ring_radius[env_ids] = torch.empty(env_ids.shape[0], device=self.device).uniform_(
+            low, high
+        )  # type: ignore
 
         origins = self.scene.env_origins[env_ids]  # (N, 3)
 
@@ -524,18 +559,17 @@ class SumoStage2Env(DirectMARLEnv):
         self._draw_ring_markers()
         self._draw_team_dots()
         extras = dict()
-        
+
         extras["team0_win_percentage"] = (torch.count_nonzero(team1_out[env_ids]).item() / N) if N > 0 else 0
         extras["team1_win_percentage"] = (torch.count_nonzero(team0_out[env_ids]).item() / N) if N > 0 else 0
 
         for key in self._episode_sums.keys():
             episodic_sum_avg = torch.mean(self._episode_sums[key][env_ids] / episode_lengths)
-            extras["Episode_Reward/"+key] = episodic_sum_avg
+            extras["Episode_Reward/" + key] = episodic_sum_avg
             self._episode_sums[key][env_ids] = 0.0
 
         self.extras["log"] = dict()
         self.extras["log"].update(extras)
-
 
     def _sample_positions_grid(self, N, radii, num_samples, min_dist=0.6, grid_spacing=0.5):
         """

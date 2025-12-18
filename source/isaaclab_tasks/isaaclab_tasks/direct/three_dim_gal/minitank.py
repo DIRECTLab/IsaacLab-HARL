@@ -7,13 +7,14 @@ from __future__ import annotations
 
 import copy
 import torch
+import torchvision.transforms as transforms
+from torch import nn
 
 import isaacsim.core.utils.torch as torch_utils
 from isaacsim.core.utils.torch.rotations import compute_heading_and_up, compute_rot, quat_conjugate
 
 import isaaclab.envs.mdp as mdp
 import isaaclab.sim as sim_utils
-import torchvision.transforms as transforms
 from isaaclab.assets import Articulation, ArticulationCfg, RigidObject, RigidObjectCfg
 from isaaclab.envs import DirectMARLEnv, DirectMARLEnvCfg
 from isaaclab.managers import EventTermCfg as EventTerm
@@ -25,9 +26,14 @@ from isaaclab.sim import SimulationCfg
 from isaaclab.terrains import TerrainImporterCfg
 from isaaclab.utils import configclass
 from isaaclab.utils.assets import ISAAC_NUCLEUS_DIR
-from isaaclab.utils.math import subtract_frame_transforms, quat_from_angle_axis, quat_from_euler_xyz, quat_mul, euler_xyz_from_quat, normalize
-from torch import nn
-
+from isaaclab.utils.math import (
+    euler_xyz_from_quat,
+    normalize,
+    quat_from_angle_axis,
+    quat_from_euler_xyz,
+    quat_mul,
+    subtract_frame_transforms,
+)
 
 ##
 # Pre-defined configs
@@ -41,7 +47,7 @@ from isaaclab_assets import CRAZYFLIE_CFG  # isort: skip
 
 class SimpleCNN(nn.Module):
     def __init__(self, in_channels: int, out_channels: int, img_height: int = 480, img_width: int = 640):
-        super(SimpleCNN, self).__init__()
+        super().__init__()
         self.conv1 = nn.Conv2d(in_channels, 16, kernel_size=3, stride=1, padding=1)
         self.bn1 = nn.BatchNorm2d(16)
         self.conv2 = nn.Conv2d(16, 32, kernel_size=3, stride=1, padding=1)
@@ -57,7 +63,7 @@ class SimpleCNN(nn.Module):
         Returns:
             _type_: _description_
         """
-        x = x.nan_to_num(nan=0.0, posinf=100_000) # since values are depth values, we can set inf to a large number
+        x = x.nan_to_num(nan=0.0, posinf=100_000)  # since values are depth values, we can set inf to a large number
         x = x.permute(0, 3, 1, 2)  # Change to (batch_size, channels, height, width)
         x = torch.relu(self.conv1(x))
         x = torch.relu(self.conv2(x))
@@ -66,9 +72,9 @@ class SimpleCNN(nn.Module):
         return x
 
 
-
 def normalize_angle(x):
     return torch.atan2(torch.sin(x), torch.cos(x))
+
 
 @configclass
 class MinitankEnvCfg(DirectMARLEnvCfg):
@@ -139,9 +145,10 @@ class MinitankEnvCfg(DirectMARLEnvCfg):
     #     offset=CameraCfg.OffsetCfg(pos=(0, 0, 1), rot=(0,0,1,0), convention="opengl"),
     # )
 
-    action_scale = .5
+    action_scale = 0.5
     max_vel = 2
     ### MINITANK CONFIGURATION ###
+
 
 def define_markers() -> VisualizationMarkers:
     marker_cfg = VisualizationMarkersCfg(
@@ -149,12 +156,12 @@ def define_markers() -> VisualizationMarkers:
         markers={
             "arrow1": sim_utils.UsdFileCfg(
                 usd_path=f"{ISAAC_NUCLEUS_DIR}/Props/UIElements/arrow_x.usd",
-                scale=(.1, .1, 1),
+                scale=(0.1, 0.1, 1),
                 visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(0.8, 0.0, 0.0)),
             ),
             "arrow2": sim_utils.UsdFileCfg(
                 usd_path=f"{ISAAC_NUCLEUS_DIR}/Props/UIElements/arrow_x.usd",
-                scale=(.1, .1, 1),
+                scale=(0.1, 0.1, 1),
                 visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(0.0, 0.8, 0.0)),
             ),
             "sphere1": sim_utils.SphereCfg(
@@ -166,9 +173,9 @@ def define_markers() -> VisualizationMarkers:
     return VisualizationMarkers(marker_cfg)
 
 
-
 class MinitankEnv(DirectMARLEnv):
     cfg: MinitankEnvCfg
+
     def __init__(
         self,
         cfg: MinitankEnvCfg,
@@ -204,22 +211,23 @@ class MinitankEnv(DirectMARLEnv):
         if not self.headless:
             self.my_visualizer = define_markers()
 
-
     def _draw_markers(self):
 
-        marker_ids = torch.concat([
-            torch.zeros(self.num_envs, dtype=torch.int32).to(self.device),
-            torch.ones(self.num_envs, dtype=torch.int32).to(self.device),
-            2 * torch.ones(self.num_envs, dtype=torch.int32).to(self.device)
-        ], dim=0)
+        marker_ids = torch.concat(
+            [
+                torch.zeros(self.num_envs, dtype=torch.int32).to(self.device),
+                torch.ones(self.num_envs, dtype=torch.int32).to(self.device),
+                2 * torch.ones(self.num_envs, dtype=torch.int32).to(self.device),
+            ],
+            dim=0,
+        )
 
         desired_pos = self._desired_pos_w
-        arm_pos = self.robots['robot_0'].data.body_com_pos_w[:, 1, :]
-        base_pos = self.robots['robot_0'].data.body_com_pos_w[:, 0, :]
+        arm_pos = self.robots["robot_0"].data.body_com_pos_w[:, 1, :]
+        base_pos = self.robots["robot_0"].data.body_com_pos_w[:, 0, :]
         base_pos_offset = torch.zeros_like(base_pos)
         base_pos_offset[:, 2] = 0.06
         base_pos = base_pos + base_pos_offset
-
 
         diff = desired_pos - arm_pos
         arm_diff = arm_pos - base_pos
@@ -238,7 +246,6 @@ class MinitankEnv(DirectMARLEnv):
         angle = dot_prod_angle / (x_vector.norm(dim=1) * desired_direction.norm(dim=1))
         angle = torch.acos(angle)
 
-
         dot_prod_angle_arm = torch.sum(x_vector * arm_direction, dim=1)
         angle_arm = dot_prod_angle_arm / (x_vector.norm(dim=1) * arm_direction.norm(dim=1))
         angle_arm = torch.acos(angle_arm)
@@ -251,17 +258,15 @@ class MinitankEnv(DirectMARLEnv):
 
         self.my_visualizer.visualize(positions, orientations, marker_indices=marker_ids)
 
-
     def _get_vector_angle_reward(self):
         """Calculates the cosine of the angle between the quaternion vector from the minitank to the drone and the\
               actual quaternion vector of the arm of the minitank.
         """
-        arm_pos = self.robots['robot_0'].data.body_com_pos_w[:, 1, :]
-        base_pos = self.robots['robot_0'].data.body_com_pos_w[:, 0, :]
+        arm_pos = self.robots["robot_0"].data.body_com_pos_w[:, 1, :]
+        base_pos = self.robots["robot_0"].data.body_com_pos_w[:, 0, :]
         base_pos_offset = torch.zeros_like(base_pos)
         base_pos_offset[:, 2] = 0.06
         base_pos = base_pos + base_pos_offset
-
 
         diff = self._desired_pos_w - arm_pos
         arm_diff = arm_pos - base_pos
@@ -280,23 +285,22 @@ class MinitankEnv(DirectMARLEnv):
         angle = dot_prod_angle / (x_vector.norm(dim=1) * desired_direction.norm(dim=1))
         angle = torch.acos(angle)
 
-
         dot_prod_angle_arm = torch.sum(x_vector * arm_direction, dim=1)
         angle_arm = dot_prod_angle_arm / (x_vector.norm(dim=1) * arm_direction.norm(dim=1))
         angle_arm = torch.acos(angle_arm)
 
-        self.desired_orientation = normalize(quat_from_angle_axis(angle, r)) 
+        self.desired_orientation = normalize(quat_from_angle_axis(angle, r))
         self.arm_orientation = normalize(quat_from_angle_axis(angle_arm, r_arm))
 
         a = torch.sum(torch.abs(self.desired_orientation - self.arm_orientation), dim=1)
         b = torch.sum(torch.abs(self.desired_orientation + self.arm_orientation), dim=1)
 
-        res = torch.stack([a,b], dim=1)
+        res = torch.stack([a, b], dim=1)
         reward = torch.min(res, dim=1)
         reward_mapped = torch.exp(-reward.values)
         return reward_mapped, self.arm_orientation, self.desired_orientation
         # return reward
- 
+
     def _setup_scene(self):
         self.num_robots = sum(1 for key in self.cfg.__dict__.keys() if "robot_" in key)
         self.robots = {}
@@ -315,7 +319,6 @@ class MinitankEnv(DirectMARLEnv):
         # self.scene.sensors["robot_1_camera"] = self.cameras["robot_1"]
         ### SETUP CAMERAS ###
 
-
         self.cfg.terrain.num_envs = self.scene.cfg.num_envs
         self.cfg.terrain.env_spacing = self.scene.cfg.env_spacing
         self._terrain = self.cfg.terrain.class_type(self.cfg.terrain)
@@ -331,9 +334,10 @@ class MinitankEnv(DirectMARLEnv):
         ### PREPHYSICS FOR MINITANK ###
 
         self.processed_actions = copy.deepcopy(actions)
-        self.processed_actions["robot_0"] = (
-            torch.clip((self.cfg.action_scale * self.processed_actions["robot_0"]) + \
-                       self.robots["robot_0"].data.joint_vel, -self.cfg.max_vel, self.cfg.max_vel)
+        self.processed_actions["robot_0"] = torch.clip(
+            (self.cfg.action_scale * self.processed_actions["robot_0"]) + self.robots["robot_0"].data.joint_vel,
+            -self.cfg.max_vel,
+            self.cfg.max_vel,
         )
         ### PREPHYSICS FOR MINITANK ###
 
@@ -348,17 +352,13 @@ class MinitankEnv(DirectMARLEnv):
         self.arm_orientation_reward, self.arm_orientation, self.desired_orientation = self._get_vector_angle_reward()
 
         tank_obs = torch.cat(
-            [
-                self.processed_actions["robot_0"],
-                self.desired_orientation,
-                self.arm_orientation
-            ],
+            [self.processed_actions["robot_0"], self.desired_orientation, self.arm_orientation],
             dim=-1,
         )
 
         self.previous_actions = copy.deepcopy(self.actions)
-        obs = {"robot_0":tank_obs}
-        
+        obs = {"robot_0": tank_obs}
+
         return obs
 
     def get_y_euler_from_quat(self, quaternion):
@@ -373,7 +373,7 @@ class MinitankEnv(DirectMARLEnv):
         ### MINITANK REWARDS ###
         minitank_rewards = self.arm_orientation_reward * self.step_dt
         ### MINITANK REWARDS ###
-    
+
         self._episode_sums["tank_angle_reward"] = minitank_rewards
 
         return {"robot_0": minitank_rewards.to(self.device)}
@@ -382,7 +382,7 @@ class MinitankEnv(DirectMARLEnv):
         time_out = (self.episode_length_buf >= self.max_episode_length - 1).to(self.device)
         dones = {}
         dones["robot_0"] = torch.zeros(self.num_envs).to(torch.int8).to(self.device)
-        time_out = {robot_id:time_out for robot_id in self.robots.keys()}
+        time_out = {robot_id: time_out for robot_id in self.robots.keys()}
 
         # dones = {robot_id: torch.zeros(self.num_envs).to(torch.int8).to(self.device) for robot_id in self.robots.keys()}
 
@@ -427,9 +427,10 @@ class MinitankEnv(DirectMARLEnv):
             robot.write_root_velocity_to_sim(default_root_state[:, 7:], env_ids)
             robot.write_joint_state_to_sim(joint_pos, joint_vel, None, env_ids)
 
-        self._desired_pos_w[env_ids, :2] = self.robots["robot_0"].data.root_pos_w[env_ids, :2] + \
-            torch.zeros_like(self._desired_pos_w[env_ids, :2]).uniform_(-10.0, 10.0)
-        
+        self._desired_pos_w[env_ids, :2] = self.robots["robot_0"].data.root_pos_w[env_ids, :2] + torch.zeros_like(
+            self._desired_pos_w[env_ids, :2]
+        ).uniform_(-10.0, 10.0)
+
         vals = self._desired_pos_w[env_ids, :2]
 
         # Set values between 0 and 3 to 3
@@ -441,6 +442,3 @@ class MinitankEnv(DirectMARLEnv):
         self._desired_pos_w[env_ids, :2] = vals
 
         self._desired_pos_w[env_ids, 2] = torch.zeros_like(self._desired_pos_w[env_ids, 2]).uniform_(0.5, 10.0)
-
-
-        

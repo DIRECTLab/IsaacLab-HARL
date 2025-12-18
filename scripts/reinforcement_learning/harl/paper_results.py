@@ -1,10 +1,15 @@
 #!/usr/bin/env python3
+# Copyright (c) 2022-2025, The Isaac Lab Project Developers.
+# All rights reserved.
+#
+# SPDX-License-Identifier: BSD-3-Clause
+
 import argparse
+import matplotlib.pyplot as plt
+import numpy as np
 import os
 import shutil
 import subprocess
-import numpy as np
-import matplotlib.pyplot as plt
 from pathlib import Path
 
 
@@ -19,9 +24,9 @@ def main(args):
         outdir = checkpoints_path.parent.parent / "results_analysis"
     outdir.mkdir(parents=True, exist_ok=True)
 
-    learned_agent_names = list(args.learned_agents_names.split(','))
-    unlearned_agent_names = list(args.unlearned_agents_names.split(','))
-    num_envs, num_steps_per_episode = args.num_envs_episode_length.split(',')
+    learned_agent_names = list(args.learned_agents_names.split(","))
+    unlearned_agent_names = list(args.unlearned_agents_names.split(","))
+    num_envs, num_steps_per_episode = args.num_envs_episode_length.split(",")
 
     results = {}
 
@@ -115,12 +120,7 @@ def main(args):
         plt.grid(True)
 
         # legend outside
-        plt.legend(
-            loc="upper left",
-            bbox_to_anchor=(1.02, 1),
-            borderaxespad=0,
-            fontsize=12
-        )
+        plt.legend(loc="upper left", bbox_to_anchor=(1.02, 1), borderaxespad=0, fontsize=12)
 
         plt.tight_layout(rect=[0, 0, 0.8, 1])
 
@@ -134,11 +134,30 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Evaluate adversarial checkpoints")
 
     parser.add_argument("--checkpoint_path", type=str, required=True, help="Path to checkpoints directory")
-    parser.add_argument("--learned_agents_names", type=str, required=True, help="Agents to evaluate adversarial learning, separated by commas i.e 'agent_1_name,agent_2_name'")
-    parser.add_argument("--unlearned_agents_names", type=str, required=True, help="Agents to evaluate against, separated by commas 'agent_1_name,agent_2_name'")
-    parser.add_argument("--num_envs_episode_length", type=str, required=True, help="For calculating the number of steps given the episodes, this parameters should be" \
-    "formatted as 'num_envs,episode_length'")
-    parser.add_argument("--eval_script", type=str, default="./get_adversarial_results.py", help="Evaluation script path")
+    parser.add_argument(
+        "--learned_agents_names",
+        type=str,
+        required=True,
+        help="Agents to evaluate adversarial learning, separated by commas i.e 'agent_1_name,agent_2_name'",
+    )
+    parser.add_argument(
+        "--unlearned_agents_names",
+        type=str,
+        required=True,
+        help="Agents to evaluate against, separated by commas 'agent_1_name,agent_2_name'",
+    )
+    parser.add_argument(
+        "--num_envs_episode_length",
+        type=str,
+        required=True,
+        help=(
+            "For calculating the number of steps given the episodes, this parameters should be"
+            "formatted as 'num_envs,episode_length'"
+        ),
+    )
+    parser.add_argument(
+        "--eval_script", type=str, default="./get_adversarial_results.py", help="Evaluation script path"
+    )
 
     parser.add_argument("--outdir", type=str, help="Output directory for results and plots")
 

@@ -12,16 +12,29 @@ import gymnasium as gym
 from . import agents
 from .anymal_c_multi_agent import AnymalCMultiAgentBar, AnymalCMultiAgentFlatEnvCfg
 from .anymal_c_multi_agent_adversarial import AnymalCAdversarialEnv, AnymalCAdversarialEnvCfg
-from .anymal_c_multi_agent_adversarial_single_agent import AnymalCAdversarialSingleAgentEnv, AnymalCAdversarialSingleAgentEnvCfg
-from .anymal_c_multi_agent_adversarial_sumo_stage1 import AnymalCAdversarialSumoStage1Env, AnymalCAdversarialSumoStage1EnvCfg
-from .anymal_c_multi_agent_adversarial_sumo_stage2 import AnymalCAdversarialSumoStage2Env, AnymalCAdversarialSumoStage2EnvCfg
 from .anymal_c_multi_agent_adversarial_same_team import AnymalCAdversarialSameTeamEnv, AnymalCAdversarialSameTeamEnvCfg
-from .anymal_c_multi_agent_bar_same_team import AnymalCMultiAgentFlatSameTeamBarEnv, AnymalCMultiAgentFlatSameTeamBarEnvCfg
-from .sumo_stage_1_single_agent import SumoStage1EnvSingleAgent, SumoStage1EnvSingleAgentCfg
+from .anymal_c_multi_agent_adversarial_single_agent import (
+    AnymalCAdversarialSingleAgentEnv,
+    AnymalCAdversarialSingleAgentEnvCfg,
+)
+from .anymal_c_multi_agent_adversarial_sumo_stage1 import (
+    AnymalCAdversarialSumoStage1Env,
+    AnymalCAdversarialSumoStage1EnvCfg,
+)
+from .anymal_c_multi_agent_adversarial_sumo_stage2 import (
+    AnymalCAdversarialSumoStage2Env,
+    AnymalCAdversarialSumoStage2EnvCfg,
+)
+from .anymal_c_multi_agent_bar_same_team import (
+    AnymalCMultiAgentFlatSameTeamBarEnv,
+    AnymalCMultiAgentFlatSameTeamBarEnvCfg,
+)
+
 # from .sumo_stage_1_multi_agent import SumoStage1MultiAgentEnv, SumoStage1MultiAgentEnvCfg
 from .sumo_stage_1_blocks import SumoStage1BlocksEnv, SumoStage1BlocksEnvCfg
-from .sumo_stage_1_blocks_push import SumoStage1BlocksPushEnv, SumoStage1BlocksPushEnvCfg
 from .sumo_stage_1_blocks_full_obs import SumoStage1BlocksFullEnv, SumoStage1BlocksFullEnvCfg
+from .sumo_stage_1_blocks_push import SumoStage1BlocksPushEnv, SumoStage1BlocksPushEnvCfg
+from .sumo_stage_1_single_agent import SumoStage1EnvSingleAgent, SumoStage1EnvSingleAgentCfg
 from .sumo_stage_2 import SumoStage2Env, SumoStage2EnvCfg
 from .sumo_stage_2_hetero import SumoStage2HeteroEnv, SumoStage2HeteroEnvCfg
 
@@ -52,7 +65,7 @@ gym.register(
         "rsl_rl_cfg_entry_point": f"{agents.__name__}.rsl_rl_ppo_cfg:AnymalCFlatPPORunnerCfg",
         "skrl_cfg_entry_point": f"{agents.__name__}:skrl_flat_ppo_cfg.yaml",
         "harl_happo_cfg_entry_point": f"{agents.__name__}:harl_happo_cfg.yaml",
-        "harl_happo_adv_cfg_entry_point": f"{agents.__name__}:harl_happo_adv_cfg.yaml"
+        "harl_happo_adv_cfg_entry_point": f"{agents.__name__}:harl_happo_adv_cfg.yaml",
     },
 )
 
@@ -66,7 +79,7 @@ gym.register(
         "rsl_rl_cfg_entry_point": f"{agents.__name__}.rsl_rl_ppo_cfg:AnymalCFlatPPORunnerCfg",
         "skrl_cfg_entry_point": f"{agents.__name__}:skrl_flat_ppo_cfg.yaml",
         "harl_happo_cfg_entry_point": f"{agents.__name__}:harl_happo_cfg.yaml",
-        "harl_happo_adv_cfg_entry_point": f"{agents.__name__}:harl_happo_adv_cfg.yaml"
+        "harl_happo_adv_cfg_entry_point": f"{agents.__name__}:harl_happo_adv_cfg.yaml",
     },
 )
 
@@ -80,7 +93,7 @@ gym.register(
         "rsl_rl_cfg_entry_point": f"{agents.__name__}.rsl_rl_ppo_cfg:AnymalCFlatPPORunnerCfg",
         "skrl_cfg_entry_point": f"{agents.__name__}:skrl_flat_ppo_cfg.yaml",
         "harl_happo_cfg_entry_point": f"{agents.__name__}:harl_happo_cfg.yaml",
-        "harl_happo_adv_cfg_entry_point": f"{agents.__name__}:harl_happo_adv_cfg.yaml"
+        "harl_happo_adv_cfg_entry_point": f"{agents.__name__}:harl_happo_adv_cfg.yaml",
     },
 )
 
@@ -95,7 +108,7 @@ gym.register(
         "rsl_rl_cfg_entry_point": f"{agents.__name__}.rsl_rl_ppo_cfg:AnymalCFlatPPORunnerCfg",
         "skrl_cfg_entry_point": f"{agents.__name__}:skrl_flat_ppo_cfg.yaml",
         "harl_happo_cfg_entry_point": f"{agents.__name__}:harl_happo_cfg.yaml",
-        "harl_happo_adv_cfg_entry_point": f"{agents.__name__}:harl_happo_adv_cfg.yaml"
+        "harl_happo_adv_cfg_entry_point": f"{agents.__name__}:harl_happo_adv_cfg.yaml",
     },
 )
 
@@ -109,7 +122,7 @@ gym.register(
         "rsl_rl_cfg_entry_point": f"{agents.__name__}.rsl_rl_ppo_cfg:AnymalCFlatPPORunnerCfg",
         "skrl_cfg_entry_point": f"{agents.__name__}:skrl_flat_ppo_cfg.yaml",
         "harl_happo_cfg_entry_point": f"{agents.__name__}:harl_happo_cfg.yaml",
-        "harl_happo_adv_cfg_entry_point": f"{agents.__name__}:harl_happo_adv_cfg.yaml"
+        "harl_happo_adv_cfg_entry_point": f"{agents.__name__}:harl_happo_adv_cfg.yaml",
     },
 )
 
@@ -124,7 +137,7 @@ gym.register(
         "rsl_rl_cfg_entry_point": f"{agents.__name__}.rsl_rl_ppo_cfg:AnymalCFlatPPORunnerCfg",
         "skrl_cfg_entry_point": f"{agents.__name__}:skrl_flat_ppo_cfg.yaml",
         "harl_happo_cfg_entry_point": f"{agents.__name__}:harl_happo_cfg.yaml",
-        "harl_happo_adv_cfg_entry_point": f"{agents.__name__}:harl_happo_adv_cfg.yaml"
+        "harl_happo_adv_cfg_entry_point": f"{agents.__name__}:harl_happo_adv_cfg.yaml",
     },
 )
 
@@ -153,7 +166,7 @@ gym.register(
         "rsl_rl_cfg_entry_point": f"{agents.__name__}.rsl_rl_ppo_cfg:AnymalCFlatPPORunnerCfg",
         "skrl_cfg_entry_point": f"{agents.__name__}:skrl_flat_ppo_cfg.yaml",
         "harl_happo_cfg_entry_point": f"{agents.__name__}:harl_happo_cfg.yaml",
-        "harl_happo_adv_cfg_entry_point": f"{agents.__name__}:harl_happo_adv_cfg.yaml"
+        "harl_happo_adv_cfg_entry_point": f"{agents.__name__}:harl_happo_adv_cfg.yaml",
     },
 )
 
@@ -181,7 +194,7 @@ gym.register(
         "rsl_rl_cfg_entry_point": f"{agents.__name__}.rsl_rl_ppo_cfg:AnymalCFlatPPORunnerCfg",
         "skrl_cfg_entry_point": f"{agents.__name__}:skrl_flat_ppo_cfg.yaml",
         "harl_happo_cfg_entry_point": f"{agents.__name__}:harl_happo_cfg.yaml",
-        "harl_happo_adv_cfg_entry_point": f"{agents.__name__}:harl_happo_adv_cfg.yaml"
+        "harl_happo_adv_cfg_entry_point": f"{agents.__name__}:harl_happo_adv_cfg.yaml",
     },
 )
 
@@ -195,7 +208,7 @@ gym.register(
         "rsl_rl_cfg_entry_point": f"{agents.__name__}.rsl_rl_ppo_cfg:AnymalCFlatPPORunnerCfg",
         "skrl_cfg_entry_point": f"{agents.__name__}:skrl_flat_ppo_cfg.yaml",
         "harl_happo_cfg_entry_point": f"{agents.__name__}:harl_happo_cfg.yaml",
-        "harl_happo_adv_cfg_entry_point": f"{agents.__name__}:harl_happo_adv_cfg.yaml"
+        "harl_happo_adv_cfg_entry_point": f"{agents.__name__}:harl_happo_adv_cfg.yaml",
     },
 )
 
@@ -209,7 +222,7 @@ gym.register(
         "rsl_rl_cfg_entry_point": f"{agents.__name__}.rsl_rl_ppo_cfg:AnymalCFlatPPORunnerCfg",
         "skrl_cfg_entry_point": f"{agents.__name__}:skrl_flat_ppo_cfg.yaml",
         "harl_happo_cfg_entry_point": f"{agents.__name__}:harl_happo_cfg.yaml",
-        "harl_happo_adv_cfg_entry_point": f"{agents.__name__}:harl_happo_adv_cfg.yaml"
+        "harl_happo_adv_cfg_entry_point": f"{agents.__name__}:harl_happo_adv_cfg.yaml",
     },
 )
 
@@ -223,6 +236,6 @@ gym.register(
         "rsl_rl_cfg_entry_point": f"{agents.__name__}.rsl_rl_ppo_cfg:AnymalCFlatPPORunnerCfg",
         "skrl_cfg_entry_point": f"{agents.__name__}:skrl_flat_ppo_cfg.yaml",
         "harl_happo_cfg_entry_point": f"{agents.__name__}:harl_happo_cfg.yaml",
-        "harl_happo_adv_cfg_entry_point": f"{agents.__name__}:harl_happo_adv_cfg.yaml"
+        "harl_happo_adv_cfg_entry_point": f"{agents.__name__}:harl_happo_adv_cfg.yaml",
     },
 )

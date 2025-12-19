@@ -285,7 +285,7 @@ class SumoStage2HeteroEnv(DirectMARLEnv):
 
     @torch.no_grad()
     def _draw_team_dots(self):
-        positions, indices, orientations, scales = [], [], [], []
+        positions, indices, _, scales = [], [], [], []
         for robot_id, robot in self.robots.items():
             pos = robot.data.root_pos_w.clone()
             pos[:, 2] += 0.5  # hover above robot

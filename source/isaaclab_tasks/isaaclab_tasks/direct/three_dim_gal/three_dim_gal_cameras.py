@@ -25,10 +25,7 @@ from isaaclab.utils.math import normalize, quat_from_angle_axis, subtract_frame_
 # Pre-defined configs
 #
 from isaaclab_assets.robots.minitank import MINITANK_CFG  # isort: skip
-from isaaclab_assets.robots.anymal import ANYMAL_C_CFG  # isort: skip
-from isaaclab_assets.robots.unitree import H1_CFG  # isort: skip
-from isaaclab.terrains.config.rough import ROUGH_TERRAINS_CFG  # isort: skip
-from isaaclab_assets import CRAZYFLIE_CFG  # isort: skip
+from isaaclab_assets.robots.quadcopter import CRAZYFLIE_CFG  # isort: skip
 
 
 class SimpleCNN(nn.Module):
@@ -485,9 +482,7 @@ class ThreeDimGalCamerasEnv(DirectMARLEnv):
     def _get_dones(self) -> tuple[dict, dict]:
         time_out = (self.episode_length_buf >= self.max_episode_length - 1).to(self.device)
         died = self.robots["robot_1"].data.root_pos_w[:, 2] < 0.1
-        dones = {}
-        dones["robot_0"] = torch.zeros(self.num_envs).to(torch.int8).to(self.device)
-        dones["robot_1"] = died.to(self.device)
+        dones = {"robot_0": torch.zeros(self.num_envs).to(torch.int8).to(self.device), "robot_1": died.to(self.device)}
         time_out = {robot_id: time_out for robot_id in self.robots.keys()}
 
         # dones = {robot_id: torch.zeros(self.num_envs).to(torch.int8).to(self.device) for robot_id in self.robots.keys()}

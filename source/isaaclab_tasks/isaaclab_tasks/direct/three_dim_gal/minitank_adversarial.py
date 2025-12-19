@@ -171,12 +171,6 @@ def define_markers() -> VisualizationMarkers:
                     diffuse_color=(0.0, 1.0, 1.0),
                 ),
             ),
-            "sphere2": sim_utils.SphereCfg(
-                radius=0.1,
-                visual_material=sim_utils.PreviewSurfaceCfg(
-                    diffuse_color=(1.0, 0.0, 0.0),
-                ),
-            ),
         },
     )
     return VisualizationMarkers(marker_cfg)
@@ -209,12 +203,6 @@ class MinitankAdversarialEnv(DirectMARLEnv):
             for agent, action_space in self.cfg.action_spaces.items()
         }
         self._drone_desired_pos_w = torch.zeros((self.num_envs, 3), device=self.device)
-        self._tank_desired_pos_w = torch.zeros((self.num_envs, 3), device=self.device)
-        self._tank_desired_pos_w[:, :2] = self._terrain.env_origins[:, :2] + torch.zeros_like(
-            self._terrain.env_origins[:, :2]
-        ).uniform_(-10, 10)
-
-        self._tank_desired_pos_w[:, 2] = torch.zeros_like(self._terrain.env_origins[:, 2]).uniform_(3, 6)
 
         self._episode_sums = {
             key: torch.zeros(self.num_envs, dtype=torch.float, device=self.device)
@@ -252,12 +240,10 @@ class MinitankAdversarialEnv(DirectMARLEnv):
                 torch.zeros(self.num_envs, dtype=torch.int32).to(self.device),
                 torch.ones(self.num_envs, dtype=torch.int32).to(self.device),
                 2 * torch.ones(self.num_envs, dtype=torch.int32).to(self.device),
-                3 * torch.ones(self.num_envs, dtype=torch.int32).to(self.device),
             ],
             dim=0,
         )
-        # TODO: change back to drone_pos
-        # drone_pos = self.robots["robot_1"].data.root_pos_w
+        drone_pos = self.robots["robot_1"].data.root_pos_w
 
         arm_pos = self.robots["robot_0"].data.body_com_pos_w[:, 1, :]
         base_pos = self.robots["robot_0"].data.body_com_pos_w[:, 0, :]
@@ -265,7 +251,7 @@ class MinitankAdversarialEnv(DirectMARLEnv):
         base_pos_offset[:, 2] = 0.06
         base_pos = base_pos + base_pos_offset
 
-        diff = self._tank_desired_pos_w - arm_pos
+        diff = drone_pos - arm_pos
         arm_diff = arm_pos - base_pos
         arm_direction = arm_diff / torch.linalg.norm(arm_diff, dim=1, keepdim=True)
 
@@ -289,8 +275,8 @@ class MinitankAdversarialEnv(DirectMARLEnv):
         orientation = quat_from_angle_axis(angle, r)
         arm_orientation = quat_from_angle_axis(angle_arm, r_arm)
         sphere_orientation = torch.zeros_like(arm_orientation)
-        positions = torch.concat([arm_pos, arm_pos, self._drone_desired_pos_w, self._tank_desired_pos_w], dim=0)
-        orientations = torch.concat([orientation, arm_orientation, sphere_orientation, sphere_orientation], dim=0)
+        positions = torch.concat([arm_pos, arm_pos, self._drone_desired_pos_w], dim=0)
+        orientations = torch.concat([orientation, arm_orientation, sphere_orientation], dim=0)
 
         self.my_visualizer.visualize(positions, orientations, marker_indices=marker_ids)
 
@@ -516,11 +502,6 @@ class MinitankAdversarialEnv(DirectMARLEnv):
         robot.write_root_velocity_to_sim(default_root_state[:, 7:], env_ids)
         robot.write_joint_state_to_sim(joint_pos, joint_vel, None, env_ids)
 
-        self._tank_desired_pos_w[env_ids, :2] = self._terrain.env_origins[env_ids, :2] + torch.zeros_like(
-            self._terrain.env_origins[env_ids, :2]
-        ).uniform_(-10, 10)
-
-        self._tank_desired_pos_w[env_ids, 2] = torch.zeros_like(self._terrain.env_origins[env_ids, 2]).uniform_(3, 6)
         # MINITANK RESET #
 
         # DRONE RESET #

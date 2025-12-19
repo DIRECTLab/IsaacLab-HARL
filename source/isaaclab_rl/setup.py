@@ -35,7 +35,7 @@ INSTALL_REQUIRES = [
     "moviepy",
     # make sure this is consistent with isaac sim version
     "pillow==11.0.0",
-    "huggingface_hub==1.2.3"
+    "huggingface_hub==1.2.3",
 ]
 
 PYTORCH_INDEX_URL = ["https://download.pytorch.org/whl/cu118"]

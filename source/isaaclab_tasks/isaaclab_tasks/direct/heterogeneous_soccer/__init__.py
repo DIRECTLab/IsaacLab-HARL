@@ -10,12 +10,12 @@ Ant locomotion environment.
 import gymnasium as gym
 
 from . import agents
+from .anymal_c_go_to_point_soccer import AnymalCGoToPointSoccerEnv, AnymalCGoToPointSoccerEnvCfg
 from .anymal_c_soccer_ma_homo import AnymalSoccerMAHomoEnv, AnymalSoccerMAHomoEnvCfg
 from .anymal_c_soccer_stage_1 import AnymalStage1SoccerEnv, AnymalStage1SoccerEnvCfg
 from .anymal_c_soccer_stage_2 import AnymalStage2SoccerEnv, AnymalStage2SoccerEnvCfg
 from .anymal_leatherback_on_each_team import AnymalSoccerHeteroInTeamEnv, AnymalSoccerHeteroInTeamEnvCfg
 from .anymals_vs_leatherbacks import AnymalSoccerHeteroByTeamEnv, AnymalSoccerHeteroByTeamEnvCfg
-from .anymal_c_go_to_point_soccer import AnymalCGoToPointSoccerEnv, AnymalCGoToPointSoccerEnvCfg
 
 ##
 # Register Gym environments.

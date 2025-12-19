@@ -9,10 +9,10 @@ import argparse
 import os
 import pprint
 import sys
-
 import torch
-from huggingface_hub import snapshot_download
 from tqdm import tqdm
+
+from huggingface_hub import snapshot_download
 
 from isaaclab.app import AppLauncher
 
@@ -78,15 +78,14 @@ simulation_app = app_launcher.app
 # --------------------------------------------------------------------------------------
 
 from harl.runners import RUNNER_REGISTRY  # noqa: E402
-from isaaclab.envs import DirectMARLEnvCfg, DirectRLEnvCfg, ManagerBasedRLEnvCfg  # noqa: E402
-
-import isaaclab_tasks  # noqa: F401, E402
-from isaaclab_tasks.utils.hydra import hydra_task_config  # noqa: E402
 
 # HF policy maps (support both possible module layouts)
 from isaaclab_assets.asset_hf_paths import HF_POLICY_MAP, HF_REPO_ID
 
+from isaaclab.envs import DirectMARLEnvCfg, DirectRLEnvCfg, ManagerBasedRLEnvCfg  # noqa: E402
 
+import isaaclab_tasks  # noqa: F401, E402
+from isaaclab_tasks.utils.hydra import hydra_task_config  # noqa: E402
 
 algorithm = args_cli.algorithm.lower()
 agent_cfg_entry_point = f"harl_{algorithm}_cfg_entry_point"

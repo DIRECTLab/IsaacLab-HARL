@@ -9,8 +9,9 @@ import argparse
 import sys
 import time
 
-from isaaclab.app import AppLauncher
 from huggingface_hub import snapshot_download
+
+from isaaclab.app import AppLauncher
 
 parser = argparse.ArgumentParser(description="Train an RL agent with HARL.")
 parser.add_argument("--video", action="store_true", help="Record videos during training.")
@@ -61,7 +62,6 @@ parser.add_argument(
     action="store_true",
     help="If set, load the trained policy for this env from HuggingFace (if one exists).",
 )
-
 
 
 # append AppLauncher cli args
@@ -148,6 +148,7 @@ def _configure_model_dir(args: dict, algo_args: dict) -> None:
     # If nothing specified, leave whatever hydra config provides (or None).
     # This mirrors the old behavior where user might rely on the default model_dir in config.
     return
+
 
 @hydra_task_config(args_cli.task, agent_cfg_entry_point)
 def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agent_cfg: dict):

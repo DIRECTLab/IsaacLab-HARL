@@ -6,6 +6,7 @@
 
 import os
 import toml
+
 from huggingface_hub import snapshot_download
 
 # Conveniences to other module directories via relative paths
@@ -30,7 +31,7 @@ if not os.path.exists(CUSTOM_ASSETS_PATH):
         repo_type="dataset",
         revision="main",
         local_dir=CUSTOM_ASSETS_DIR,
-        allow_patterns=["assets/**"]
+        allow_patterns=["assets/**"],
     )
 
 from .robots import *

@@ -165,7 +165,7 @@ class DronesEnvCfg(DirectMARLEnvCfg):
     # events
     # events: EventCfg = EventCfg()
 
-    ### CRAZYFLIE CONFIGURATION ###
+    # CRAZYFLIE CONFIGURATION #
     robot_0: ArticulationCfg = CRAZYFLIE_CFG.replace(prim_path="/World/envs/env_.*/Robot_0")
     robot_0.init_state.pos = (0.0, 0.0, 2.0)
 
@@ -192,7 +192,7 @@ class DronesEnvCfg(DirectMARLEnvCfg):
     ang_vel_reward_scale = -0.01
     distance_to_goal_reward_scale = 15.0
 
-    ### CRAZYFLIE CONFIGURATION ###
+    # CRAZYFLIE CONFIGURATION #
 
 
 def define_markers() -> VisualizationMarkers:
@@ -235,7 +235,7 @@ class DronesEnv(DirectMARLEnv):
             for agent, action_space in self.cfg.action_spaces.items()
         }
 
-        ### CRAZYFLIE INITIALIZATION ###
+        # CRAZYFLIE INITIALIZATION #
         # with open(crazy_flie_model, "rb") as f:
         #     self.crazy_flie_model = torch.jit.load(f)
 
@@ -257,7 +257,7 @@ class DronesEnv(DirectMARLEnv):
                 "tank_angle_reward",
             ]
         }
-        ### CRAZYFLIE INITIALIZATION ###
+        # CRAZYFLIE INITIALIZATION #
         if not self.headless:
             self.my_visualizer = define_markers()
 
@@ -285,10 +285,10 @@ class DronesEnv(DirectMARLEnv):
                 self.robots[f"robot_{i}"] = Articulation(self.cfg.__dict__["robot_" + str(i)])
                 self.scene.articulations[f"robot_{i}"] = self.robots[f"robot_{i}"]
 
-        ### SETUP CAMERAS ###
+        # SETUP CAMERAS #
         # self.cameras["robot_0"] = TiledCamera(self.cfg.camera_0)
         # self.scene.sensors["robot_0_camera"] = self.cameras["robot_0"]
-        ### SETUP CAMERAS ###
+        # SETUP CAMERAS #
 
         self.cfg.terrain.num_envs = self.scene.cfg.num_envs
         self.cfg.terrain.env_spacing = self.scene.cfg.env_spacing
@@ -301,7 +301,7 @@ class DronesEnv(DirectMARLEnv):
 
     def _pre_physics_step(self, actions: dict):
 
-        ### PREPHYSICS FOR CRAZYFLIE ###
+        # PREPHYSICS FOR CRAZYFLIE #
 
         self.processed_actions["robot_0"] = self.processed_actions["robot_0"].clamp(-1.0, 1.0)
         self._thrust[:, 0, 2] = (
@@ -309,7 +309,7 @@ class DronesEnv(DirectMARLEnv):
         )
         self._moment[:, 0, :] = self.cfg.moment_scale * self.processed_actions["robot_0"][:, 1:]
 
-        ### PREPHYSICS FOR CRAZYFLIE ###
+        # PREPHYSICS FOR CRAZYFLIE #
 
     def _apply_action(self):
         self.robots["robot_0"].set_external_force_and_torque(

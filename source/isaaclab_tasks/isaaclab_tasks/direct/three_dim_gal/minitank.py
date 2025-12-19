@@ -124,7 +124,7 @@ class MinitankEnvCfg(DirectMARLEnvCfg):
     # events
     # events: EventCfg = EventCfg()
 
-    ### MINITANK CONFIGURATION ###
+    # MINITANK CONFIGURATION #
     robot_0: ArticulationCfg = MINITANK_CFG.replace(prim_path="/World/envs/env_.*/Robot_0")
     # robot_0.init_state.rot = (1.0, 0.0, 0.0, 1.0)
     robot_0.init_state.pos = (0.0, 0.0, 0.2)
@@ -147,7 +147,7 @@ class MinitankEnvCfg(DirectMARLEnvCfg):
 
     action_scale = 0.5
     max_vel = 2
-    ### MINITANK CONFIGURATION ###
+    # MINITANK CONFIGURATION #
 
 
 def define_markers() -> VisualizationMarkers:
@@ -312,12 +312,12 @@ class MinitankEnv(DirectMARLEnv):
                 self.robots[f"robot_{i}"] = Articulation(self.cfg.__dict__["robot_" + str(i)])
                 self.scene.articulations[f"robot_{i}"] = self.robots[f"robot_{i}"]
 
-        ### SETUP CAMERAS ###
+        # SETUP CAMERAS #
         # self.cameras["robot_0"] = TiledCamera(self.cfg.camera_0)
         # self.scene.sensors["robot_0_camera"] = self.cameras["robot_0"]
         # self.cameras["robot_1"] = TiledCamera(self.cfg.camera_1)
         # self.scene.sensors["robot_1_camera"] = self.cameras["robot_1"]
-        ### SETUP CAMERAS ###
+        # SETUP CAMERAS #
 
         self.cfg.terrain.num_envs = self.scene.cfg.num_envs
         self.cfg.terrain.env_spacing = self.scene.cfg.env_spacing
@@ -331,7 +331,7 @@ class MinitankEnv(DirectMARLEnv):
 
     def _pre_physics_step(self, actions: dict):
 
-        ### PREPHYSICS FOR MINITANK ###
+        # PREPHYSICS FOR MINITANK #
 
         self.processed_actions = copy.deepcopy(actions)
         self.processed_actions["robot_0"] = torch.clip(
@@ -339,7 +339,7 @@ class MinitankEnv(DirectMARLEnv):
             -self.cfg.max_vel,
             self.cfg.max_vel,
         )
-        ### PREPHYSICS FOR MINITANK ###
+        # PREPHYSICS FOR MINITANK #
 
     def _apply_action(self):
         # self.robots["robot_0"].set_joint_velocity_target(self.processed_actions["robot_0"])
@@ -370,9 +370,9 @@ class MinitankEnv(DirectMARLEnv):
         if not self.headless:
             self._draw_markers()
 
-        ### MINITANK REWARDS ###
+        # MINITANK REWARDS #
         minitank_rewards = self.arm_orientation_reward * self.step_dt
-        ### MINITANK REWARDS ###
+        # MINITANK REWARDS #
 
         self._episode_sums["tank_angle_reward"] = minitank_rewards
 

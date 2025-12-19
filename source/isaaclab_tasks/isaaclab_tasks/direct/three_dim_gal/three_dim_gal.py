@@ -151,7 +151,7 @@ class ThreeDimGalEnvCfg(DirectMARLEnvCfg):
     # events
     # events: EventCfg = EventCfg()
 
-    ### MINITANK CONFIGURATION ###
+    # MINITANK CONFIGURATION #
     robot_0: ArticulationCfg = MINITANK_CFG.replace(prim_path="/World/envs/env_.*/Robot_0")
     # robot_0.init_state.rot = (1.0, 0.0, 0.0, 1.0)
     robot_0.init_state.pos = (0.0, 0.0, 0.2)
@@ -174,9 +174,9 @@ class ThreeDimGalEnvCfg(DirectMARLEnvCfg):
 
     action_scale = 0.5
     max_vel = 2
-    ### MINITANK CONFIGURATION ###
+    # MINITANK CONFIGURATION #
 
-    ### CRAZYFLIE CONFIGURATION ###
+    # CRAZYFLIE CONFIGURATION #
     robot_1: ArticulationCfg = CRAZYFLIE_CFG.replace(prim_path="/World/envs/env_.*/Robot_1")
     robot_1.init_state.pos = (10.0, 0.0, 2.0)
 
@@ -203,7 +203,7 @@ class ThreeDimGalEnvCfg(DirectMARLEnvCfg):
     ang_vel_reward_scale = -0.01
     distance_to_goal_reward_scale = 15.0
 
-    ### CRAZYFLIE CONFIGURATION ###
+    # CRAZYFLIE CONFIGURATION #
 
 
 def define_markers() -> VisualizationMarkers:
@@ -256,7 +256,7 @@ class ThreeDimGalEnv(DirectMARLEnv):
             for agent, action_space in self.cfg.action_spaces.items()
         }
 
-        ### CRAZYFLIE INITIALIZATION ###
+        # CRAZYFLIE INITIALIZATION #
         # with open(crazy_flie_model, "rb") as f:
         #     self.crazy_flie_model = torch.jit.load(f)
 
@@ -278,7 +278,7 @@ class ThreeDimGalEnv(DirectMARLEnv):
                 "tank_angle_reward",
             ]
         }
-        ### CRAZYFLIE INITIALIZATION ###
+        # CRAZYFLIE INITIALIZATION #
         if not self.headless:
             self.my_visualizer = define_markers()
 
@@ -384,12 +384,12 @@ class ThreeDimGalEnv(DirectMARLEnv):
                 self.robots[f"robot_{i}"] = Articulation(self.cfg.__dict__["robot_" + str(i)])
                 self.scene.articulations[f"robot_{i}"] = self.robots[f"robot_{i}"]
 
-        ### SETUP CAMERAS ###
+        # SETUP CAMERAS #
         # self.cameras["robot_0"] = TiledCamera(self.cfg.camera_0)
         # self.scene.sensors["robot_0_camera"] = self.cameras["robot_0"]
         # self.cameras["robot_1"] = TiledCamera(self.cfg.camera_1)
         # self.scene.sensors["robot_1_camera"] = self.cameras["robot_1"]
-        ### SETUP CAMERAS ###
+        # SETUP CAMERAS #
 
         self.cfg.terrain.num_envs = self.scene.cfg.num_envs
         self.cfg.terrain.env_spacing = self.scene.cfg.env_spacing
@@ -403,7 +403,7 @@ class ThreeDimGalEnv(DirectMARLEnv):
 
     def _pre_physics_step(self, actions: dict):
 
-        ### PREPHYSICS FOR MINITANK ###
+        # PREPHYSICS FOR MINITANK #
 
         self.processed_actions = copy.deepcopy(actions)
         self.processed_actions["robot_0"] = torch.clip(
@@ -411,9 +411,9 @@ class ThreeDimGalEnv(DirectMARLEnv):
             -self.cfg.max_vel,
             self.cfg.max_vel,
         )
-        ### PREPHYSICS FOR MINITANK ###
+        # PREPHYSICS FOR MINITANK #
 
-        ### PREPHYSICS FOR CRAZYFLIE ###
+        # PREPHYSICS FOR CRAZYFLIE #
 
         self.processed_actions["robot_1"] = self.processed_actions["robot_1"].clamp(-1.0, 1.0)
         self._thrust[:, 0, 2] = (
@@ -421,7 +421,7 @@ class ThreeDimGalEnv(DirectMARLEnv):
         )
         self._moment[:, 0, :] = self.cfg.moment_scale * self.processed_actions["robot_1"][:, 1:]
 
-        ### PREPHYSICS FOR CRAZYFLIE ###
+        # PREPHYSICS FOR CRAZYFLIE #
 
     def _apply_action(self):
         # self.robots["robot_0"].set_joint_velocity_target(self.processed_actions["robot_0"])
@@ -470,11 +470,11 @@ class ThreeDimGalEnv(DirectMARLEnv):
         if not self.headless:
             self._draw_markers()
 
-        ### MINITANK REWARDS ###
+        # MINITANK REWARDS #
         # minitank_rewards = self.arm_orientation_reward * self.step_dt
-        ### MINITANK REWARDS ###
+        # MINITANK REWARDS #
 
-        ### CRAZYFLIE REWARDS ###
+        # CRAZYFLIE REWARDS #
         lin_vel = torch.sum(torch.square(self.robots["robot_1"].data.root_lin_vel_b), dim=1)
         ang_vel = torch.sum(torch.square(self.robots["robot_1"].data.root_ang_vel_b), dim=1)
         distance_to_goal = torch.linalg.norm(self._desired_pos_w - self.robots["robot_1"].data.root_pos_w, dim=1)
@@ -493,7 +493,7 @@ class ThreeDimGalEnv(DirectMARLEnv):
         minitank_rewards = torch.zeros_like(crazy_flie_reward)
         self._episode_sums["tank_angle_reward"] = minitank_rewards
 
-        ### CRAZYFLIE REWARDS ###
+        # CRAZYFLIE REWARDS #
         return {"robot_0": minitank_rewards.to(self.device), "robot_1": crazy_flie_reward.to(self.device)}
 
     def _get_dones(self) -> tuple[dict, dict]:
@@ -510,7 +510,7 @@ class ThreeDimGalEnv(DirectMARLEnv):
         # return dones, dones
 
     def _reset_idx(self, env_ids: torch.Tensor | None):
-        ### CRAZYFLIE RESET ###
+        # CRAZYFLIE RESET #
         # Logging
         final_distance_to_goal = torch.linalg.norm(
             self._desired_pos_w[env_ids] - self.robots["robot_1"].data.root_pos_w[env_ids], dim=1
@@ -526,7 +526,7 @@ class ThreeDimGalEnv(DirectMARLEnv):
         extras["Metrics/final_distance_to_goal"] = final_distance_to_goal.item()
         self.extras["log"].update(extras)
 
-        ### CRAZYFLIE RESET ###
+        # CRAZYFLIE RESET #
         super()._reset_idx(env_ids)
 
         for agent, action_space in self.cfg.action_spaces.items():
@@ -556,6 +556,6 @@ class ThreeDimGalEnv(DirectMARLEnv):
             robot.write_root_velocity_to_sim(default_root_state[:, 7:], env_ids)
             robot.write_joint_state_to_sim(joint_pos, joint_vel, None, env_ids)
 
-        ### Set the desired position to the position of the tank ###
+        # Set the desired position to the position of the tank #
         self._desired_pos_w[env_ids] = self.robots["robot_0"].data.root_pos_w[env_ids]
         self._desired_pos_w[env_ids, 2] += 1.0

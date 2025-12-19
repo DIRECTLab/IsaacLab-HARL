@@ -94,7 +94,7 @@ class QuadcopterMARLEnvCfg(DirectMARLEnvCfg):
     # events
     # events: EventCfg = EventCfg()
 
-    ### CRAZYFLIE CONFIGURATION ###
+    # CRAZYFLIE CONFIGURATION #
     robot_0: ArticulationCfg = CRAZYFLIE_CFG.replace(prim_path="/World/envs/env_.*/Robot_0")
     robot_0.init_state.pos = (0.0, 0.0, 2.0)
 
@@ -122,7 +122,7 @@ class QuadcopterMARLEnvCfg(DirectMARLEnvCfg):
     distance_to_goal_reward_scale = 15.0
     debug_vis = True
 
-    ### CRAZYFLIE CONFIGURATION ###
+    # CRAZYFLIE CONFIGURATION #
 
 
 class QuadcopterMARLEnv(DirectMARLEnv):
@@ -174,10 +174,10 @@ class QuadcopterMARLEnv(DirectMARLEnv):
                 self.robots[f"robot_{i}"] = Articulation(self.cfg.__dict__["robot_" + str(i)])
                 self.scene.articulations[f"robot_{i}"] = self.robots[f"robot_{i}"]
 
-        ### SETUP CAMERAS ###
+        # SETUP CAMERAS #
         # self.cameras["robot_0"] = TiledCamera(self.cfg.camera_0)
         # self.scene.sensors["robot_0_camera"] = self.cameras["robot_0"]
-        ### SETUP CAMERAS ###
+        # SETUP CAMERAS #
 
         self.cfg.terrain.num_envs = self.scene.cfg.num_envs
         self.cfg.terrain.env_spacing = self.scene.cfg.env_spacing

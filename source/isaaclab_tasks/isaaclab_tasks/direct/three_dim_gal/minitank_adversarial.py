@@ -129,7 +129,7 @@ class MinitankAdversarialEnvCfg(DirectMARLEnvCfg):
     # events
     # events: EventCfg = EventCfg()
 
-    ### MINITANKAdversarial CONFIGURATION ###
+    # MINITANKAdversarial CONFIGURATION #
     robot_0: ArticulationCfg = MINITANK_CFG.replace(prim_path="/World/envs/env_.*/Robot_0")
     # robot_0.init_state.rot = (1.0, 0.0, 0.0, 1.0)
     robot_0.init_state.pos = (0.0, 0.0, 0.2)
@@ -152,9 +152,9 @@ class MinitankAdversarialEnvCfg(DirectMARLEnvCfg):
 
     action_scale = 0.5
     max_vel = 100
-    ### MINITANKAdversarial CONFIGURATION ###
+    # MINITANKAdversarial CONFIGURATION #
 
-    ### CRAZYFLIE CONFIGURATION ###
+    # CRAZYFLIE CONFIGURATION #
     robot_1: ArticulationCfg = CRAZYFLIE_CFG.replace(prim_path="/World/envs/env_.*/Robot_1")
     robot_1.init_state.pos = (0.0, 0.0, 3.0)
 
@@ -166,7 +166,7 @@ class MinitankAdversarialEnvCfg(DirectMARLEnvCfg):
     ang_vel_reward_scale = -0.01
     distance_to_goal_reward_scale = 15.0
     debug_vis = True
-    ### CRAZYFLIE CONFIGURATION ###
+    # CRAZYFLIE CONFIGURATION #
 
 
 def define_markers() -> VisualizationMarkers:
@@ -247,7 +247,7 @@ class MinitankAdversarialEnv(DirectMARLEnv):
         if not self.headless:
             self.my_visualizer = define_markers()
 
-        ### CRAZYFLIE INITIALIZATION ###
+        # CRAZYFLIE INITIALIZATION #
         self._thrust = torch.zeros(self.num_envs, 1, 3, device=self.device)
         self._moment = torch.zeros(self.num_envs, 1, 3, device=self.device)
 
@@ -260,7 +260,7 @@ class MinitankAdversarialEnv(DirectMARLEnv):
         self._robot_mass = self.robots["robot_1"].root_physx_view.get_masses()[0].sum()
         self._gravity_magnitude = torch.tensor(self.sim.cfg.gravity, device=self.device).norm()
         self._robot_weight = (self._robot_mass * self._gravity_magnitude).item()
-        ### CRAZYFLIE INITIALIZATION ###
+        # CRAZYFLIE INITIALIZATION #
         self.time_out_envs = torch.tensor([], device=self.device)
 
     def _draw_markers(self):
@@ -369,12 +369,12 @@ class MinitankAdversarialEnv(DirectMARLEnv):
                 self.robots[f"robot_{i}"] = Articulation(self.cfg.__dict__["robot_" + str(i)])
                 self.scene.articulations[f"robot_{i}"] = self.robots[f"robot_{i}"]
 
-        ### SETUP CAMERAS ###
+        # SETUP CAMERAS #
         # self.cameras["robot_0"] = TiledCamera(self.cfg.camera_0)
         # self.scene.sensors["robot_0_camera"] = self.cameras["robot_0"]
         # self.cameras["robot_1"] = TiledCamera(self.cfg.camera_1)
         # self.scene.sensors["robot_1_camera"] = self.cameras["robot_1"]
-        ### SETUP CAMERAS ###
+        # SETUP CAMERAS #
 
         self.cfg.terrain.num_envs = self.scene.cfg.num_envs
         self.cfg.terrain.env_spacing = self.scene.cfg.env_spacing
@@ -388,7 +388,7 @@ class MinitankAdversarialEnv(DirectMARLEnv):
 
     def _pre_physics_step(self, actions: dict):
 
-        ### PREPHYSICS FOR MINITANKAdversarial ###
+        # PREPHYSICS FOR MINITANKAdversarial #
 
         self.processed_actions = copy.deepcopy(actions)
         self.processed_actions["robot_0"] = torch.clip(
@@ -396,26 +396,26 @@ class MinitankAdversarialEnv(DirectMARLEnv):
             -self.cfg.max_vel,
             self.cfg.max_vel,
         )
-        ### PREPHYSICS FOR MINITANKAdversarial ###
+        # PREPHYSICS FOR MINITANKAdversarial #
 
-        ### PREPHYSICS FOR CRAZYFLIE ###
+        # PREPHYSICS FOR CRAZYFLIE #
         self.actions["robot_1"] = actions["robot_1"].clone().clamp(-1.0, 1.0)
         self._thrust[:, 0, 2] = (
             self.cfg.thrust_to_weight * self._robot_weight * (self.actions["robot_1"][:, 0] + 1.0) / 2.0
         )
         self._moment[:, 0, :] = self.cfg.moment_scale * self.actions["robot_1"][:, 1:]
-        ### PREPHYSICS FOR CRAZYFLIE ###
+        # PREPHYSICS FOR CRAZYFLIE #
 
     def _apply_action(self):
-        ### APPLY ACTION FOR TANK ###
+        # APPLY ACTION FOR TANK #
         self.robots["robot_0"].set_joint_velocity_target(self.processed_actions["robot_0"])
-        ### APPLY ACTION FOR TANK ###
-        ### APPLY ACTION FOR CRAZYFLIE ###
+        # APPLY ACTION FOR TANK #
+        # APPLY ACTION FOR CRAZYFLIE #
         self.robots["robot_1"].set_external_force_and_torque(self._thrust, self._moment, body_ids=self._body_id)
-        ### APPLY ACTION FOR CRAZYFLIE ###
+        # APPLY ACTION FOR CRAZYFLIE #
 
     def _get_observations(self) -> dict:
-        ### OBSERVATIONS FOR MINITANKAdversarial ###
+        # OBSERVATIONS FOR MINITANKAdversarial #
         self.arm_orientation_reward, self.arm_orientation, self.desired_orientation = self._get_vector_angle_reward()
 
         tank_obs = torch.cat(
@@ -424,9 +424,9 @@ class MinitankAdversarialEnv(DirectMARLEnv):
         )
 
         self.previous_actions = copy.deepcopy(self.actions)
-        ### OBSERVATIONS FOR MINITANKAdversarial ###
+        # OBSERVATIONS FOR MINITANKAdversarial #
 
-        ### OBSERVATIONS FOR CRAZYFLIE ###
+        # OBSERVATIONS FOR CRAZYFLIE #
         desired_pos_b, _ = subtract_frame_transforms(
             self.robots["robot_1"].data.root_state_w[:, :3],
             self.robots["robot_1"].data.root_state_w[:, 3:7],
@@ -441,7 +441,7 @@ class MinitankAdversarialEnv(DirectMARLEnv):
             ],
             dim=-1,
         )
-        ### OBSERVATIONS FOR CRAZYFLIE ###
+        # OBSERVATIONS FOR CRAZYFLIE #
 
         # obs = {"robot_0":tank_obs, "robot_1":drone_obs}
         obs = {"team_0": {"robot_0": tank_obs}, "team_1": {"robot_1": drone_obs}}
@@ -457,11 +457,11 @@ class MinitankAdversarialEnv(DirectMARLEnv):
         if not self.headless:
             self._draw_markers()
 
-        ### MINITANK REWARDS ###
+        # MINITANK REWARDS #
         minitank_reward = self.arm_orientation_reward * self.step_dt
-        ### MINITANK REWARDS ###
+        # MINITANK REWARDS #
 
-        ### CRAZYFLIE REWARDS ###
+        # CRAZYFLIE REWARDS #
         lin_vel = torch.sum(torch.square(self.robots["robot_0"].data.root_lin_vel_b), dim=1)
         ang_vel = torch.sum(torch.square(self.robots["robot_0"].data.root_ang_vel_b), dim=1)
         distance_to_goal = torch.linalg.norm(self._drone_desired_pos_w - self.robots["robot_1"].data.root_pos_w, dim=1)
@@ -475,7 +475,7 @@ class MinitankAdversarialEnv(DirectMARLEnv):
         # Logging
         for key, value in rewards.items():
             self._episode_sums[key] += value
-        ### CRAZYFLIE REWARDS ###
+        # CRAZYFLIE REWARDS #
 
         self._episode_sums["tank_angle_reward"] = minitank_reward
 
@@ -516,7 +516,7 @@ class MinitankAdversarialEnv(DirectMARLEnv):
         extras["Metrics/final_distance_to_goal"] = final_distance_to_goal.item()
         self.extras["log"].update(extras)
 
-        ### MINITANK RESET ###
+        # MINITANK RESET #
         robot = self.robots["robot_0"]
         self.actions["robot_0"][env_ids] = 0.0
         self.previous_actions["robot_0"][env_ids] = 0.0
@@ -539,9 +539,9 @@ class MinitankAdversarialEnv(DirectMARLEnv):
         ).uniform_(-10, 10)
 
         self._tank_desired_pos_w[env_ids, 2] = torch.zeros_like(self._terrain.env_origins[env_ids, 2]).uniform_(3, 6)
-        ### MINITANK RESET ###
+        # MINITANK RESET #
 
-        ### DRONE RESET ###
+        # DRONE RESET #
         robot = self.robots["robot_1"]
         self.actions["robot_1"][env_ids] = 0.0
         if env_ids is None or len(env_ids) == self.num_envs:
@@ -562,4 +562,4 @@ class MinitankAdversarialEnv(DirectMARLEnv):
         ).uniform_(-10, 10)
 
         self._drone_desired_pos_w[env_ids, 2] = torch.zeros_like(self._terrain.env_origins[env_ids, 2]).uniform_(3, 6)
-        ### DRONE RESET ###
+        # DRONE RESET #

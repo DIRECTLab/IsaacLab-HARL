@@ -22,7 +22,6 @@ from isaaclab.sim.spawners.from_files import GroundPlaneCfg, spawn_ground_plane
 from isaaclab.utils import configclass
 from isaaclab.utils.math import quat_from_euler_xyz, subtract_frame_transforms
 
-from isaaclab_assets.robots.leatherback import LEATHERBACK_CFG  # isort: skip
 from isaaclab_assets.robots.anymal import ANYMAL_C_CFG  # isort: skip
 
 
@@ -281,7 +280,7 @@ class SumoStage2Env(DirectMARLEnv):
 
     @torch.no_grad()
     def _draw_team_dots(self):
-        positions, indices, orientations, scales = [], [], [], []
+        positions, indices, _, _ = [], [], [], []
         for robot_id, robot in self.robots.items():
             pos = robot.data.root_pos_w.clone()
             pos[:, 2] += 0.5  # hover above robot
@@ -460,7 +459,7 @@ class SumoStage2Env(DirectMARLEnv):
         fallen = {}
 
         for team, agents in self.cfg.teams.items():
-            if not team in fallen.keys():
+            if team not in fallen.keys():
                 fallen[team] = torch.zeros(self.num_envs, dtype=torch.bool, device=self.device)
             for robot_id in agents:
                 died = self.robots[robot_id].data.root_com_pos_w[:, 2] < 0.1
@@ -522,7 +521,6 @@ class SumoStage2Env(DirectMARLEnv):
 
         team0_out = torch.any(torch.stack([out_map["robot_0"], out_map["robot_1"]]), dim=0)
         team1_out = torch.any(torch.stack([out_map["robot_2"], out_map["robot_3"]]), dim=0)
-        tot = torch.count_nonzero(team1_out[env_ids]).item() + torch.count_nonzero(team0_out[env_ids]).item()
 
         if env_ids is None:
             env_ids = torch.arange(self.num_envs, device=self.device)

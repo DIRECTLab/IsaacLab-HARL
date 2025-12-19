@@ -27,7 +27,6 @@ from isaaclab.utils.math import quat_from_angle_axis, subtract_frame_transforms
 # Pre-defined configs
 ##
 from isaaclab_assets.robots.anymal import ANYMAL_C_CFG  # isort: skip
-from isaaclab.terrains.config.rough import ROUGH_TERRAINS_CFG  # isort: skip
 
 
 @configclass

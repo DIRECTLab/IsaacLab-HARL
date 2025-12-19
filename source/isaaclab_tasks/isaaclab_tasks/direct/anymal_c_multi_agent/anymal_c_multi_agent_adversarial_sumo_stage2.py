@@ -28,7 +28,6 @@ from isaaclab.utils.math import quat_from_angle_axis, quat_from_euler_xyz, subtr
 # Pre-defined configs
 ##
 from isaaclab_assets.robots.anymal import ANYMAL_C_CFG  # isort: skip
-from isaaclab.terrains.config.rough import ROUGH_TERRAINS_CFG  # isort: skip
 
 
 def chase_commands_holonomic(rel_pos_b, v_max=1.5, w_max=2.5, k_v=1.0, k_w=1.5, eps=1e-6):
@@ -454,7 +453,6 @@ class AnymalCAdversarialSumoStage2Env(DirectMARLEnv):
             self.robots["robot_1"].data.root_state_w[:, 3:7],
             self.robots["robot_0"].data.root_pos_w,
         )
-        time_remaining = (self.max_episode_length - self.episode_length_buf).unsqueeze(-1)
 
         robot_0_dist_to_center = get_distance_to_center(
             self.scene.env_origins[:, :2].to(self.device), self.robots["robot_0"]
@@ -768,7 +766,6 @@ class AnymalCAdversarialSumoStage2Env(DirectMARLEnv):
                 if i == 0:
                     # First robot, accept immediately
                     final_offsets = offsets
-                    break
                 else:
                     # Distance from previously placed robot(s)
                     prev_offsets = sampled_positions[robot_ids[0]]  # (N, 3)
@@ -777,7 +774,6 @@ class AnymalCAdversarialSumoStage2Env(DirectMARLEnv):
                     mask_valid = dist > min_separation
                     if torch.all(mask_valid):
                         final_offsets = offsets
-                        break
                     # otherwise retry
 
             sampled_positions[robot_id] = final_offsets

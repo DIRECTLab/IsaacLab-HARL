@@ -26,7 +26,6 @@ from isaaclab.utils.math import quat_from_euler_xyz, subtract_frame_transforms
 # Pre-defined configs
 ##
 from isaaclab_assets.robots.anymal import ANYMAL_C_CFG  # isort: skip
-from isaaclab.terrains.config.rough import ROUGH_TERRAINS_CFG  # isort: skip
 
 
 @configclass
@@ -399,17 +398,6 @@ class AnymalSoccerRunningEnv(DirectMARLEnv):
         # spread out resets
         if len(env_ids) == self.num_envs:  # type:ignore
             self.episode_length_buf[:] = torch.randint_like(self.episode_length_buf, high=int(self.max_episode_length))
-
-        # --- Reset robots & states ---
-        origins = self.scene.env_origins[env_ids]  # (N, 3)
-        N = env_ids.shape[0]  # type:ignore
-
-        min_separation = 1
-        spawn_radius_max = 2
-        max_tries = 10
-
-        sampled_offsets = {}  # per robot (N, 3)
-        robot_ids = list(self.robots.keys())
 
         for robot_id, robot in self.robots.items():
             if env_ids is None or len(env_ids) == self.num_envs:

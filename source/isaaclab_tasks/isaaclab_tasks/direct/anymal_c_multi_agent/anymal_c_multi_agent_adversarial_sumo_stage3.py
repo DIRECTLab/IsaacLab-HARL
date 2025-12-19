@@ -27,7 +27,6 @@ from isaaclab.utils.math import quat_from_angle_axis, quat_from_euler_xyz, subtr
 # Pre-defined configs
 ##
 from isaaclab_assets.robots.anymal import ANYMAL_C_CFG  # isort: skip
-from isaaclab.terrains.config.rough import ROUGH_TERRAINS_CFG  # isort: skip
 
 # import omni.usd
 # from pxr import Usd, UsdPhysics, PhysxSchema

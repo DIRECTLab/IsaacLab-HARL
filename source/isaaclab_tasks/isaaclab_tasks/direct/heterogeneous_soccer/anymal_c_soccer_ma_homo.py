@@ -22,7 +22,6 @@ from isaaclab.sim.spawners.from_files import GroundPlaneCfg, spawn_ground_plane
 from isaaclab.utils import configclass
 from isaaclab.utils.math import quat_from_euler_xyz, quat_rotate_inverse, subtract_frame_transforms
 
-from isaaclab_assets.robots.leatherback import LEATHERBACK_CFG  # isort: skip
 from isaaclab_assets.robots.anymal import ANYMAL_C_CFG  # isort: skip
 from isaaclab_assets.custom.soccer_ball import SOCCERBALL_CFG  # isort: skip
 
@@ -313,7 +312,7 @@ class AnymalSoccerMAHomoEnv(DirectMARLEnv):
 
     @torch.no_grad()
     def _draw_team_dots(self):
-        positions, indices, orientations, scales = [], [], [], []
+        positions, indices, _, _ = [], [], [], []
         for robot_id, robot in self.robots.items():
             pos = robot.data.root_pos_w.clone()
             pos[:, 2] += 0.5  # hover above robot
@@ -434,7 +433,6 @@ class AnymalSoccerMAHomoEnv(DirectMARLEnv):
     def _get_rewards(self) -> dict:
         self._draw_team_dots()
         ball_in_goal1, ball_in_goal2 = self._ball_in_goal_area()
-        time_out = self.episode_length_buf >= self.max_episode_length - 1
         out_of_arena = self._get_out_of_arena()
         # fallen_team_0 = self._get_fallen_robots(self.cfg.teams["team_0"])
         # fallen_team_1 = self._get_fallen_robots(self.cfg.teams["team_1"])
@@ -503,8 +501,6 @@ class AnymalSoccerMAHomoEnv(DirectMARLEnv):
 
         ball_in_any_goal = ball_in_goal1 | ball_in_goal2
         out_of_arena = self._get_out_of_arena()
-
-        fallen = self._get_fallen_robots(self.robots.keys())
 
         done = out_of_arena | ball_in_any_goal
         time_out = self.episode_length_buf >= self.max_episode_length - 1

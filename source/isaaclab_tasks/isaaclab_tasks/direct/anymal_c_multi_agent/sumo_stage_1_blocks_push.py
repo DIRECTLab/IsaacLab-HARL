@@ -22,7 +22,6 @@ from isaaclab.sim.spawners.from_files import GroundPlaneCfg, spawn_ground_plane
 from isaaclab.utils import configclass
 from isaaclab.utils.math import quat_from_euler_xyz, subtract_frame_transforms
 
-from isaaclab_assets.robots.leatherback import LEATHERBACK_CFG  # isort: skip
 from isaaclab_assets.robots.anymal import ANYMAL_C_CFG  # isort: skip
 
 
@@ -333,7 +332,6 @@ class SumoStage1BlocksPushEnv(DirectMARLEnv):
 
     def _get_observations(self) -> dict:
         self.previous_actions = copy.deepcopy(self.actions)
-        time_remaining = (self.max_episode_length - self.episode_length_buf).unsqueeze(-1)
         rcol = self.ring_radius.view(-1, 1)
 
         robot_0_desired_pos, _ = subtract_frame_transforms(
@@ -434,9 +432,6 @@ class SumoStage1BlocksPushEnv(DirectMARLEnv):
 
         dist_r0_b0_mapped = 1 - torch.tanh(dist_r0_b0 / self.cfg.ring_radius_max)
         dist_r1_b1_mapped = 1 - torch.tanh(dist_r1_b1 / self.cfg.ring_radius_max)
-
-        # --- Time penalty (shared) ---
-        time_penalty = self.cfg.time_penalty * torch.ones_like(block0_dist, device=self.device)
 
         out = self._robots_out_of_ring()
         block0_out = out["block_0"].to(torch.float32)

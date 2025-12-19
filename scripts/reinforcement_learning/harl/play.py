@@ -10,8 +10,10 @@ import argparse
 # import numpy as np
 import sys
 import torch
+import os
 
 from isaaclab.app import AppLauncher
+from huggingface_hub import snapshot_download
 
 parser = argparse.ArgumentParser(description="Train an RL agent with HARL.")
 parser.add_argument(
@@ -39,6 +41,8 @@ parser.add_argument("--seed", type=int, default=None, help="Seed used for the en
 parser.add_argument("--num_env_steps", type=int, default=None, help="RL Policy training iterations.")
 parser.add_argument("--dir", type=str, default=None, help="folder with trained models")
 parser.add_argument("--debug", action="store_true", help="whether to run in debug mode for visualization")
+parser.add_argument("--load_starting_policy", action="store_true", help="For the given environment, if this flag is set, it will load the starting policy for that environment (if one exists)")
+parser.add_argument("--load_trained_policy", action="store_true", help="For the given environment, if this flag is set, it will load the trained policy for that environment")
 
 # append AppLauncher cli args
 AppLauncher.add_app_launcher_args(parser)
@@ -58,6 +62,7 @@ from isaaclab.envs import DirectMARLEnvCfg, DirectRLEnvCfg, ManagerBasedRLEnvCfg
 
 import isaaclab_tasks  # noqa: F401
 from isaaclab_tasks.utils.hydra import hydra_task_config
+from isaaclab_assets.asset_hf_paths import HF_POLICY_MAP, HF_REPO_ID
 
 algorithm = args_cli.algorithm.lower()
 agent_cfg_entry_point = f"harl_{algorithm}_cfg_entry_point"
@@ -85,6 +90,26 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     env_args["video_settings"]["video"] = False
     env_args["headless"] = args["headless"]
     env_args["debug"] = args["debug"]
+
+    load_policy_args = ["dir", "load_trained_policy", "load_starting_policy"]
+
+    for arg_1 in load_policy_args:
+        for arg_2 in load_policy_args:
+            if not arg_1 == arg_2:
+                if args.get(arg_1, False) and args.get(arg_2, False):
+                    raise Exception(f"Cannot set both {arg_1} and {arg_2}")
+                
+    if args["load_trained_policy"]:
+        policy_location = HF_POLICY_MAP[env_args['task']]['trained']
+        path = snapshot_download(
+            repo_id=HF_REPO_ID,
+            repo_type="dataset",
+            revision="main",
+            allow_patterns=[f"{policy_location}/**"],
+        )
+
+        path = os.path.join(path, policy_location)
+        algo_args["train"]["model_dir"] = path
 
     # create runner
     runner = RUNNER_REGISTRY[args["algo"]](args, algo_args, env_args)

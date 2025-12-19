@@ -59,6 +59,8 @@ from harl.runners import RUNNER_REGISTRY
 from isaaclab.envs import DirectMARLEnvCfg, DirectRLEnvCfg, ManagerBasedRLEnvCfg
 
 import isaaclab_tasks  # noqa: F401
+
+from isaaclab_assets.isaaclab_assets.asset_hf_paths import HF_POLICY_MAP
 from isaaclab_tasks.utils.hydra import hydra_task_config
 
 algorithm = args_cli.algorithm.lower()

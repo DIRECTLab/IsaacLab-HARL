@@ -10,7 +10,7 @@ Ant locomotion environment.
 import gymnasium as gym
 
 from . import agents
-from .anymal_c_go_to_point_sumo import SumoStage1EnvSingleAgent, SumoStage1EnvSingleAgentCfg
+from .anymal_c_go_to_point_sumo import AnymalCGoToPointSumo, AnymalCGoToPointSumoCfg
 from .sumo_stage_1_blocks_push import SumoStage1BlocksPushEnv, SumoStage1BlocksPushEnvCfg
 from .sumo_stage_2 import SumoStage2Env, SumoStage2EnvCfg
 from .sumo_stage_2_hetero_by_team import SumoStage2HeteroByTeamEnv, SumoStage2HeteroByTeamEnvCfg
@@ -21,11 +21,11 @@ from .sumo_stage_2_hetero_within_team import SumoStage2HeteroEnv, SumoStage2Hete
 ##
 
 gym.register(
-    id="Anymal-C-Go-To-Point-Single-Agent-v0",
-    entry_point=SumoStage1EnvSingleAgent,
+    id="Anymal-C-Go-To-Point-Sumo",
+    entry_point=AnymalCGoToPointSumo,
     disable_env_checker=True,
     kwargs={
-        "env_cfg_entry_point": SumoStage1EnvSingleAgentCfg,
+        "env_cfg_entry_point": AnymalCGoToPointSumoCfg,
         "rl_games_cfg_entry_point": f"{agents.__name__}:rl_games_flat_ppo_cfg.yaml",
         "rsl_rl_cfg_entry_point": f"{agents.__name__}.rsl_rl_ppo_cfg:AnymalCFlatPPORunnerCfg",
         "skrl_cfg_entry_point": f"{agents.__name__}:skrl_flat_ppo_cfg.yaml",

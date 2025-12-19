@@ -69,7 +69,7 @@ def get_quaternion_tuple_from_xyz(x, y, z):
 
 
 @configclass
-class SumoStage1EnvSingleAgentCfg(DirectMARLEnvCfg):
+class AnymalCGoToPointSumoCfg(DirectMARLEnvCfg):
     # env
     episode_length_s = 20.0
     decimation = 4
@@ -167,10 +167,10 @@ def define_markers() -> VisualizationMarkers:
     return VisualizationMarkers(marker_cfg)
 
 
-class SumoStage1EnvSingleAgent(DirectMARLEnv):
-    cfg: SumoStage1EnvSingleAgentCfg
+class AnymalCGoToPointSumo(DirectMARLEnv):
+    cfg: AnymalCGoToPointSumoCfg
 
-    def __init__(self, cfg: SumoStage1EnvSingleAgentCfg, render_mode: str | None = None, debug=False, **kwargs):
+    def __init__(self, cfg: AnymalCGoToPointSumoCfg, render_mode: str | None = None, debug=False, **kwargs):
         self.debug = debug
         super().__init__(cfg, render_mode, **kwargs)
         self.actions = {

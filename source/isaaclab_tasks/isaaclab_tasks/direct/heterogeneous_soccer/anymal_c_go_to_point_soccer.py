@@ -76,8 +76,8 @@ class AnymalCGoToPointSoccerEnvCfg(DirectMARLEnvCfg):
     action_scale = 0.5
     action_space = 12
     action_spaces = {f"robot_{i}": 12 for i in range(1)}
-    observation_space = 56
-    observation_spaces = {f"robot_{i}": 56 for i in range(1)}
+    observation_space = 66
+    observation_spaces = {f"robot_{i}": 66 for i in range(1)}
     state_space = 0
     state_spaces = {f"robot_{i}": 0 for i in range(1)}
     possible_agents = [f"robot_{i}" for i in range(1)]

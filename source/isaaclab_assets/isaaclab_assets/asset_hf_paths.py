@@ -40,4 +40,8 @@ HF_POLICY_MAP = {
         "starting": "adversarial_policies/anymal_c_go_to_ball",
         "trained": None
     },
+    "Isaac-Multi-Agent-Flat-Anymal-C-Direct-v0": {
+        "starting": "adversarial_policies/anymal_c_velocity_model",
+        "trained": None
+    },
 }

@@ -128,7 +128,6 @@ class NoiseModel:
             env_ids: The environment ids to reset the noise model for. Defaults to None,
                 in which case all environments are considered.
         """
-        pass
 
     def apply(self, data: torch.Tensor) -> torch.Tensor:
         """Apply the noise to the data.

@@ -180,8 +180,6 @@ class NonTypeAnnotationOrderingDemoCfg:
 class InheritedNonTypeAnnotationOrderingDemoCfg(NonTypeAnnotationOrderingDemoCfg):
     """Inherited config class without type annotations."""
 
-    pass
-
 
 """
 Dummy configuration: Inheritance

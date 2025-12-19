@@ -48,4 +48,3 @@ class UIWidgetWrapper:
         """
         Perform any necessary cleanup
         """
-        pass

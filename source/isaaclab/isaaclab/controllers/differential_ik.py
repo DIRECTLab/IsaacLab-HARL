@@ -93,7 +93,6 @@ class DifferentialIKController:
         Args:
             env_ids: The environment indices to reset. If None, then all environments are reset.
         """
-        pass
 
     def set_command(
         self, command: torch.Tensor, ee_pos: torch.Tensor | None = None, ee_quat: torch.Tensor | None = None

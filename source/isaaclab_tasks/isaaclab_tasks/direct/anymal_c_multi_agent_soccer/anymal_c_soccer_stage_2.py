@@ -6,7 +6,6 @@
 from __future__ import annotations
 
 import copy
-import random
 import torch
 
 import isaaclab.envs.mdp as mdp
@@ -20,12 +19,7 @@ from isaaclab.scene import InteractiveSceneCfg
 from isaaclab.sim import SimulationCfg
 from isaaclab.sim.spawners.from_files import GroundPlaneCfg, spawn_ground_plane
 from isaaclab.utils import configclass
-from isaaclab.utils.math import (
-    quat_from_angle_axis,
-    quat_from_euler_xyz,
-    quat_rotate_inverse,
-    subtract_frame_transforms,
-)
+from isaaclab.utils.math import quat_from_euler_xyz, quat_rotate_inverse, subtract_frame_transforms
 
 from isaaclab_assets.robots.anymal import ANYMAL_C_CFG  # isort: skip
 from isaaclab_assets.custom.soccer_ball import SOCCERBALL_CFG  # isort: skip

@@ -15,8 +15,6 @@ from typing import Any, ClassVar
 class TimerError(Exception):
     """A custom exception used to report errors in use of :class:`Timer` class."""
 
-    pass
-
 
 class Timer(ContextDecorator):
     """A timer for performance measurements.

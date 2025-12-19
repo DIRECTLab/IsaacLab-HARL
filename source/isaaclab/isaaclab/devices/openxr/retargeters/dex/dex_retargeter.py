@@ -20,7 +20,6 @@ class DexRetargeter(RetargeterBase):
         """Initialize the DEX retargeter."""
         super().__init__()
         # TODO: Add any initialization parameters and state variables needed
-        pass
 
     def retarget(self, joint_data: dict[str, np.ndarray]) -> Any:
         """Convert OpenXR hand joint poses to DEX robot commands.

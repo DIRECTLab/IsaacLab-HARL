@@ -28,4 +28,3 @@ class RetargeterBase(ABC):
         Returns:
             Retargeted data in implementation-specific format
         """
-        pass

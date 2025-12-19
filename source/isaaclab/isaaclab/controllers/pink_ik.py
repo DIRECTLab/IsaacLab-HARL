@@ -78,7 +78,6 @@ class PinkIKController:
 
         This method is called during setup but before the first compute call.
         """
-        pass
 
     def compute(
         self,

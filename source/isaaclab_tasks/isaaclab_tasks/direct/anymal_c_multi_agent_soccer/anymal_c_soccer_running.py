@@ -10,7 +10,7 @@ import torch
 
 import isaaclab.envs.mdp as mdp
 import isaaclab.sim as sim_utils
-from isaaclab.assets import Articulation, ArticulationCfg, RigidObject, RigidObjectCfg
+from isaaclab.assets import Articulation, ArticulationCfg
 from isaaclab.envs import DirectMARLEnv, DirectMARLEnvCfg
 from isaaclab.managers import EventTermCfg as EventTerm
 from isaaclab.managers import SceneEntityCfg
@@ -20,8 +20,7 @@ from isaaclab.sensors import ContactSensor, ContactSensorCfg
 from isaaclab.sim import SimulationCfg
 from isaaclab.terrains import TerrainImporterCfg
 from isaaclab.utils import configclass
-from isaaclab.utils.assets import ISAAC_NUCLEUS_DIR
-from isaaclab.utils.math import quat_from_angle_axis, quat_from_euler_xyz, subtract_frame_transforms
+from isaaclab.utils.math import quat_from_euler_xyz, subtract_frame_transforms
 
 ##
 # Pre-defined configs

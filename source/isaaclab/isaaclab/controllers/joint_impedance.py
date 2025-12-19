@@ -136,11 +136,9 @@ class JointImpedanceController:
 
     def initialize(self):
         """Initialize the internals."""
-        pass
 
     def reset_idx(self, robot_ids: torch.Tensor = None):
         """Reset the internals."""
-        pass
 
     def set_command(self, command: torch.Tensor):
         """Set target end-effector pose command.

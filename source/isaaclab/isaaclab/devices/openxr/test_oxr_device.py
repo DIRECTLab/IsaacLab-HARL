@@ -35,14 +35,10 @@ from isaaclab.utils import configclass
 class EmptyManagerCfg:
     """Empty manager."""
 
-    pass
-
 
 @configclass
 class EmptySceneCfg(InteractiveSceneCfg):
     """Configuration for an empty scene."""
-
-    pass
 
 
 @configclass

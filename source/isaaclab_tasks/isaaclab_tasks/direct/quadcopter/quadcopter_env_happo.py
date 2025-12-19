@@ -5,7 +5,6 @@
 
 from __future__ import annotations
 
-import gymnasium as gym
 import torch
 
 import isaaclab.sim as sim_utils

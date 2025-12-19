@@ -682,7 +682,6 @@ class DirectMARLEnv(gym.Env):
         We leave the implementation of this function to the derived classes. If the environment does not require
         any explicit scene setup, the function can be left empty.
         """
-        pass
 
     @abstractmethod
     def _pre_physics_step(self, actions: dict[AgentID, ActionType]):

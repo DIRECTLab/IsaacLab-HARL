@@ -7,42 +7,24 @@ from __future__ import annotations
 
 import copy
 import torch
-import torchvision.transforms as transforms
 from torch import nn
 
-import isaacsim.core.utils.torch as torch_utils
-from isaacsim.core.utils.torch.rotations import compute_heading_and_up, compute_rot, quat_conjugate
-
-import isaaclab.envs.mdp as mdp
 import isaaclab.sim as sim_utils
-from isaaclab.assets import Articulation, ArticulationCfg, RigidObject, RigidObjectCfg
+from isaaclab.assets import Articulation, ArticulationCfg
 from isaaclab.envs import DirectMARLEnv, DirectMARLEnvCfg
-from isaaclab.managers import EventTermCfg as EventTerm
-from isaaclab.managers import SceneEntityCfg
 from isaaclab.markers import VisualizationMarkers, VisualizationMarkersCfg
 from isaaclab.scene import InteractiveSceneCfg
-from isaaclab.sensors import Camera, CameraCfg, TiledCamera, TiledCameraCfg
 from isaaclab.sim import SimulationCfg
 from isaaclab.terrains import TerrainImporterCfg
 from isaaclab.utils import configclass
 from isaaclab.utils.assets import ISAAC_NUCLEUS_DIR
-from isaaclab.utils.math import (
-    euler_xyz_from_quat,
-    normalize,
-    quat_from_angle_axis,
-    quat_from_euler_xyz,
-    quat_mul,
-    subtract_frame_transforms,
-)
+from isaaclab.utils.math import normalize, quat_from_angle_axis, subtract_frame_transforms
 
 ##
 # Pre-defined configs
 ##
 from isaaclab_assets.robots.minitank import MINITANK_CFG  # isort: skip
-from isaaclab_assets.robots.anymal import ANYMAL_C_CFG  # isort: skip
-from isaaclab_assets.robots.unitree import H1_CFG  # isort: skip
-from isaaclab.terrains.config.rough import ROUGH_TERRAINS_CFG  # isort: skip
-from isaaclab_assets import CRAZYFLIE_CFG  # isort: skip
+from isaaclab_assets.robots.quadcopter import CRAZYFLIE_CFG  # isort: skip
 
 
 class SimpleCNN(nn.Module):

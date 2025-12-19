@@ -4,12 +4,9 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 """Configuration for a Minitank robot with an arm joint."""
-import os
 
 import isaaclab.sim as sim_utils
-from isaaclab.actuators import DCMotorCfg, ImplicitActuatorCfg
 from isaaclab.assets import ArticulationCfg
-from isaaclab.utils.assets import ISAACLAB_NUCLEUS_DIR
 
 sim_path = sim_utils.__path__[0]
 SOURCE_PATH = sim_path[: sim_path.index("source")] + "source"

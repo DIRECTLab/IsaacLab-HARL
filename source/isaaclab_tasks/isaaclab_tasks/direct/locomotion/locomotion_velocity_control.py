@@ -9,13 +9,13 @@ import torch
 from pathlib import Path
 
 import isaacsim.core.utils.torch as torch_utils
-from isaacsim.core.utils.torch.rotations import compute_heading_and_up, compute_rot, quat_conjugate
+from isaacsim.core.utils.torch.rotations import quat_conjugate
 
 import isaaclab.sim as sim_utils
 from isaaclab.assets import Articulation
 from isaaclab.envs import DirectMARLEnv, DirectMARLEnvCfg
 from isaaclab.markers import VisualizationMarkers, VisualizationMarkersCfg
-from isaaclab.sensors import ContactSensor, ContactSensorCfg
+from isaaclab.sensors import ContactSensor
 from isaaclab.utils.assets import ISAAC_NUCLEUS_DIR
 from isaaclab.utils.math import quat_from_angle_axis, quat_rotate_inverse, yaw_quat
 

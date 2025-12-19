@@ -36,8 +36,6 @@ from isaaclab.utils import configclass
 class EmptyManagerCfg:
     """Empty specifications for the environment."""
 
-    pass
-
 
 def create_manager_based_env(render_interval: int):
     """Create a manager based environment."""

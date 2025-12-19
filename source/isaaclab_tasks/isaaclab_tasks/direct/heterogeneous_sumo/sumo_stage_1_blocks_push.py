@@ -20,7 +20,7 @@ from isaaclab.sensors import ContactSensor, ContactSensorCfg
 from isaaclab.sim import SimulationCfg
 from isaaclab.sim.spawners.from_files import GroundPlaneCfg, spawn_ground_plane
 from isaaclab.utils import configclass
-from isaaclab.utils.math import quat_from_angle_axis, quat_from_euler_xyz, subtract_frame_transforms
+from isaaclab.utils.math import quat_from_euler_xyz, subtract_frame_transforms
 
 from isaaclab_assets.robots.leatherback import LEATHERBACK_CFG  # isort: skip
 from isaaclab_assets.robots.anymal import ANYMAL_C_CFG  # isort: skip

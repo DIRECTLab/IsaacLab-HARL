@@ -164,7 +164,7 @@ class LeatherbackSumoMAStage2Env(DirectMARLEnv):
 
     @torch.no_grad()
     def _draw_team_dots(self):
-        positions, indices, orientations, scales = [], [], [], []
+        positions, indices, _, _ = [], [], [], []
         for robot_id, robot in self.robots.items():
             pos = robot.data.root_pos_w.clone()
             pos[:, 2] += 0.5  # hover above robot
@@ -388,7 +388,6 @@ class LeatherbackSumoMAStage2Env(DirectMARLEnv):
 
         team0_out = torch.any(torch.stack([out_map["robot_0"], out_map["robot_1"]]), dim=0)
         team1_out = torch.any(torch.stack([out_map["robot_2"], out_map["robot_3"]]), dim=0)
-        tot = torch.count_nonzero(team1_out[env_ids]).item() + torch.count_nonzero(team0_out[env_ids]).item()
 
         if env_ids is None:
             env_ids = torch.arange(self.num_envs, device=self.device)

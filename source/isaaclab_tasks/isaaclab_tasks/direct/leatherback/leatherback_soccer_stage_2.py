@@ -230,7 +230,7 @@ class LeatherbackStage2AdversarialSoccerEnv(DirectMARLEnv):
 
     @torch.no_grad()
     def _draw_team_dots(self):
-        positions, indices, orientations, scales = [], [], [], []
+        positions, indices, _, _ = [], [], [], []
         for robot_id, robot in self.robots.items():
             pos = robot.data.root_pos_w.clone()
             pos[:, 2] += 0.5  # hover above robot
@@ -365,8 +365,8 @@ class LeatherbackStage2AdversarialSoccerEnv(DirectMARLEnv):
     def _get_rewards(self) -> dict:
         self._draw_team_dots()
         ball_in_goal1, ball_in_goal2 = self._ball_in_goal_area()
-        time_out = self.episode_length_buf >= self.max_episode_length - 1
-        out_of_arena = self._get_out_of_arena()
+        # time_out = self.episode_length_buf >= self.max_episode_length - 1
+        # out_of_arena = self._get_out_of_arena()
 
         time_step_reward = -0.01 * torch.ones(self.num_envs, device=self.device)
 

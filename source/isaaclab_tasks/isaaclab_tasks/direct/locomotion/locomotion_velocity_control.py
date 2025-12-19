@@ -104,7 +104,7 @@ class LocomotionVelocityEnv(DirectMARLEnv):
             "other_rewards": torch.zeros(self.num_envs, dtype=torch.float32, device=self.device),
         }
 
-        self.feet_ids, self.feet_names = self.contact_sensors[f"robot_0"].find_bodies(".*_ankle_link")
+        self.feet_ids, self.feet_names = self.contact_sensors["robot_0"].find_bodies(".*_ankle_link")
 
     def _draw_markers(self, command):
         xy_commands = command.clone()
@@ -118,7 +118,7 @@ class LocomotionVelocityEnv(DirectMARLEnv):
                 2 * torch.ones(self._commands.shape[0]),
                 3 * torch.ones(self._commands.shape[0]),
             ],
-            axis=0,
+            dim=0,
         )
 
         robot_pos = self.robots["robot_0"].data.root_pos_w
@@ -335,8 +335,8 @@ class LocomotionVelocityEnv(DirectMARLEnv):
         motor_effort_ratio: torch.Tensor,
     ):
         # Requires storing prev_actions
-        action_delta = actions - prev_actions
-        smoothness_penalty = torch.sum(action_delta**2, dim=-1)
+        # action_delta = actions - prev_actions
+        # smoothness_penalty = torch.sum(action_delta**2, dim=-1)
 
         # linear velocity tracking
 
@@ -348,19 +348,19 @@ class LocomotionVelocityEnv(DirectMARLEnv):
         yaw_rate_error = torch.square(commands[:, 2] - robot.data.root_ang_vel_w[:, 2])
         yaw_rate_error_mapped = torch.exp(-yaw_rate_error / 0.25)
 
-        # energy penalty for movement
-        actions_cost = torch.sum(actions**2, dim=-1)
-        electricity_cost = torch.sum(
-            torch.abs(actions * dof_vel * dof_vel_scale) * motor_effort_ratio.unsqueeze(0),
-            dim=-1,
-        )
+        # # energy penalty for movement
+        # actions_cost = torch.sum(actions**2, dim=-1)
+        # electricity_cost = torch.sum(
+        #     torch.abs(actions * dof_vel * dof_vel_scale) * motor_effort_ratio.unsqueeze(0),
+        #     dim=-1,
+        # )
 
         # dof at limit cost
-        dof_at_limit_cost = torch.sum(dof_pos_scaled > 0.98, dim=-1)
+        # dof_at_limit_cost = torch.sum(dof_pos_scaled > 0.98, dim=-1)
 
         # reward for duration of staying alive
         alive_reward = torch.ones_like(potentials)
-        progress_reward = potentials - prev_potentials
+        # progress_reward = potentials - prev_potentials
 
         total_reward = (
             # progress_reward

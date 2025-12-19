@@ -195,8 +195,7 @@ class LeatherbackEnv(DirectMARLEnv):
         return {"robot_0": composite_reward}
 
     def _get_dones(self) -> tuple[dict, dict]:
-        task_failed = {}
-        task_failed["robot_0"] = self.episode_length_buf > self.max_episode_length
+        task_failed = {"robot_0": self.episode_length_buf > self.max_episode_length}
         return task_failed, self.task_completed
 
     def _reset_idx(self, env_ids: torch.Tensor | None):

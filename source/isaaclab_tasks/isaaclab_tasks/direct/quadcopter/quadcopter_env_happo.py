@@ -234,8 +234,7 @@ class QuadcopterMARLEnv(DirectMARLEnv):
     def _get_dones(self) -> tuple[dict, dict]:
         time_out = (self.episode_length_buf >= self.max_episode_length - 1).to(self.device)
         died = self.robots["robot_0"].data.root_pos_w[:, 2] < 0.1
-        dones = {}
-        dones["robot_0"] = died.to(self.device)
+        dones = {"robot_0": died.to(self.device)}
         time_out = {robot_id: time_out for robot_id in self.robots.keys()}
 
         # dones = {robot_id: torch.zeros(self.num_envs).to(torch.int8).to(self.device) for robot_id in self.robots.keys()}

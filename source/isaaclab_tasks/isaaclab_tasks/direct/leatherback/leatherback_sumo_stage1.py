@@ -370,7 +370,6 @@ class LeatherbackSumoStage1Env(DirectMARLEnv):
                 if i == 0:
                     # First robot, accept immediately
                     final_offsets = offsets
-                    break
                 else:
                     # Distance from previously placed robot(s)
                     prev_offsets = sampled_positions[robot_ids[0]]  # (N, 3)
@@ -379,7 +378,6 @@ class LeatherbackSumoStage1Env(DirectMARLEnv):
                     mask_valid = dist > min_separation
                     if torch.all(mask_valid):
                         final_offsets = offsets
-                        break
                     # otherwise retry
 
             sampled_positions[robot_id] = final_offsets

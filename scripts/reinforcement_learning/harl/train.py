@@ -10,6 +10,7 @@ import sys
 import time
 
 from isaaclab.app import AppLauncher
+from huggingface_hub import snapshot_download
 
 parser = argparse.ArgumentParser(description="Train an RL agent with HARL.")
 parser.add_argument("--video", action="store_true", help="Record videos during training.")
@@ -50,6 +51,18 @@ parser.add_argument(
     choices=["happo", "hatrpo", "haa2c", "mappo", "mappo_unshare", "happo_adv"],
     help="Algorithm name. Choose from: happo, hatrpo, haa2c, mappo, and mappo_unshare.",
 )
+parser.add_argument(
+    "--load_starting_policy",
+    action="store_true",
+    help="If set, load the starting policy for this env from HuggingFace (if one exists).",
+)
+parser.add_argument(
+    "--load_trained_policy",
+    action="store_true",
+    help="If set, load the trained policy for this env from HuggingFace (if one exists).",
+)
+
+
 
 # append AppLauncher cli args
 AppLauncher.add_app_launcher_args(parser)
@@ -78,6 +91,63 @@ from isaaclab_tasks.utils.hydra import hydra_task_config
 algorithm = args_cli.algorithm.lower()
 agent_cfg_entry_point = f"harl_{algorithm}_cfg_entry_point"
 
+from isaaclab_assets.asset_hf_paths import HF_POLICY_MAP, HF_REPO_ID
+
+
+def _configure_model_dir(args: dict, algo_args: dict) -> None:
+    """Apply HF/local policy loading rules and set algo_args['train']['model_dir']."""
+    task_name = args.get("task")
+    provided_dir = bool(args.get("dir"))
+    load_trained = bool(args.get("load_trained_policy"))
+    load_starting = bool(args.get("load_starting_policy"))
+
+    # mutual exclusivity:
+    if load_trained and load_starting:
+        raise ValueError("Cannot set both --load_trained_policy and --load_starting_policy.")
+    if provided_dir and (load_trained or load_starting):
+        raise ValueError("Cannot combine --dir with --load_trained_policy/--load_starting_policy.")
+
+    # default: use --dir (if provided)
+    if provided_dir:
+        algo_args["train"]["model_dir"] = args["dir"]
+        return
+
+    # HF load
+    if load_trained:
+        entry = HF_POLICY_MAP.get(task_name, {})
+        policy_location = entry.get("trained")
+        if not policy_location:
+            print("Sorry, a trained policy doesn't exist for this env.")
+            return
+
+        base = snapshot_download(
+            repo_id=HF_REPO_ID,
+            repo_type="dataset",
+            revision="main",
+            allow_patterns=[f"{policy_location}/**"],
+        )
+        algo_args["train"]["model_dir"] = os.path.join(base, policy_location)
+        return
+
+    if load_starting:
+        entry = HF_POLICY_MAP.get(task_name, {})
+        policy_location = entry.get("starting")
+        if not policy_location:
+            print("Sorry, a starting policy doesn't exist for this env.")
+            return
+
+        base = snapshot_download(
+            repo_id=HF_REPO_ID,
+            repo_type="dataset",
+            revision="main",
+            allow_patterns=[f"{policy_location}/**"],
+        )
+        algo_args["train"]["model_dir"] = os.path.join(base, policy_location)
+        return
+
+    # If nothing specified, leave whatever hydra config provides (or None).
+    # This mirrors the old behavior where user might rely on the default model_dir in config.
+    return
 
 @hydra_task_config(args_cli.task, agent_cfg_entry_point)
 def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agent_cfg: dict):
@@ -102,6 +172,9 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     algo_args["seed"]["seed"] = args["seed"]
     algo_args["algo"]["adversarial_training_mode"] = args["adversarial_training_mode"]
     algo_args["algo"]["adversarial_training_iterations"] = args["adversarial_training_iterations"]
+
+    algo_args.setdefault("train", {})
+    _configure_model_dir(args, algo_args)
 
     env_args = {}
     env_cfg.scene.num_envs = args["num_envs"]

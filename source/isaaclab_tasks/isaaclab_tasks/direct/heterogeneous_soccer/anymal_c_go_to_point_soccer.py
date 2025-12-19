@@ -69,22 +69,22 @@ def get_quaternion_tuple_from_xyz(x, y, z):
 
 
 @configclass
-class AnymalSoccerRunningEnvCfg(DirectMARLEnvCfg):
+class AnymalCGoToPointSoccerEnvCfg(DirectMARLEnvCfg):
     # env
     episode_length_s = 20.0
     decimation = 4
     action_scale = 0.5
     action_space = 12
     action_spaces = {f"robot_{i}": 12 for i in range(1)}
-    observation_space = 100
-    observation_spaces = {f"robot_{i}": 100 for i in range(1)}
+    observation_space = 56
+    observation_spaces = {f"robot_{i}": 56 for i in range(1)}
     state_space = 0
     state_spaces = {f"robot_{i}": 0 for i in range(1)}
     possible_agents = [f"robot_{i}" for i in range(1)]
 
-    # teams = {
-    #     "team_0": ["robot_0"],
-    # }
+    teams = {
+        "team_0": ["robot_0"],
+    }
 
     # simulation
     sim: SimulationCfg = SimulationCfg(
@@ -131,7 +131,7 @@ class AnymalSoccerRunningEnvCfg(DirectMARLEnvCfg):
     robot_0.init_state.pos = (0.0, 1.0, 0.3)
 
     # --- NEW: goal params (visual + sampling) ---
-    goal_reach_radius: float = 0.35  # within this distance counts as "reached"
+    goal_reach_radius: float = 1  # within this distance counts as "reached"
     goal_spawn_radius_min: float = 3
     goal_spawn_radius_max: float = 5
     goal_min_separation: float = 1.0
@@ -167,10 +167,10 @@ def define_markers() -> VisualizationMarkers:
     return VisualizationMarkers(marker_cfg)
 
 
-class AnymalSoccerRunningEnv(DirectMARLEnv):
-    cfg: AnymalSoccerRunningEnvCfg
+class AnymalCGoToPointSoccerEnv(DirectMARLEnv):
+    cfg: AnymalCGoToPointSoccerEnvCfg
 
-    def __init__(self, cfg: AnymalSoccerRunningEnvCfg, render_mode: str | None = None, debug=False, **kwargs):
+    def __init__(self, cfg: AnymalCGoToPointSoccerEnvCfg, render_mode: str | None = None, debug=False, **kwargs):
         self.debug = debug
         super().__init__(cfg, render_mode, **kwargs)
         self.actions = {
@@ -262,9 +262,8 @@ class AnymalSoccerRunningEnv(DirectMARLEnv):
             robot.set_joint_position_target(self.processed_actions[robot_id])
 
     def _get_observations(self) -> dict:
+        obs = {}
         self.previous_actions = copy.deepcopy(self.actions)
-
-        # time_remaining = (self.max_episode_length - self.episode_length_buf).unsqueeze(-1)
         goals_xy = self.goal_pos_w[:, :, :2]
         for robot_id, robot in self.robots.items():
             self._prev_min_goal_dist[robot_id] = self._min_goal_dist[robot_id].clone()
@@ -273,31 +272,48 @@ class AnymalSoccerRunningEnv(DirectMARLEnv):
 
             self._min_goal_dist[robot_id] = torch.min(dists, dim=-1).values
 
-        obs = {}
-        for i, robot_id in enumerate(self.robots.keys()):
-
-            goal_pos, _ = subtract_frame_transforms(
-                self.robots[robot_id].data.root_state_w[:, :3],
-                self.robots[robot_id].data.root_state_w[:, 3:7],
-                self._desired_pos,
-            )
-
-            zero_buffer = torch.zeros((self.num_envs, 52), device=self.device)
-
-            obs_vec = torch.cat(
-                [
+        for team_name, robots in self.cfg.teams.items():
+            team_obs = {}
+            for i, robot_id in enumerate(robots):
+                robot_state = (
                     self.robots[robot_id].data.root_lin_vel_b,
                     self.robots[robot_id].data.root_ang_vel_b,
                     self.robots[robot_id].data.projected_gravity_b,
                     self.robots[robot_id].data.joint_pos - self.robots[robot_id].data.default_joint_pos,
                     self.robots[robot_id].data.joint_vel,
                     self.actions[robot_id],
-                    goal_pos,
-                    zero_buffer,
-                ],
-                dim=-1,
-            )
-            obs[robot_id] = obs_vec
+                )
+
+                ball_pos_buffer = torch.zeros((self.num_envs, 3), device=self.device, dtype=torch.float32)
+                ball_vel_buffer = torch.zeros((self.num_envs, 3), device=self.device, dtype=torch.float32)
+
+                target_goal_pos, _ = subtract_frame_transforms(
+                    self.robots[robot_id].data.root_state_w[:, :3],
+                    self.robots[robot_id].data.root_state_w[:, 3:7],
+                    self._desired_pos,
+                )
+
+                other_goal_pos_buffer = torch.zeros((self.num_envs, 3), device=self.device, dtype=torch.float32)
+                teammate_buffer = torch.zeros((self.num_envs, 3), device=self.device, dtype=torch.float32)
+                enemy_0_buffer = torch.zeros((self.num_envs, 3), device=self.device, dtype=torch.float32)
+                enemy_1_buffer = torch.zeros((self.num_envs, 3), device=self.device, dtype=torch.float32)
+
+                obs_vec = torch.cat(
+                    robot_state
+                    + (
+                        ball_pos_buffer,  # Ball position in robot frame (3)
+                        ball_vel_buffer,  # Ball velocity in robot frame (3)
+                        target_goal_pos,  # Target goal position in robot frame (3)
+                        other_goal_pos_buffer,  # other goal position in robot frame (3)
+                        teammate_buffer,  # Teammate position in robot frame (3)
+                        enemy_0_buffer,  # Enemy 0 position in robot frame (3)
+                        enemy_1_buffer,  # Enemy 1 position in robot frame (3)
+                    ),
+                    dim=-1,
+                )
+
+                team_obs[robot_id] = obs_vec
+            obs[team_name] = team_obs
 
         return obs
 
@@ -313,7 +329,7 @@ class AnymalSoccerRunningEnv(DirectMARLEnv):
             dists = torch.norm(goals_xy - robot_xy, dim=-1)
             hit = dists <= reach_r
             # distance reward
-            distance_reward = 1 - torch.tanh(dists / 0.8)
+            distance_reward = 1 - torch.tanh(dists / 5)
             # z velocity tracking
             z_vel_error = torch.square(self.robots[robot_id].data.root_lin_vel_b[:, 2])
             # angular velocity x/y
@@ -363,7 +379,7 @@ class AnymalSoccerRunningEnv(DirectMARLEnv):
             for key, value in rewards.items():
                 self._episode_sums[key] += value
 
-        return {"robot_0": all_rewards["robot_0"]}
+        return {"team_0": all_rewards["robot_0"]}
 
     def _get_dones(self) -> tuple[dict, dict]:
         reach_r = self.cfg.goal_reach_radius
@@ -372,6 +388,7 @@ class AnymalSoccerRunningEnv(DirectMARLEnv):
 
         # goals in XY: (N, 2, 2)
         goals_xy = self._desired_pos[:, :2]
+        self.died = {}
         for robot_id, robot in self.robots.items():
             net_contact_forces = self.contact_sensors[robot_id].data.net_forces_w_history
             died = torch.any(
@@ -384,11 +401,12 @@ class AnymalSoccerRunningEnv(DirectMARLEnv):
             # did this robot hit any goal? (N,)
             hit = dists <= reach_r
             any_robot_reached |= hit
+            self.died[robot_id] = died
 
-        dones = {"robot_0": torch.logical_or(died.clone(), any_robot_reached.clone())}
+        dones = {team: torch.logical_or(died.clone(), any_robot_reached.clone()) for team in self.cfg.teams.keys()}
 
         to_mask = self.episode_length_buf >= (self.max_episode_length - 1)
-        time_out = {robot_id: to_mask for robot_id in self.robots.keys()}
+        time_out = {team: to_mask for team in self.cfg.teams.keys()}
 
         return dones, time_out
 
@@ -415,20 +433,26 @@ class AnymalSoccerRunningEnv(DirectMARLEnv):
         for robot_id, robot in self.robots.items():
             if env_ids is None or len(env_ids) == self.num_envs:
                 env_ids = robot._ALL_INDICES
-            self.actions[robot_id][env_ids] = 0.0
-            self.previous_actions[robot_id][env_ids] = 0.0
 
-            robot.reset(env_ids)
+            if not hasattr(self, "died"):
+                died_envs = env_ids
+            else:
+                died_envs = env_ids[self.died[robot_id][env_ids]]
+
+            self.actions[robot_id][died_envs] = 0.0
+            self.previous_actions[robot_id][died_envs] = 0.0
+
+            robot.reset(died_envs)
 
             # Reset robot state
-            joint_pos = robot.data.default_joint_pos[env_ids]
-            joint_vel = robot.data.default_joint_vel[env_ids]
-            default_root_state = robot.data.default_root_state[env_ids]
+            joint_pos = robot.data.default_joint_pos[died_envs]
+            joint_vel = robot.data.default_joint_vel[died_envs]
+            default_root_state = robot.data.default_root_state[died_envs]
 
-            default_root_state[:, :2] += self._terrain.env_origins[env_ids][:, :2]
-            robot.write_root_pose_to_sim(default_root_state[:, :7], env_ids)
-            robot.write_root_velocity_to_sim(default_root_state[:, 7:], env_ids)
-            robot.write_joint_state_to_sim(joint_pos, joint_vel, None, env_ids)
+            default_root_state[:, :2] += self._terrain.env_origins[died_envs][:, :2]
+            robot.write_root_pose_to_sim(default_root_state[:, :7], died_envs)
+            robot.write_root_velocity_to_sim(default_root_state[:, 7:], died_envs)
+            robot.write_joint_state_to_sim(joint_pos, joint_vel, None, died_envs)
 
         self._desired_pos[env_ids, :2] = self.robots["robot_0"].data.root_pos_w[env_ids, :2] + torch.zeros_like(
             self._desired_pos[env_ids, :2]

@@ -131,7 +131,7 @@ class SumoStage1EnvSingleAgentCfg(DirectMARLEnvCfg):
     robot_0.init_state.pos = (0.0, 1.0, 0.3)
 
     # --- NEW: goal params (visual + sampling) ---
-    goal_reach_radius: float = 0.35  # within this distance counts as "reached"
+    goal_reach_radius: float = 1  # within this distance counts as "reached"
     goal_spawn_radius_min: float = 3
     goal_spawn_radius_max: float = 5
     goal_min_separation: float = 1.0
@@ -286,7 +286,6 @@ class SumoStage1EnvSingleAgent(DirectMARLEnv):
 
                 dist_to_center = torch.zeros((self.num_envs, 1), device=self.device)
                 arena_radius = torch.zeros((self.num_envs, 1), device=self.device)
-                time_remaining = torch.zeros((self.num_envs, 1), device=self.device)
                 teammate_pos = torch.zeros((self.num_envs, 3), device=self.device)
                 other_pos = torch.zeros((self.num_envs, 3), device=self.device)
 
@@ -303,7 +302,6 @@ class SumoStage1EnvSingleAgent(DirectMARLEnv):
                         other_pos,
                         dist_to_center,
                         arena_radius,
-                        # time_remaining,
                     ],
                     dim=-1,
                 )
@@ -383,6 +381,7 @@ class SumoStage1EnvSingleAgent(DirectMARLEnv):
 
         # goals in XY: (N, 2, 2)
         goals_xy = self._desired_pos[:, :2]
+        self.died = {}
         for robot_id, robot in self.robots.items():
             net_contact_forces = self.contact_sensors[robot_id].data.net_forces_w_history
             died = torch.any(
@@ -395,6 +394,7 @@ class SumoStage1EnvSingleAgent(DirectMARLEnv):
             # did this robot hit any goal? (N,)
             hit = dists <= reach_r
             any_robot_reached |= hit
+            self.died[robot_id] = died
 
         dones = {team: torch.logical_or(died.clone(), any_robot_reached.clone()) for team in self.cfg.teams.keys()}
 
@@ -426,20 +426,26 @@ class SumoStage1EnvSingleAgent(DirectMARLEnv):
         for robot_id, robot in self.robots.items():
             if env_ids is None or len(env_ids) == self.num_envs:
                 env_ids = robot._ALL_INDICES
-            self.actions[robot_id][env_ids] = 0.0
-            self.previous_actions[robot_id][env_ids] = 0.0
 
-            robot.reset(env_ids)
+            if not hasattr(self, "died"):
+                died_envs = env_ids
+            else:
+                died_envs = env_ids[self.died[robot_id][env_ids]]
+
+            self.actions[robot_id][died_envs] = 0.0
+            self.previous_actions[robot_id][died_envs] = 0.0
+
+            robot.reset(died_envs)
 
             # Reset robot state
-            joint_pos = robot.data.default_joint_pos[env_ids]
-            joint_vel = robot.data.default_joint_vel[env_ids]
-            default_root_state = robot.data.default_root_state[env_ids]
+            joint_pos = robot.data.default_joint_pos[died_envs]
+            joint_vel = robot.data.default_joint_vel[died_envs]
+            default_root_state = robot.data.default_root_state[died_envs]
 
-            default_root_state[:, :2] += self._terrain.env_origins[env_ids][:, :2]
-            robot.write_root_pose_to_sim(default_root_state[:, :7], env_ids)
-            robot.write_root_velocity_to_sim(default_root_state[:, 7:], env_ids)
-            robot.write_joint_state_to_sim(joint_pos, joint_vel, None, env_ids)
+            default_root_state[:, :2] += self._terrain.env_origins[died_envs][:, :2]
+            robot.write_root_pose_to_sim(default_root_state[:, :7], died_envs)
+            robot.write_root_velocity_to_sim(default_root_state[:, 7:], died_envs)
+            robot.write_joint_state_to_sim(joint_pos, joint_vel, None, died_envs)
 
         self._desired_pos[env_ids, :2] = self.robots["robot_0"].data.root_pos_w[env_ids, :2] + torch.zeros_like(
             self._desired_pos[env_ids, :2]

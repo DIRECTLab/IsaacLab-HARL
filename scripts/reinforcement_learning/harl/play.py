@@ -84,10 +84,8 @@ import isaaclab_tasks  # noqa: F401, E402
 from isaaclab_tasks.utils.hydra import hydra_task_config  # noqa: E402
 
 # HF policy maps (support both possible module layouts)
-try:  # noqa: E402
-    from isaaclab_assets.asset_hf_paths import HF_POLICY_MAP, HF_REPO_ID
-except Exception:  # noqa: E402
-    from isaaclab_assets.isaaclab_assets.asset_hf_paths import HF_POLICY_MAP, HF_REPO_ID  # type: ignore
+from isaaclab_assets.asset_hf_paths import HF_POLICY_MAP, HF_REPO_ID
+
 
 
 algorithm = args_cli.algorithm.lower()

@@ -10,7 +10,7 @@ Ant locomotion environment.
 import gymnasium as gym
 
 from . import agents
-from .go_to_point_single_agent import SumoStage1EnvSingleAgent, SumoStage1EnvSingleAgentCfg
+from .anymal_c_go_to_point_sumo import SumoStage1EnvSingleAgent, SumoStage1EnvSingleAgentCfg
 from .sumo_stage_1_blocks_push import SumoStage1BlocksPushEnv, SumoStage1BlocksPushEnvCfg
 from .sumo_stage_2 import SumoStage2Env, SumoStage2EnvCfg
 from .sumo_stage_2_hetero_by_team import SumoStage2HeteroByTeamEnv, SumoStage2HeteroByTeamEnvCfg

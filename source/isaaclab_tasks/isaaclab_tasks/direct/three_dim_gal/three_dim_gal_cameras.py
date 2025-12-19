@@ -35,9 +35,9 @@ from isaaclab.utils.math import (
     subtract_frame_transforms,
 )
 
-##
+#
 # Pre-defined configs
-##
+#
 from isaaclab_assets.robots.minitank import MINITANK_CFG  # isort: skip
 from isaaclab_assets.robots.anymal import ANYMAL_C_CFG  # isort: skip
 from isaaclab_assets.robots.unitree import H1_CFG  # isort: skip
@@ -384,12 +384,12 @@ class ThreeDimGalCamerasEnv(DirectMARLEnv):
                 self.robots[f"robot_{i}"] = Articulation(self.cfg.__dict__["robot_" + str(i)])
                 self.scene.articulations[f"robot_{i}"] = self.robots[f"robot_{i}"]
 
-        ## SETUP CAMERAS #
+        # SETUP CAMERAS #
         self.cameras["robot_0"] = TiledCamera(self.cfg.camera_0)
         self.scene.sensors["robot_0_camera"] = self.cameras["robot_0"]
         self.cameras["robot_1"] = TiledCamera(self.cfg.camera_1)
         self.scene.sensors["robot_1_camera"] = self.cameras["robot_1"]
-        ## SETUP CAMERAS #
+        # SETUP CAMERAS #
 
         self.cfg.terrain.num_envs = self.scene.cfg.num_envs
         self.cfg.terrain.env_spacing = self.scene.cfg.env_spacing

@@ -3,6 +3,43 @@
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
+HF_REPO_ID = "isaacwilliam4/isaaclab-harl-dataset"
+
+HF_POLICY_MAP = {
+    "Leatherback-Stage1-Soccer-v0": {
+        "starting": None,
+        "trained": "adversarial_policies/policy_for_sa_score_goal_leatherback",
+    },
+    "Leatherback-Stage2-Soccer-v0": {
+        "starting": "adversarial_policies/stage_2_leatherback_start_policy_soccer",
+        "trained": "adversarial_policies/trained_vs_trained_soccer_leatherback",
+    },
+    "AnymalC_Soccer_Hetero_By_Team-v0": {
+        "starting": "adversarial_policies/anymals_vs_leatherback_start_policy_soccer",
+        "trained": None,
+    },
+    "Sumo-Stage2-Hetero-By-Team-v0": {
+        "starting": "adversarial_policies/hetero_by_team_start_policies_sumo",
+        "trained": None,
+    },
+    "Sumo-Stage2-Hetero-v0": {
+        "starting": "adversarial_policies/hetero_within_team_start_policies_sumo",
+        "trained": None,
+    },
+    "Minitank-Adversarial-Direct-v0": {"starting": "adversarial_policies/3dg_model", "trained": None},
+    "Isaac-Multi-Agent-Flat-Sumo-Stage1-Blocks-Push-v0": {
+        "starting": "adversarial_policies/anymal_c_walk_to_point_policy",
+        "trained": None,
+    },
+    "Anymal-C-Go-To-Point-Sumo": {"starting": None, "trained": "adversarial_policies/anymal_c_go_to_point_sumo"},
+    "AnymalC_Soccer_Go_To_Point-v1": {"starting": None, "trained": "adversarial_policies/anymal_c_go_to_point_soccer"},
+    "AnymalC_Soccer_Stage2-v0": {"starting": "adversarial_policies/anymal_c_go_to_ball", "trained": None},
+    "Isaac-Multi-Agent-Flat-Anymal-C-Direct-v0": {
+        "starting": "adversarial_policies/anymal_c_velocity_model",
+        "trained": "adversarial_policies/bar_carrying_trained",
+    },
+}
+
 """Play an algorithm (supports both coordination + adversarial HARL runners)."""
 
 import argparse
@@ -16,11 +53,44 @@ from huggingface_hub import snapshot_download
 
 from isaaclab.app import AppLauncher
 
-# --------------------------------------------------------------------------------------
-# CLI
-# --------------------------------------------------------------------------------------
+def policies_summary(policy_map: dict) -> str:
+    # Build rows
+    rows = []
+    for env, info in policy_map.items():
+        has_start = info.get("starting") is not None
+        has_train = info.get("trained") is not None
+        rows.append((env, "YES" if has_start else "NO", "YES" if has_train else "NO"))
 
-parser = argparse.ArgumentParser(description="Play an RL agent with HARL.")
+    headers = ("Environment", "Starting", "Trained")
+
+    # Compute column widths
+    w_env = max(len(headers[0]), *(len(r[0]) for r in rows)) if rows else len(headers[0])
+    w_start = max(len(headers[1]), *(len(r[1]) for r in rows)) if rows else len(headers[1])
+    w_train = max(len(headers[2]), *(len(r[2]) for r in rows)) if rows else len(headers[2])
+
+    def sep(char="-", cross="+"):
+        return (
+            f"{cross}{char*(w_env+2)}"
+            f"{cross}{char*(w_start+2)}"
+            f"{cross}{char*(w_train+2)}{cross}"
+        )
+
+    def fmt_row(a, b, c):
+        return f"| {a:<{w_env}} | {b:<{w_start}} | {c:<{w_train}} |"
+
+    lines = []
+    lines.append("Policy availability by environment:")
+    lines.append(sep("-"))
+    lines.append(fmt_row(*headers))
+    lines.append(sep("="))
+    for r in rows:
+        lines.append(fmt_row(*r))
+    lines.append(sep("-"))
+
+    return "\n" + "\n".join(lines)
+
+parser = argparse.ArgumentParser(description="Play an RL agent with HARL.", formatter_class=argparse.RawTextHelpFormatter, epilog=policies_summary(HF_POLICY_MAP))
+
 parser.add_argument(
     "--algorithm",
     type=str,
@@ -79,9 +149,6 @@ simulation_app = app_launcher.app
 
 from harl.runners import RUNNER_REGISTRY  # noqa: E402
 
-# HF policy maps (support both possible module layouts)
-from isaaclab_assets.asset_hf_paths import HF_POLICY_MAP, HF_REPO_ID
-
 from isaaclab.envs import DirectMARLEnvCfg, DirectRLEnvCfg, ManagerBasedRLEnvCfg  # noqa: E402
 
 import isaaclab_tasks  # noqa: F401, E402
@@ -89,6 +156,7 @@ from isaaclab_tasks.utils.hydra import hydra_task_config  # noqa: E402
 
 algorithm = args_cli.algorithm.lower()
 agent_cfg_entry_point = f"harl_{algorithm}_cfg_entry_point"
+
 
 
 def _max_action_dim(action_space) -> int:
@@ -154,14 +222,12 @@ def _configure_model_dir(args: dict, algo_args: dict) -> None:
         )
         algo_args["train"]["model_dir"] = os.path.join(base, policy_location)
         return
-
-    # If nothing specified, leave whatever hydra config provides (or None).
-    # This mirrors the old behavior where user might rely on the default model_dir in config.
     return
-
 
 @hydra_task_config(args_cli.task, agent_cfg_entry_point)
 def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agent_cfg: dict):
+    policies_summary(HF_POLICY_MAP)
+
     args = args_cli.__dict__
 
     # HARL runner args

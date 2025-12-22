@@ -33,7 +33,8 @@ HF_POLICY_MAP = {
         "starting": "adversarial_policies/anymal_c_walk_to_point_policy",
         "trained": None,
     },
-    "AnymalC_Soccer_Stage1-v0": {"starting": None, "trained": "adversarial_policies/anymal_c_go_to_ball"},
+    "Anymal-C-Go-To-Point-Sumo": {"starting": None, "trained": "adversarial_policies/anymal_c_go_to_point_sumo"},
+    "AnymalC_Soccer_Go_To_Point-v1": {"starting": None, "trained": "adversarial_policies/anymal_c_go_to_point_soccer"},
     "AnymalC_Soccer_Stage2-v0": {"starting": "adversarial_policies/anymal_c_go_to_ball", "trained": None},
     "Isaac-Multi-Agent-Flat-Anymal-C-Direct-v0": {
         "starting": "adversarial_policies/anymal_c_velocity_model",

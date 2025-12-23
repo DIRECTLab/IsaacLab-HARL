@@ -49,7 +49,7 @@ gym.register(
 )
 
 gym.register(
-    id="AnymalC_Soccer_Stage2-v1",
+    id="AnymalC_Soccer_Score_Goals_V1",
     entry_point=AnymalStage2SoccerEnv,
     disable_env_checker=True,
     kwargs={

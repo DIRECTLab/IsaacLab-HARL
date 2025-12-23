@@ -54,7 +54,7 @@ HF_POLICY_MAP = {
         "starting": "adversarial_policies/anymal_c_go_to_point_sumo",
         "trained": "adversarial_policies/anymal_push_blocks",
     },
-    "AnymalC_Soccer_Score_Goals": {
+    "AnymalC_Soccer_Score_Goals_V1": {
         "starting": "adversarial_policies/anymal_c_go_to_point_soccer",
         "trained": None,
     },

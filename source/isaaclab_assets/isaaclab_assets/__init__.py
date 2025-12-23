@@ -9,6 +9,8 @@ import toml
 
 from huggingface_hub import snapshot_download
 
+
+
 # Conveniences to other module directories via relative paths
 ISAACLAB_ASSETS_EXT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "../"))
 """Path to the extension source directory."""

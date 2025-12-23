@@ -42,6 +42,10 @@ HF_POLICY_MAP = {
         "starting": "adversarial_policies/anymal_c_go_to_point_sumo",
         "trained": None,
     },
+    "AnymalC_Soccer_Score_Goals": {
+        "starting": "adversarial_policies/anymal_c_go_to_point_soccer",
+        "trained": None,
+    },
 }
 
 """Play an algorithm (supports both coordination + adversarial HARL runners)."""

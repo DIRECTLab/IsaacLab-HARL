@@ -12,8 +12,9 @@ import time
 from huggingface_hub import snapshot_download
 
 from isaaclab.app import AppLauncher
+from isaaclab.utils import HF_POLICY_MAP, HF_REPO_ID, policies_summary
+parser = argparse.ArgumentParser(description="Train an RL agent with HARL.", formatter_class=argparse.RawTextHelpFormatter, epilog=policies_summary(HF_POLICY_MAP))
 
-parser = argparse.ArgumentParser(description="Train an RL agent with HARL.")
 parser.add_argument("--video", action="store_true", help="Record videos during training.")
 parser.add_argument("--video_length", type=int, default=500, help="Length of the recorded video (in steps).")
 parser.add_argument("--video_interval", type=int, default=20000, help="Interval between video recordings (in steps).")
@@ -90,9 +91,6 @@ from isaaclab_tasks.utils.hydra import hydra_task_config
 
 algorithm = args_cli.algorithm.lower()
 agent_cfg_entry_point = f"harl_{algorithm}_cfg_entry_point"
-
-from isaaclab_assets.asset_hf_paths import HF_POLICY_MAP, HF_REPO_ID
-
 
 def _configure_model_dir(args: dict, algo_args: dict) -> None:
     """Apply HF/local policy loading rules and set algo_args['train']['model_dir']."""

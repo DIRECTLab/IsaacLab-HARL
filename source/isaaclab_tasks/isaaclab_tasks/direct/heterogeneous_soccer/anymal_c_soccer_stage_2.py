@@ -333,7 +333,7 @@ class AnymalStage2SoccerEnv(DirectMARLEnv):
 
         rewards = {
             # "dist_to_ball_reward": robot_distance_to_ball_mapped * self.cfg.dist_to_ball_reward_scale * self.step_dt,
-            "ball_velocity_reward": ball_vel_reward * self.cfg.ball_velocity_scale * self.step_dt,
+            # "ball_velocity_reward": ball_vel_reward * self.cfg.ball_velocity_scale * self.step_dt,
             "ball_to_goal_reward": ball_distance_to_goal_mapped * self.cfg.ball_to_goal_reward_scale * self.step_dt,
             "goal_reward": goal_reward * self.cfg.goal_reward_scale,
         }

@@ -329,8 +329,8 @@ class AnymalStage1SoccerEnv(DirectMARLEnv):
 
         rewards = {
             "dist_to_ball_reward": robot_distance_to_ball_mapped * self.cfg.dist_to_ball_reward_scale * self.step_dt,
-            "ball_to_goal_reward": ball_distance_to_goal_mapped * self.cfg.ball_to_goal_reward_scale * self.step_dt,
-            "goal_reward": goal_reward * self.cfg.goal_reward_scale,
+            # "ball_to_goal_reward": ball_distance_to_goal_mapped * self.cfg.ball_to_goal_reward_scale * self.step_dt,
+            # "goal_reward": goal_reward * self.cfg.goal_reward_scale,
         }
 
         rewards = {k: torch.nan_to_num(v, nan=0.0, posinf=1e6, neginf=-1e6) for k, v in rewards.items()}

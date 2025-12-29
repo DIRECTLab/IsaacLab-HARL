@@ -282,14 +282,15 @@ class AnymalCGoToPointSoccerEnv(DirectMARLEnv):
                     self.actions[robot_id],
                 )
 
-                ball_pos_buffer = torch.zeros((self.num_envs, 3), device=self.device, dtype=torch.float32)
-                ball_vel_buffer = torch.zeros((self.num_envs, 3), device=self.device, dtype=torch.float32)
-
-                target_goal_pos, _ = subtract_frame_transforms(
+                go_to_point, _ = subtract_frame_transforms(
                     self.robots[robot_id].data.root_state_w[:, :3],
                     self.robots[robot_id].data.root_state_w[:, 3:7],
                     self._desired_pos,
                 )
+
+                ball_vel_buffer = torch.zeros((self.num_envs, 3), device=self.device, dtype=torch.float32)
+
+                target_goal_pos = torch.zeros((self.num_envs, 3), device=self.device, dtype=torch.float32)
 
                 other_goal_pos_buffer = torch.zeros((self.num_envs, 3), device=self.device, dtype=torch.float32)
                 teammate_buffer = torch.zeros((self.num_envs, 3), device=self.device, dtype=torch.float32)
@@ -299,7 +300,7 @@ class AnymalCGoToPointSoccerEnv(DirectMARLEnv):
                 obs_vec = torch.cat(
                     robot_state
                     + (
-                        ball_pos_buffer,  # Ball position in robot frame (3)
+                        go_to_point,  # go to point position in robot frame (3)
                         ball_vel_buffer,  # Ball velocity in robot frame (3)
                         target_goal_pos,  # Target goal position in robot frame (3)
                         other_goal_pos_buffer,  # other goal position in robot frame (3)

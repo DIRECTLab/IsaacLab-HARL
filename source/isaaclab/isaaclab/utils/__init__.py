@@ -44,8 +44,6 @@ HF_POLICY_MAP = {
         "trained": None,
     },
     "Anymal-C-Go-To-Point-Sumo": {"starting": None, "trained": "adversarial_policies/anymal_c_go_to_point_sumo"},
-    "AnymalC_Soccer_Go_To_Point_Stage_0": {"starting": None, "trained": "adversarial_policies/anymal_c_go_to_point_soccer"},
-    "AnymalC_Soccer_Stage2-v0": {"starting": "adversarial_policies/anymal_c_go_to_point_soccer", "trained": None},
     "Isaac-Multi-Agent-Flat-Anymal-C-Direct-v0": {
         "starting": "adversarial_policies/anymal_c_velocity_model",
         "trained": "adversarial_policies/bar_carrying_trained",
@@ -54,12 +52,13 @@ HF_POLICY_MAP = {
         "starting": "adversarial_policies/anymal_c_go_to_point_sumo",
         "trained": "adversarial_policies/anymal_push_blocks",
     },
-    "AnymalC_Soccer_Score_Goals_Stage_2": {
-        "starting": "adversarial_policies/anymal_c_go_to_point_soccer",
-        "trained": None,
-    },
+    "AnymalC_Soccer_Go_To_Point_Stage_0": {"starting": None, "trained": "adversarial_policies/anymal_c_go_to_point_soccer"},
     "AnymalC_Soccer_Go_To_Ball_Stage_1": {
         "starting": "adversarial_policies/anymal_c_go_to_point_soccer",
+        "trained": "adversarial_policies/anymal_c_go_to_ball",
+    },
+    "AnymalC_Soccer_Score_Goals_Stage_2": {
+        "starting": "adversarial_policies/anymal_c_go_to_ball",
         "trained": None,
     },
 }

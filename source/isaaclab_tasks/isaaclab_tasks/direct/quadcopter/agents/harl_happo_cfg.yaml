@@ -45,7 +45,7 @@ render:
 model:
   # network parameters
   # hidden sizes for mlp module in the network
-  hidden_sizes: [128, 128]
+  hidden_sizes: [32, 32]
   # activation function, choose from sigmoid, tanh, relu, leaky_relu, selu
   activation_func: relu
   # whether to use feature normalization
@@ -79,9 +79,9 @@ model:
 algo:
   # ppo parameters
   # number of epochs for actor update
-  ppo_epoch: 5
+  ppo_epoch: 10
   # number of epochs for critic update
-  critic_epoch: 5
+  critic_epoch: 10
   # whether to use clipped value loss
   use_clipped_value_loss: True
   # clip parameter

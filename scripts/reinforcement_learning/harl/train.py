@@ -28,6 +28,7 @@ parser.add_argument("--dir", type=str, default=None, help="folder with trained m
 parser.add_argument("--debug", action="store_true", help="whether to run in debug mode for visualization")
 parser.add_argument("--adversarial_training_mode", default="parallel", choices=["parallel", "ladder", "leapfrog"], help="the mode type for adversarial training")
 parser.add_argument("--adversarial_training_iterations", default=50_000_000, type=int,help="the number of iterations to swap training for adversarial modes like ladder and leapfrog")
+parser.add_argument("--network_base", type=str, default="mlp", choices=["mlp", "cnn", "snn", "snn_memory"], help="base network architecture")
 
 parser.add_argument(
     "--algorithm",
@@ -93,8 +94,13 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     algo_args["train"]["model_dir"] = args["dir"]
     algo_args["seed"]["specify_seed"] = True
     algo_args["seed"]["seed"] = args["seed"]
+    # algo_args["algo"]["ppo_epoch"] = 50
+    # algo_args["algo"]["critic_epoch"] = 50
     algo_args["algo"]["adversarial_training_mode"] = args["adversarial_training_mode"]
     algo_args["algo"]["adversarial_training_iterations"] = args["adversarial_training_iterations"]
+    algo_args["model"]["network_base"] = args.get("network_base", "mlp")
+    algo_args["model"]["hidden_sizes"] = [128, 128]
+    algo_args["model"]["snn_T"] = 10
 
     env_args = {}
     env_cfg.scene.num_envs = args["num_envs"]

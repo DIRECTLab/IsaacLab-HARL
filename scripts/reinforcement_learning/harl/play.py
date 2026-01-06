@@ -39,6 +39,7 @@ parser.add_argument("--seed", type=int, default=None, help="Seed used for the en
 parser.add_argument("--num_env_steps", type=int, default=None, help="RL Policy training iterations.")
 parser.add_argument("--dir", type=str, default=None, help="folder with trained models")
 parser.add_argument("--debug", action="store_true", help="whether to run in debug mode for visualization")
+parser.add_argument("--network_base", type=str, default="mlp", choices=["mlp", "cnn", "snn", "snn_memory"], help="base network architecture")
 
 # append AppLauncher cli args
 AppLauncher.add_app_launcher_args(parser)
@@ -76,6 +77,9 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     algo_args["eval"]["use_eval"] = False
     algo_args["render"]["use_render"] = True
     algo_args["train"]["model_dir"] = args["dir"]
+    algo_args["model"]["network_base"] = args.get("network_base", "mlp")
+    algo_args["model"]["hidden_sizes"] = [128, 128]
+    algo_args["model"]["snn_T"] = 5
 
     env_args = {}
     env_cfg.scene.num_envs = args["num_envs"]

@@ -59,7 +59,7 @@ HF_POLICY_MAP = {
     },
     "AnymalC_Soccer_Score_Goals_Stage_2": {
         "starting": "adversarial_policies/anymal_c_go_to_ball",
-        "trained": None,
+        "trained": "adversarial_policies/score_goals_policy",
     },
 }
 

@@ -61,6 +61,10 @@ HF_POLICY_MAP = {
         "starting": "adversarial_policies/anymal_c_go_to_ball",
         "trained": "adversarial_policies/score_goals_policy",
     },
+    "AnymalC_Soccer_Hetero_By_Team-v0": {
+        "starting": "adversarial_policies/anymals_vs_leatherback_start_policy_soccer",
+        "trained": None
+    }
 }
 
 def policies_summary(policy_map: dict) -> str:

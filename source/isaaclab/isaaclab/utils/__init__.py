@@ -36,7 +36,7 @@ HF_POLICY_MAP = {
     },
     "Sumo-Stage2-Hetero-v0": {
         "starting": "adversarial_policies/hetero_within_team_start_policies_sumo",
-        "trained": None,
+        "trained": "adversarial_policies/anymal_leatherback_hetero_in_team_sumo",
     },
     "Minitank-Adversarial-Direct-v0": {"starting": "adversarial_policies/3dg_model", "trained": None},
     "Isaac-Multi-Agent-Flat-Sumo-Stage1-Blocks-Push-v0": {

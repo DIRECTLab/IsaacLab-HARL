@@ -80,7 +80,7 @@ class EventCfg:
 
 
 @configclass
-class SumoStage1BlocksPushEnvCfg(DirectMARLEnvCfg):
+class AnymalCBlocksPushEnvCfg(DirectMARLEnvCfg):
     decimation = 4
     episode_length_s = 20.0
 
@@ -164,11 +164,11 @@ class SumoStage1BlocksPushEnvCfg(DirectMARLEnvCfg):
     )
 
 
-class SumoStage1BlocksPushEnv(DirectMARLEnv):
-    cfg: SumoStage1BlocksPushEnvCfg
+class AnymalCBlocksPushEnv(DirectMARLEnv):
+    cfg: AnymalCBlocksPushEnvCfg
 
     def __init__(
-        self, cfg: SumoStage1BlocksPushEnvCfg, render_mode: str | None = None, headless: bool | None = None, **kwargs
+        self, cfg: AnymalCBlocksPushEnvCfg, render_mode: str | None = None, headless: bool | None = None, **kwargs
     ):
         super().__init__(cfg, render_mode, **kwargs)
         self.headless = headless

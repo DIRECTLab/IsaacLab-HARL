@@ -11,8 +11,6 @@ import gymnasium as gym
 
 from . import agents
 from .leatherback import LeatherbackEnvCfg
-from .leatherback_soccer_stage_1 import LeatherbackStage1SoccerEnv, LeatherbackStage1SoccerEnvCfg
-from .leatherback_soccer_stage_2 import LeatherbackStage2AdversarialSoccerEnv, LeatherbackStage2AdversarialSoccerEnvCfg
 from .leatherback_sumo_ma_stage1 import LeatherbackSumoMAStage1Env, LeatherbackSumoMAStage1EnvCfg
 from .leatherback_sumo_ma_stage1_same_team import (
     LeatherbackSumoMAStage1SameTeamEnv,
@@ -101,18 +99,18 @@ gym.register(
     },
 )
 
-gym.register(
-    id="Leatherback-Stage1-Soccer-v0",
-    entry_point=LeatherbackStage1SoccerEnv,
-    disable_env_checker=True,
-    kwargs={
-        "env_cfg_entry_point": LeatherbackStage1SoccerEnvCfg,
-        "rl_games_cfg_entry_point": f"{agents.__name__}:rl_games_flat_ppo_cfg.yaml",
-        "rsl_rl_cfg_entry_point": f"{agents.__name__}.rsl_rl_ppo_cfg:AnymalCSoccerFlatPPORunnerCfg",
-        "skrl_cfg_entry_point": f"{agents.__name__}:skrl_flat_ppo_cfg.yaml",
-        "harl_happo_cfg_entry_point": f"{agents.__name__}:harl_happo_cfg.yaml",
-    },
-)
+# gym.register(
+#     id="Leatherback-Stage1-Soccer-v0",
+#     entry_point=LeatherbackStage1SoccerEnv,
+#     disable_env_checker=True,
+#     kwargs={
+#         "env_cfg_entry_point": LeatherbackStage1SoccerEnvCfg,
+#         "rl_games_cfg_entry_point": f"{agents.__name__}:rl_games_flat_ppo_cfg.yaml",
+#         "rsl_rl_cfg_entry_point": f"{agents.__name__}.rsl_rl_ppo_cfg:AnymalCSoccerFlatPPORunnerCfg",
+#         "skrl_cfg_entry_point": f"{agents.__name__}:skrl_flat_ppo_cfg.yaml",
+#         "harl_happo_cfg_entry_point": f"{agents.__name__}:harl_happo_cfg.yaml",
+#     },
+# )
 
 gym.register(
     id="Leatherback-Stage1-Soccer-v0-Same-Team",
@@ -128,16 +126,3 @@ gym.register(
     },
 )
 
-gym.register(
-    id="Leatherback-Stage2-Soccer-v0",
-    entry_point=LeatherbackStage2AdversarialSoccerEnv,
-    disable_env_checker=True,
-    kwargs={
-        "env_cfg_entry_point": LeatherbackStage2AdversarialSoccerEnvCfg,
-        "rl_games_cfg_entry_point": f"{agents.__name__}:rl_games_flat_ppo_cfg.yaml",
-        "rsl_rl_cfg_entry_point": f"{agents.__name__}.rsl_rl_ppo_cfg:AnymalCSoccerFlatPPORunnerCfg",
-        "skrl_cfg_entry_point": f"{agents.__name__}:skrl_flat_ppo_cfg.yaml",
-        "harl_happo_cfg_entry_point": f"{agents.__name__}:harl_happo_cfg.yaml",
-        "harl_happo_adv_cfg_entry_point": f"{agents.__name__}:harl_happo_adv_cfg.yaml",
-    },
-)

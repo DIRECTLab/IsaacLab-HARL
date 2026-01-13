@@ -11,7 +11,6 @@ import gymnasium as gym
 
 from . import agents
 from .minitank import MinitankEnv, MinitankEnvCfg
-from .minitank_adversarial import MinitankAdversarialEnv, MinitankAdversarialEnvCfg
 from .three_dim_gal import ThreeDimGalEnv, ThreeDimGalEnvCfg
 from .three_dim_gal_cameras import ThreeDimGalCamerasEnv, ThreeDimGalCamerasEnvCfg
 
@@ -45,16 +44,6 @@ gym.register(
 )
 
 
-gym.register(
-    id="Minitank-Adversarial-Direct-v0",
-    entry_point=MinitankAdversarialEnv,
-    disable_env_checker=True,
-    kwargs={
-        "env_cfg_entry_point": MinitankAdversarialEnvCfg,
-        "harl_happo_cfg_entry_point": f"{agents.__name__}:harl_happo_cfg.yaml",
-        "harl_happo_adv_cfg_entry_point": f"{agents.__name__}:harl_happo_adv_cfg.yaml",
-    },
-)
 
 
 gym.register(

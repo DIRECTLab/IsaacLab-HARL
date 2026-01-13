@@ -10,30 +10,18 @@ Ant locomotion environment.
 import gymnasium as gym
 
 from . import agents
-from .anymal_c_go_to_point_soccer import AnymalCGoToPointSoccerEnv, AnymalCGoToPointSoccerEnvCfg
+from ..adversarial.soccer.anymal_c.anymal_c_go_to_point_soccer import AnymalCGoToPointSoccerEnv, AnymalCGoToPointSoccerEnvCfg
 from .anymal_c_soccer_ma_homo import AnymalSoccerMAHomoEnv, AnymalSoccerMAHomoEnvCfg
 from .anymal_c_soccer_stage_1 import AnymalStage1SoccerEnv, AnymalStage1SoccerEnvCfg
 from .anymal_c_soccer_stage_2 import AnymalStage2SoccerEnv, AnymalStage2SoccerEnvCfg
 from .anymal_leatherback_on_each_team import AnymalSoccerHeteroInTeamEnv, AnymalSoccerHeteroInTeamEnvCfg
-from .anymals_vs_leatherbacks import AnymalSoccerHeteroByTeamEnv, AnymalSoccerHeteroByTeamEnvCfg
+from ..adversarial.soccer.heterogeneous.anymals_vs_leatherbacks import AnymalSoccerHeteroByTeamEnv, AnymalSoccerHeteroByTeamEnvCfg
 
 ##
 # Register Gym environments.
 ##
 
-gym.register(
-    id="AnymalC_Soccer_Go_To_Point_Stage_0",
-    entry_point=AnymalCGoToPointSoccerEnv,
-    disable_env_checker=True,
-    kwargs={
-        "env_cfg_entry_point": AnymalCGoToPointSoccerEnvCfg,
-        "rl_games_cfg_entry_point": f"{agents.__name__}:rl_games_flat_ppo_cfg.yaml",
-        "rsl_rl_cfg_entry_point": f"{agents.__name__}.rsl_rl_ppo_cfg:AnymalCSoccerFlatPPORunnerCfg",
-        "skrl_cfg_entry_point": f"{agents.__name__}:skrl_flat_ppo_cfg.yaml",
-        "harl_happo_cfg_entry_point": f"{agents.__name__}:harl_happo_cfg.yaml",
-        "harl_happo_adv_cfg_entry_point": f"{agents.__name__}:harl_happo_adv_cfg.yaml",
-    },
-)
+
 
 gym.register(
     id="AnymalC_Soccer_Go_To_Ball_Stage_1",
@@ -75,19 +63,7 @@ gym.register(
     },
 )
 
-gym.register(
-    id="AnymalC_Soccer_Hetero_By_Team-v0",
-    entry_point=AnymalSoccerHeteroByTeamEnv,
-    disable_env_checker=True,
-    kwargs={
-        "env_cfg_entry_point": AnymalSoccerHeteroByTeamEnvCfg,
-        "rl_games_cfg_entry_point": f"{agents.__name__}:rl_games_flat_ppo_cfg.yaml",
-        "rsl_rl_cfg_entry_point": f"{agents.__name__}.rsl_rl_ppo_cfg:AnymalCSoccerFlatPPORunnerCfg",
-        "skrl_cfg_entry_point": f"{agents.__name__}:skrl_flat_ppo_cfg.yaml",
-        "harl_happo_cfg_entry_point": f"{agents.__name__}:harl_happo_cfg.yaml",
-        "harl_happo_adv_cfg_entry_point": f"{agents.__name__}:harl_happo_adv_cfg.yaml",
-    },
-)
+
 
 gym.register(
     id="AnymalC_Soccer_Hetero_In_Team-v0",

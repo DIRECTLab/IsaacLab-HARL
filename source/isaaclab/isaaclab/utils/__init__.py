@@ -39,10 +39,6 @@ HF_POLICY_MAP = {
         "trained": "adversarial_policies/anymal_leatherback_hetero_in_team_sumo",
     },
     "Minitank-Adversarial-Direct-v0": {"starting": "adversarial_policies/3dg_model", "trained": None},
-    "Isaac-Multi-Agent-Flat-Sumo-Stage1-Blocks-Push-v0": {
-        "starting": "adversarial_policies/anymal_c_walk_to_point_policy",
-        "trained": None,
-    },
     "Anymal-C-Go-To-Point-Sumo": {"starting": None, "trained": "adversarial_policies/anymal_c_go_to_point_sumo"},
     "Isaac-Multi-Agent-Flat-Anymal-C-Direct-v0": {
         "starting": "adversarial_policies/anymal_c_velocity_model",
@@ -60,10 +56,6 @@ HF_POLICY_MAP = {
     "AnymalC_Soccer_Score_Goals_Stage_2": {
         "starting": "adversarial_policies/anymal_c_go_to_ball",
         "trained": "adversarial_policies/score_goals_policy",
-    },
-    "AnymalC_Soccer_Hetero_By_Team-v0": {
-        "starting": "adversarial_policies/anymals_vs_leatherback_start_policy_soccer",
-        "trained": None
     }
 }
 

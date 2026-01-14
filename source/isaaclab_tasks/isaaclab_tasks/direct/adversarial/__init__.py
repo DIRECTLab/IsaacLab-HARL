@@ -150,7 +150,7 @@ gym.register(
 )
 
 gym.register(
-    id="AnymalC-VS-Leatherback-Soccer-Stage1-v0",
+    id="AnymalC-VS-Leatherback-Soccer-v0",
     entry_point=AnymalVsLeatherbackSoccerEnv,
     disable_env_checker=True,
     kwargs={

@@ -61,7 +61,7 @@ HF_POLICY_MAP = {
         "starting": None,
         "trained": "adversarial_policies/leatherback_ma_push_blocks",
     },
-    "AnymalC-VS-Leatherback-Soccer-Stage1-v0": {
+    "AnymalC-VS-Leatherback-Soccer-v0": {
         "starting": "adversarial_policies/anymalc_vs_leatherback_start_policy_soccer",
         "trained": None,
     }

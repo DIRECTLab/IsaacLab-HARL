@@ -426,7 +426,7 @@ class AnymalVsLeatherbackSoccerEnv(DirectMARLEnv):
                         target_goal_pos,  # Target goal position in robot frame (3)
                         other_goal_pos,  # other goal position in robot frame (3)
                         teammate_pos_buf,  # Teammate position in robot frame (3)
-                        enemy_1_pos_buf,  # Enemy 0 position in robot frame (3)
+                        enemy_0_pos,  # Enemy 0 position in robot frame (3)
                         enemy_1_pos_buf,  # Enemy 1 position in robot frame (3)
                     ),
                     dim=-1,

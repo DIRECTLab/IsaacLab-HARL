@@ -28,7 +28,7 @@ def get_quaternion_tuple_from_xyz(x, y, z):
 
 
 @configclass
-class LeatherbackStage2AdversarialSoccerEnvCfg(DirectMARLEnvCfg):
+class LeatherbacksVSLeatherbacksSoccerEnvCfg(DirectMARLEnvCfg):
     decimation = 4
     episode_length_s = 30.0
     action_spaces = {f"robot_{i}": 2 for i in range(4)}
@@ -126,12 +126,12 @@ class LeatherbackStage2AdversarialSoccerEnvCfg(DirectMARLEnvCfg):
     dist_to_ball_reward_scale = 1.0
 
 
-class LeatherbackStage2AdversarialSoccerEnv(DirectMARLEnv):
-    cfg: LeatherbackStage2AdversarialSoccerEnvCfg
+class LeatherbacksVSLeatherbacksSoccerEnv(DirectMARLEnv):
+    cfg: LeatherbacksVSLeatherbacksSoccerEnvCfg
 
     def __init__(
         self,
-        cfg: LeatherbackStage2AdversarialSoccerEnvCfg,
+        cfg: LeatherbacksVSLeatherbacksSoccerEnvCfg,
         render_mode: str | None = None,
         headless: bool | None = None,
         **kwargs,

@@ -11,11 +11,12 @@ import gymnasium as gym
 
 from . import agents
 from .soccer.leatherback.leatherback_soccer_stage_1 import LeatherbackStage1SoccerEnv, LeatherbackStage1SoccerEnvCfg
-from .soccer.leatherback.leatherback_soccer_stage_2 import LeatherbackStage2AdversarialSoccerEnv, LeatherbackStage2AdversarialSoccerEnvCfg
+from .soccer.leatherback.leatherbacks_vs_leatherbacks import LeatherbacksVSLeatherbacksSoccerEnv, LeatherbacksVSLeatherbacksSoccerEnvCfg
 from .soccer.heterogeneous.anymals_vs_leatherbacks import AnymalSoccerHeteroByTeamEnv, AnymalSoccerHeteroByTeamEnvCfg
 from .soccer.anymal_c.anymal_c_go_to_point_soccer import AnymalCGoToPointSoccerEnv, AnymalCGoToPointSoccerEnvCfg
 from .soccer.anymal_c.anymal_c_soccer_stage_2 import AnymalStage2SoccerEnv, AnymalStage2SoccerEnvCfg
 from .soccer.anymal_c.anymal_c_soccer_stage_1 import AnymalStage1SoccerEnv, AnymalStage1SoccerEnvCfg
+from .soccer.heterogeneous.anymal_vs_leatherback import AnymalVsLeatherbackSoccerEnv, AnymalVsLeatherbackSoccerEnvCfg
 from .sumo.heterogeneous.sumo_stage_2_hetero_by_team import SumoStage2HeteroByTeamEnv, SumoStage2HeteroByTeamEnvCfg
 from .sumo.heterogeneous.sumo_stage_2_hetero_within_team import SumoStage2HeteroEnv, SumoStage2HeteroEnvCfg
 from .sumo.leatherback.leatherback_sumo_ma_stage1 import LeatherbackSumoMAStage1Env, LeatherbackSumoMAStage1EnvCfg
@@ -39,10 +40,10 @@ gym.register(
 
 gym.register(
     id="Leatherback-Stage2-Soccer-v0",
-    entry_point=LeatherbackStage2AdversarialSoccerEnv,
+    entry_point=LeatherbacksVSLeatherbacksSoccerEnv,
     disable_env_checker=True,
     kwargs={
-        "env_cfg_entry_point": LeatherbackStage2AdversarialSoccerEnvCfg,
+        "env_cfg_entry_point": LeatherbacksVSLeatherbacksSoccerEnvCfg,
         "harl_happo_cfg_entry_point": f"{agents.__name__}:harl_happo_cfg.yaml",
         "harl_happo_adv_cfg_entry_point": f"{agents.__name__}:harl_happo_adv_cfg.yaml",
     },
@@ -144,6 +145,16 @@ gym.register(
     disable_env_checker=True,
     kwargs={
         "env_cfg_entry_point": LeatherbackSumoMAStage1EnvCfg,
+        "harl_happo_adv_cfg_entry_point": f"{agents.__name__}:harl_happo_adv_cfg.yaml",
+    },
+)
+
+gym.register(
+    id="AnymalC-VS-Leatherback-Soccer-Stage1-v0",
+    entry_point=AnymalVsLeatherbackSoccerEnv,
+    disable_env_checker=True,
+    kwargs={
+        "env_cfg_entry_point": AnymalVsLeatherbackSoccerEnvCfg,
         "harl_happo_adv_cfg_entry_point": f"{agents.__name__}:harl_happo_adv_cfg.yaml",
     },
 )

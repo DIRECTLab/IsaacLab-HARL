@@ -11,14 +11,14 @@ import gymnasium as gym
 
 from . import agents
 from .leatherback import LeatherbackEnvCfg
-from .leatherback_sumo_ma_stage1 import LeatherbackSumoMAStage1Env, LeatherbackSumoMAStage1EnvCfg
+from ..adversarial.sumo.leatherback.leatherback_sumo_ma_stage1 import LeatherbackSumoMAStage1Env, LeatherbackSumoMAStage1EnvCfg
 from .leatherback_sumo_ma_stage1_same_team import (
     LeatherbackSumoMAStage1SameTeamEnv,
     LeatherbackSumoMAStage1SameTeamEnvCfg,
 )
 from .leatherback_sumo_ma_stage2 import LeatherbackSumoMAStage2Env, LeatherbackSumoMAStage2EnvCfg
-from .leatherback_sumo_stage1 import LeatherbackSumoStage1Env, LeatherbackSumoStage1EnvCfg
-from .leatherback_sumo_stage2 import LeatherbackSumoStage2Env, LeatherbackSumoStage2EnvCfg
+from .leatherback_vs_leatherback_sumo_stage_1 import LeatherbackVSLeatherbackSumoStage1Env, LeatherbackVSLeatherbackSumoStage1EnvCfg
+from .leatherback_vs_leatherback_sumo_stage_2 import LeatherbackVSLeatherbackSumoStage2Env, LeatherbackVSLeatherbackSumoStage2EnvCfg
 
 ##
 # Register Gym environments.
@@ -39,11 +39,11 @@ gym.register(
 )
 
 gym.register(
-    id="leatherback-Sumo-Direct-Stage1-v0",
-    entry_point=LeatherbackSumoStage1Env,
+    id="leatherback-vs-leatherback-Sumo-Direct-Stage1-v0",
+    entry_point=LeatherbackVSLeatherbackSumoStage1Env,
     disable_env_checker=True,
     kwargs={
-        "env_cfg_entry_point": LeatherbackSumoStage1EnvCfg,
+        "env_cfg_entry_point": LeatherbackVSLeatherbackSumoStage1EnvCfg,
         "rl_games_cfg_entry_point": f"{agents.__name__}:rl_games_flat_ppo_cfg.yaml",
         "rsl_rl_cfg_entry_point": f"{agents.__name__}.rsl_rl_ppo_cfg:AnymalCFlatPPORunnerCfg",
         "skrl_cfg_entry_point": f"{agents.__name__}:skrl_flat_ppo_cfg.yaml",
@@ -54,11 +54,11 @@ gym.register(
 )
 
 gym.register(
-    id="leatherback-Sumo-Direct-Stage2-v0",
-    entry_point=LeatherbackSumoStage2Env,
+    id="leatherback-vs-leatherback-Sumo-Direct-Stage2-v0",
+    entry_point=LeatherbackVSLeatherbackSumoStage2Env,
     disable_env_checker=True,
     kwargs={
-        "env_cfg_entry_point": LeatherbackSumoStage2EnvCfg,
+        "env_cfg_entry_point": LeatherbackVSLeatherbackSumoStage2EnvCfg,
         "rl_games_cfg_entry_point": f"{agents.__name__}:rl_games_flat_ppo_cfg.yaml",
         "rsl_rl_cfg_entry_point": f"{agents.__name__}.rsl_rl_ppo_cfg:AnymalCFlatPPORunnerCfg",
         "skrl_cfg_entry_point": f"{agents.__name__}:skrl_flat_ppo_cfg.yaml",
@@ -69,20 +69,6 @@ gym.register(
 )
 
 
-gym.register(
-    id="leatherback-Sumo-Direct-MA-Stage1-v0",
-    entry_point=LeatherbackSumoMAStage1Env,
-    disable_env_checker=True,
-    kwargs={
-        "env_cfg_entry_point": LeatherbackSumoMAStage1EnvCfg,
-        "rl_games_cfg_entry_point": f"{agents.__name__}:rl_games_flat_ppo_cfg.yaml",
-        "rsl_rl_cfg_entry_point": f"{agents.__name__}.rsl_rl_ppo_cfg:AnymalCFlatPPORunnerCfg",
-        "skrl_cfg_entry_point": f"{agents.__name__}:skrl_flat_ppo_cfg.yaml",
-        "harl_happo_adv_cfg_entry_point": f"{agents.__name__}:harl_happo_adv_cfg.yaml",
-        "harl_happo_cfg_entry_point": f"{agents.__name__}:harl_happo_cfg.yaml",
-        "harl_mappo_cfg_entry_point": f"{agents.__name__}:harl_mappo_cfg.yaml",
-    },
-)
 
 gym.register(
     id="leatherback-Sumo-Direct-MA-Stage2-v0",

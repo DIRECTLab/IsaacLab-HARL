@@ -26,7 +26,7 @@ def get_quaternion_tuple_from_xyz(x, y, z):
 
 
 @configclass
-class LeatherbackSumoStage2EnvCfg(DirectMARLEnvCfg):
+class LeatherbackVSLeatherbackSumoStage2EnvCfg(DirectMARLEnvCfg):
     decimation = 4
     episode_length_s = 30.0
     action_spaces = {f"robot_{i}": 2 for i in range(2)}
@@ -74,11 +74,11 @@ class LeatherbackSumoStage2EnvCfg(DirectMARLEnvCfg):
     time_penalty = -0.01
 
 
-class LeatherbackSumoStage2Env(DirectMARLEnv):
-    cfg: LeatherbackSumoStage2EnvCfg
+class LeatherbackVSLeatherbackSumoStage2Env(DirectMARLEnv):
+    cfg: LeatherbackVSLeatherbackSumoStage2EnvCfg
 
     def __init__(
-        self, cfg: LeatherbackSumoStage2EnvCfg, render_mode: str | None = None, headless: bool | None = None, **kwargs
+        self, cfg: LeatherbackVSLeatherbackSumoStage2EnvCfg, render_mode: str | None = None, headless: bool | None = None, **kwargs
     ):
         super().__init__(cfg, render_mode, **kwargs)
         self.headless = headless

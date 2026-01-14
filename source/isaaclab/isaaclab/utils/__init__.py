@@ -56,6 +56,10 @@ HF_POLICY_MAP = {
     "AnymalC_Soccer_Score_Goals_Stage_2": {
         "starting": "adversarial_policies/anymal_c_go_to_ball",
         "trained": "adversarial_policies/score_goals_policy",
+    },
+    "leatherback-Sumo-Direct-MA-Stage1-v0": {
+        "starting": None,
+        "trained": "adversarial_policies/leatherback_ma_push_blocks",
     }
 }
 

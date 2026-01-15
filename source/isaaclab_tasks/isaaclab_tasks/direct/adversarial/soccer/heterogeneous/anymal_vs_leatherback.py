@@ -445,11 +445,11 @@ class AnymalVsLeatherbackSoccerEnv(DirectMARLEnv):
         time_step_reward = -0.01 * torch.ones(self.num_envs, device=self.device)
 
         # Distances to opponent’s goal
-        team_0_ball_distance_to_goal = torch.linalg.norm(self.ball.data.root_pos_w - self.goal0_pos, dim=1)
-        team_0_ball_distance_to_goal_mapped = 1 - torch.tanh(team_0_ball_distance_to_goal / 0.8)
+        # team_0_ball_distance_to_goal = torch.linalg.norm(self.ball.data.root_pos_w - self.goal0_pos, dim=1)
+        # team_0_ball_distance_to_goal_mapped = 1 - torch.tanh(team_0_ball_distance_to_goal / 0.8)
 
-        team_1_ball_distance_to_goal = torch.linalg.norm(self.ball.data.root_pos_w - self.goal0_pos, dim=1)
-        team_1_ball_distance_to_goal_mapped = 1 - torch.tanh(team_1_ball_distance_to_goal / 0.8)
+        # team_1_ball_distance_to_goal = torch.linalg.norm(self.ball.data.root_pos_w - self.goal0_pos, dim=1)
+        # team_1_ball_distance_to_goal_mapped = 1 - torch.tanh(team_1_ball_distance_to_goal / 0.8)
 
         # Score rewards
         team_0_score_reward = (
@@ -462,7 +462,7 @@ class AnymalVsLeatherbackSoccerEnv(DirectMARLEnv):
         # Team 0 rewards
         reward_team_0 = {
             "team_0_score_reward": team_0_score_reward,
-            "team_0_ball_to_goal_reward": team_0_ball_distance_to_goal_mapped,
+            # "team_0_ball_to_goal_reward": team_0_ball_distance_to_goal_mapped,
             "team_0_timestep_reward": time_step_reward,
         }
         reward_team_0 = {k: torch.nan_to_num(v, nan=0.0, posinf=1e6, neginf=-1e6) for k, v in reward_team_0.items()}
@@ -475,7 +475,7 @@ class AnymalVsLeatherbackSoccerEnv(DirectMARLEnv):
         # Team 1 rewards
         reward_team_1 = {
             "team_1_score_reward": team_1_score_reward,
-            "team_1_ball_to_goal_reward": team_1_ball_distance_to_goal_mapped,
+            # "team_1_ball_to_goal_reward": team_1_ball_distance_to_goal_mapped,
             "team_1_timestep_reward": time_step_reward,
         }
         reward_team_1 = {k: torch.nan_to_num(v, nan=0.0, posinf=1e6, neginf=-1e6) for k, v in reward_team_1.items()}

@@ -5,21 +5,17 @@
 
 """Configuration for the leatherback robot."""
 
-import os
-
+import isaaclab
 import isaaclab.sim as sim_utils
 from isaaclab.actuators import ImplicitActuatorCfg
 from isaaclab.assets import ArticulationCfg
+from pathlib import Path
 
-# Get absolute path to workspace root
-WORKSPACE_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__)))
-
-# USD path with proper resolution for cross-platform compatibility
-USD_PATH = os.path.join(WORKSPACE_ROOT, "custom_assets", "leatherback_simple_better.usd")
+isaaclab_asset_path = Path(Path(isaaclab.__path__[0]).parent.parent, "isaaclab_assets", "isaaclab_assets", "custom", "assets")
 
 LEATHERBACK_CFG = ArticulationCfg(
     spawn=sim_utils.UsdFileCfg(
-        usd_path=USD_PATH,
+        usd_path=str(Path(isaaclab_asset_path, "leatherback_simple_better.usd")),
         rigid_props=sim_utils.RigidBodyPropertiesCfg(
             rigid_body_enabled=True,
             max_linear_velocity=1000.0,

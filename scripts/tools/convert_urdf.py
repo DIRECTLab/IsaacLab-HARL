@@ -26,6 +26,7 @@ optional arguments:
   --joint-stiffness         The stiffness of the joint drive. (default: 100.0)
   --joint-damping           The damping of the joint drive. (default: 1.0)
   --joint-target-type       The type of control to use for the joint drive. (default: "position")
+  --root-link-name          The link on which the PhysX articulation root is placed.
 
 """
 
@@ -64,6 +65,12 @@ parser.add_argument(
     default="position",
     choices=["position", "velocity", "none"],
     help="The type of control to use for the joint drive.",
+)
+parser.add_argument(
+    "--root-link-name",
+    type=str,
+    default="base_link",
+    help="The link on which the PhysX articulation root is placed."
 )
 
 # append AppLauncher cli args
@@ -107,6 +114,7 @@ def main():
         usd_dir=os.path.dirname(dest_path),
         usd_file_name=os.path.basename(dest_path),
         fix_base=args_cli.fix_base,
+        root_link_name=args_cli.root_link_name,
         merge_fixed_joints=args_cli.merge_joints,
         force_usd_conversion=True,
         joint_drive=UrdfConverterCfg.JointDriveCfg(

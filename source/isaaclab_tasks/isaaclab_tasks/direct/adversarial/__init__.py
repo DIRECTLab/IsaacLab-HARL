@@ -13,6 +13,7 @@ from . import agents
 from .soccer.leatherback.leatherback_soccer_stage_1 import LeatherbackStage1SoccerEnv, LeatherbackStage1SoccerEnvCfg
 from .soccer.leatherback.leatherbacks_vs_leatherbacks import LeatherbacksVSLeatherbacksSoccerEnv, LeatherbacksVSLeatherbacksSoccerEnvCfg
 from .soccer.heterogeneous.anymals_vs_leatherbacks import AnymalSoccerHeteroByTeamEnv, AnymalSoccerHeteroByTeamEnvCfg
+from .soccer.heterogeneous.go2_vs_leatherbacks import go2SoccerHeteroByTeamEnv, go2SoccerHeteroByTeamEnvCfg
 from .soccer.anymal_c.anymal_c_go_to_point_soccer import AnymalCGoToPointSoccerEnv, AnymalCGoToPointSoccerEnvCfg
 from .soccer.anymal_c.anymal_c_soccer_stage_2 import AnymalStage2SoccerEnv, AnymalStage2SoccerEnvCfg
 from .soccer.anymal_c.anymal_c_soccer_stage_1 import AnymalStage1SoccerEnv, AnymalStage1SoccerEnvCfg
@@ -23,7 +24,6 @@ from .sumo.leatherback.leatherback_sumo_ma_stage1 import LeatherbackSumoMAStage1
 from .sumo.anymal_c.anymal_c_go_to_point_sumo import AnymalCGoToPointSumo, AnymalCGoToPointSumoCfg
 from .minitank_drone.heterogeneous.minitank_adversarial import MinitankAdversarialEnv, MinitankAdversarialEnvCfg
 from .sumo.anymal_c.sumo_stage_1_blocks_push import AnymalCBlocksPushEnv, AnymalCBlocksPushEnvCfg
-
 ##
 # Register Gym environments.
 ##
@@ -35,6 +35,7 @@ gym.register(
     kwargs={
         "env_cfg_entry_point": LeatherbackStage1SoccerEnvCfg,
         "harl_happo_cfg_entry_point": f"{agents.__name__}:harl_happo_cfg.yaml",
+        "harl_happo_adv_cfg_entry_point": f"{agents.__name__}:harl_happo_adv_cfg.yaml",
     },
 )
 
@@ -55,6 +56,16 @@ gym.register(
     disable_env_checker=True,
     kwargs={
         "env_cfg_entry_point": AnymalSoccerHeteroByTeamEnvCfg,
+        "harl_happo_adv_cfg_entry_point": f"{agents.__name__}:harl_happo_adv_cfg.yaml",
+    },
+)
+
+gym.register(
+    id="go2_Soccer_Hetero_By_Team-v0",
+    entry_point=go2SoccerHeteroByTeamEnv,
+    disable_env_checker=True,
+    kwargs={
+        "env_cfg_entry_point": go2SoccerHeteroByTeamEnvCfg,
         "harl_happo_adv_cfg_entry_point": f"{agents.__name__}:harl_happo_adv_cfg.yaml",
     },
 )

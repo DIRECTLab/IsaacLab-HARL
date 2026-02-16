@@ -25,6 +25,7 @@ from isaaclab.utils.math import quat_from_euler_xyz, quat_rotate_inverse, subtra
 from isaaclab_assets.robots.leatherback import LEATHERBACK_CFG  # isort: skip
 from isaaclab_assets.robots.unitree import UNITREE_GO2_CFG  # isort: skip
 from isaaclab_assets.custom.soccer_ball import SOCCERBALL_CFG  # isort: skip
+from isaaclab_assets.robots.quadcopter import CRAZYFLIE_CFG  # isort: skip
 
 
 def get_quaternion_tuple_from_xyz(x, y, z):
@@ -88,17 +89,19 @@ class go2SoccerHeteroByTeamEnvCfg(DirectMARLEnvCfg):
     action_scale = 0.5
     go2_action_spaces = {f"go2_{i}": 12 for i in range(2)}
     leatherback_action_spaces = {f"leatherback_{i}": 2 for i in range(2)}
-    action_spaces = go2_action_spaces | leatherback_action_spaces
+    crazyflie_action_spaces = {f"crazyflie_{i}": 4 for i in range(2)}
+    action_spaces = go2_action_spaces | leatherback_action_spaces | crazyflie_action_spaces
     go2_observation_spaces = {f"go2_{i}": 66 for i in range(2)}
     leatherback_observation_spaces = {f"leatherback_{i}": 24 for i in range(2)}
-    observation_spaces = go2_observation_spaces | leatherback_observation_spaces
+    crazyflie_observation_spaces = {f"crazyflie_{i}": 34 for i in range(2)}
+    observation_spaces = go2_observation_spaces | leatherback_observation_spaces | crazyflie_observation_spaces
     state_space = 0
     state_spaces = {robot: 0 for robot in observation_spaces.keys()}
-    possible_agents = ["go2_0", "go2_1", "leatherback_0", "leatherback_1"]
+    possible_agents = ["go2_0", "go2_1", "leatherback_0", "leatherback_1", "crazyflie_0", "crazyflie_1"]
 
     teams = {
-        "team_0": ["go2_0", "go2_1"],
-        "team_1": ["leatherback_0", "leatherback_1"],
+        "team_0": ["go2_0", "go2_1", "crazyflie_0"],
+        "team_1": ["leatherback_0", "leatherback_1", "crazyflie_1"],
     }
 
     sim: SimulationCfg = SimulationCfg(dt=1 / 200, render_interval=decimation)
@@ -118,6 +121,12 @@ class go2SoccerHeteroByTeamEnvCfg(DirectMARLEnvCfg):
     leatherback_1: ArticulationCfg = LEATHERBACK_CFG.replace(prim_path="/World/envs/env_.*/Leatherback_1")
     leatherback_1.init_state.rot = get_quaternion_tuple_from_xyz(0, 0, torch.pi)
     leatherback_1.init_state.pos = (0, 0, 0.3)
+
+    crazyflie_0: ArticulationCfg = CRAZYFLIE_CFG.replace(prim_path="/World/envs/env_.*/Crazyflie_0")
+    crazyflie_0.init_state.pos = (0, 0, 2.0)
+
+    crazyflie_1: ArticulationCfg = CRAZYFLIE_CFG.replace(prim_path="/World/envs/env_.*/Crazyflie_1")
+    crazyflie_1.init_state.pos = (0, 0, 2.0)
 
     wall_0 = RigidObjectCfg(
         prim_path="/World/envs/env_.*/Object0",
@@ -186,6 +195,9 @@ class go2SoccerHeteroByTeamEnvCfg(DirectMARLEnvCfg):
     steering_scale = 0.1
     steering_max = 0.75
 
+    thrust_to_weight = 1.9
+    moment_scale = 0.01
+
     env_spacing = 20.0
     scene: InteractiveSceneCfg = InteractiveSceneCfg(num_envs=4096, env_spacing=env_spacing, replicate_physics=True)
     viewer = ViewerCfg(eye=(10.0, 10.0, 10.0), env_index=0, origin_type="env")
@@ -210,6 +222,19 @@ class go2SoccerHeteroByTeamEnv(DirectMARLEnv):
 
         self._throttle_dof_idx, _ = self.robots["leatherback_0"].find_joints(self.cfg.throttle_dof_name)
         self._steering_dof_idx, _ = self.robots["leatherback_0"].find_joints(self.cfg.steering_dof_name)
+
+        self.crazyflies = {robot_id: self.robots[robot_id] for robot_id in self.robots if "crazyflie" in robot_id}
+        self._crazyflie_body_ids = {}
+        self._crazyflie_weight = {}
+        self._crazyflie_thrust = {}
+        self._crazyflie_moment = {}
+        self._gravity_magnitude = torch.tensor(self.sim.cfg.gravity, device=self.device).norm()
+        for robot_id, robot in self.crazyflies.items():
+            self._crazyflie_body_ids[robot_id] = robot.find_bodies("body")[0]
+            crazyflie_mass = robot.root_physx_view.get_masses()[0].sum()
+            self._crazyflie_weight[robot_id] = (crazyflie_mass * self._gravity_magnitude).item()
+            self._crazyflie_thrust[robot_id] = torch.zeros(self.num_envs, 1, 3, device=self.device)
+            self._crazyflie_moment[robot_id] = torch.zeros(self.num_envs, 1, 3, device=self.device)
 
         self._throttle_state = {
             robot_id: torch.zeros((self.num_envs, 4), device=self.device, dtype=torch.float32)
@@ -299,6 +324,7 @@ class go2SoccerHeteroByTeamEnv(DirectMARLEnv):
         self.robots = {}
         self.go2s = {}
         self.leatherbacks = {}
+        self.crazyflies = {}
         self.num_robots = len(self.cfg.possible_agents)
         for agent_id in self.cfg.possible_agents:
             self.robots[agent_id] = Articulation(self.cfg.__dict__[agent_id])
@@ -307,6 +333,8 @@ class go2SoccerHeteroByTeamEnv(DirectMARLEnv):
                 self.go2s[agent_id] = self.robots[agent_id]
             elif "leatherback" in agent_id:
                 self.leatherbacks[agent_id] = self.robots[agent_id]
+            elif "crazyflie" in agent_id:
+                self.crazyflies[agent_id] = self.robots[agent_id]
 
         self.scene.clone_environments(copy_from_source=False)
         self.scene.filter_collisions(global_prim_paths=[])
@@ -361,6 +389,16 @@ class go2SoccerHeteroByTeamEnv(DirectMARLEnv):
             self._steering_action = torch.clamp(self._steering_action, -self.cfg.steering_max, self.cfg.steering_max)
             self._steering_state[robot_id] = self._steering_action
 
+        for robot_id in self.crazyflies.keys():
+            crazyflie_actions = actions[robot_id].clamp(-1.0, 1.0)
+            self._crazyflie_thrust[robot_id][:, 0, 2] = (
+                self.cfg.thrust_to_weight
+                * self._crazyflie_weight[robot_id]
+                * (crazyflie_actions[:, 0] + 1.0)
+                / 2.0
+            )
+            self._crazyflie_moment[robot_id][:, 0, :] = self.cfg.moment_scale * crazyflie_actions[:, 1:]
+
         self.processed_actions = {}
         self.actions = copy.deepcopy(actions)
         for robot_id, robot in self.go2s.items():
@@ -371,6 +409,13 @@ class go2SoccerHeteroByTeamEnv(DirectMARLEnv):
         for robot_id, robot in self.leatherbacks.items():
             robot.set_joint_velocity_target(self._throttle_state[robot_id], joint_ids=self._throttle_dof_idx)
             robot.set_joint_position_target(self._steering_state[robot_id], joint_ids=self._steering_dof_idx)
+
+        for robot_id, robot in self.crazyflies.items():
+            robot.set_external_force_and_torque(
+                self._crazyflie_thrust[robot_id],
+                self._crazyflie_moment[robot_id],
+                body_ids=self._crazyflie_body_ids[robot_id],
+            )
 
         for robot_id, robot in self.go2s.items():
             robot.set_joint_position_target(self.processed_actions[robot_id])
@@ -389,8 +434,15 @@ class go2SoccerHeteroByTeamEnv(DirectMARLEnv):
                         self.robots[robot_id].data.joint_vel,
                         self.actions[robot_id],
                     )
-                else:
+                elif robot_id in self.leatherbacks.keys():
                     robot_state = (self.robots[robot_id].data.root_lin_vel_b,)
+                else:
+                    robot_state = (
+                        self.robots[robot_id].data.root_lin_vel_b,
+                        self.robots[robot_id].data.root_ang_vel_b,
+                        self.robots[robot_id].data.projected_gravity_b,
+                        self.actions[robot_id],
+                    )
 
                 ball_pos, _ = subtract_frame_transforms(
                     self.robots[robot_id].data.root_state_w[:, :3],
@@ -416,24 +468,38 @@ class go2SoccerHeteroByTeamEnv(DirectMARLEnv):
                     self.goal0_pos if team == "team_0" else self.goal1_pos,
                 )
 
+                teammate_ids = [agent_id for agent_id in self.cfg.teams[team] if agent_id != robot_id]
+                teammate_world_pos = torch.stack([self.robots[agent_id].data.root_pos_w for agent_id in teammate_ids])
+                teammate_world_pos = torch.mean(teammate_world_pos, dim=0)
                 teammate_pos, _ = subtract_frame_transforms(
                     self.robots[robot_id].data.root_state_w[:, :3],
                     self.robots[robot_id].data.root_state_w[:, 3:7],
-                    self.robots[
-                        self.cfg.teams[team][1] if robot_id == self.cfg.teams[team][0] else self.cfg.teams[team][0]
-                    ].data.root_pos_w,
+                    teammate_world_pos,
                 )
 
-                enemy_0_pos, _ = subtract_frame_transforms(
-                    self.robots[robot_id].data.root_state_w[:, :3],
-                    self.robots[robot_id].data.root_state_w[:, 3:7],
-                    self.robots[self.cfg.teams["team_1" if team == "team_0" else "team_0"][0]].data.root_pos_w,
-                )
-                enemy_1_pos, _ = subtract_frame_transforms(
-                    self.robots[robot_id].data.root_state_w[:, :3],
-                    self.robots[robot_id].data.root_state_w[:, 3:7],
-                    self.robots[self.cfg.teams["team_1" if team == "team_0" else "team_0"][1]].data.root_pos_w,
-                )
+                enemy_team = "team_1" if team == "team_0" else "team_0"
+                enemy_ids = self.cfg.teams[enemy_team]
+                enemy_rel_positions = []
+                for enemy_id in enemy_ids:
+                    enemy_pos, _ = subtract_frame_transforms(
+                        self.robots[robot_id].data.root_state_w[:, :3],
+                        self.robots[robot_id].data.root_state_w[:, 3:7],
+                        self.robots[enemy_id].data.root_pos_w,
+                    )
+                    enemy_rel_positions.append(enemy_pos)
+
+                enemy_rel_positions = torch.stack(enemy_rel_positions, dim=1)
+                enemy_dists = torch.linalg.norm(enemy_rel_positions, dim=2)
+                nearest_count = min(2, enemy_rel_positions.shape[1])
+                nearest_idx = torch.topk(enemy_dists, k=nearest_count, largest=False).indices
+                gather_idx = nearest_idx.unsqueeze(-1).expand(-1, -1, 3)
+                nearest_enemies = torch.gather(enemy_rel_positions, 1, gather_idx)
+                if nearest_count == 1:
+                    enemy_0_pos = nearest_enemies[:, 0]
+                    enemy_1_pos = torch.zeros_like(enemy_0_pos)
+                else:
+                    enemy_0_pos = nearest_enemies[:, 0]
+                    enemy_1_pos = nearest_enemies[:, 1]
 
                 # buf0 = torch.zeros((self.num_envs, 9), device = self.device)
 

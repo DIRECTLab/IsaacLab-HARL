@@ -119,7 +119,7 @@ def benchmark_environment(env_name: str, num_envs: int, algorithm: str = "happo"
 def main():
     # Configuration
     test_envs = get_test_environments()
-    num_envs_list = [100, 1000, 5000]
+    num_envs_list = [100, 1000, 2000, 5000, 10000]
     num_steps = 500  # Steps per benchmark (enough to get stable FPS)
     
     # Results storage

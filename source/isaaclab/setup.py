@@ -39,7 +39,7 @@ INSTALL_REQUIRES = [
     "pillow==11.0.0",
     # livestream
     "starlette==0.46.0",
-    "flatdict==4.0.1",
+    # "flatdict==4.0.1",
 ]
 
 # Additional dependencies that are only available on Linux platforms

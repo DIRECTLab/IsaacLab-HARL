@@ -19,49 +19,72 @@ HF_REPO_ID = "isaacwilliam4/isaaclab-harl-dataset"
 
 HF_POLICY_MAP = {
     "Leatherback-Stage1-Soccer-v0": {
+        "algorithm": "happo",
         "starting": None,
         "trained": "adversarial_policies/policy_for_sa_score_goal_leatherback",
     },
     "Leatherback-Stage2-Soccer-v0": {
+        "algorithm": "happo_adv",
         "starting": "adversarial_policies/stage_2_leatherback_start_policy_soccer",
         "trained": "adversarial_policies/trained_vs_trained_soccer_leatherback",
     },
     "AnymalC_Soccer_Hetero_By_Team-v0": {
+        "algorithm": "happo_adv",
         "starting": "adversarial_policies/anymals_vs_leatherback_start_policy_soccer",
         "trained": None,
     },
     "Sumo-Stage2-Hetero-By-Team-v0": {
+        "algorithm": "happo_adv",
         "starting": "adversarial_policies/hetero_by_team_start_policies_sumo",
         "trained": None,
     },
     "Sumo-Stage2-Hetero-v0": {
+        "algorithm": "happo_adv",
         "starting": "adversarial_policies/hetero_within_team_start_policies_sumo",
         "trained": "adversarial_policies/anymal_leatherback_hetero_in_team_sumo",
     },
-    "Minitank-Adversarial-Direct-v0": {"starting": "adversarial_policies/3dg_model", "trained": None},
-    "Anymal-C-Go-To-Point-Sumo": {"starting": None, "trained": "adversarial_policies/anymal_c_go_to_point_sumo"},
+    "Minitank-Adversarial-Direct-v0": {
+        "algorithm": "happo_adv",
+        "starting": "adversarial_policies/3dg_model",
+        "trained": None,
+    },
+    "Anymal-C-Go-To-Point-Sumo": {
+        "algorithm": "happo_adv",
+        "starting": None,
+        "trained": "adversarial_policies/anymal_c_go_to_point_sumo",
+    },
     "Isaac-Multi-Agent-Flat-Anymal-C-Direct-v0": {
+        "algorithm": "happo",
         "starting": "adversarial_policies/anymal_c_velocity_model",
         "trained": "adversarial_policies/bar_carrying_trained",
     },
     "Anymal-C-Sumo-Stage1-Blocks-Push-v0": {
+        "algorithm": "happo_adv",
         "starting": "adversarial_policies/anymal_c_go_to_point_sumo",
         "trained": "adversarial_policies/anymal_push_blocks",
     },
-    "AnymalC_Soccer_Go_To_Point_Stage_0": {"starting": None, "trained": "adversarial_policies/anymal_c_go_to_point_soccer"},
+    "AnymalC_Soccer_Go_To_Point_Stage_0": {
+        "algorithm": "happo_adv",
+        "starting": None,
+        "trained": "adversarial_policies/anymal_c_go_to_point_soccer",
+    },
     "AnymalC_Soccer_Go_To_Ball_Stage_1": {
+        "algorithm": "happo",
         "starting": "adversarial_policies/anymal_c_go_to_point_soccer",
         "trained": "adversarial_policies/anymal_c_go_to_ball",
     },
     "AnymalC_Soccer_Score_Goals_Stage_2": {
+        "algorithm": "happo",
         "starting": "adversarial_policies/anymal_c_go_to_ball",
         "trained": "adversarial_policies/score_goals_policy",
     },
     "leatherback-Sumo-Direct-MA-Stage1-v0": {
+        "algorithm": "happo_adv",
         "starting": None,
         "trained": "adversarial_policies/leatherback_ma_push_blocks",
     },
     "AnymalC-VS-Leatherback-Soccer-v0": {
+        "algorithm": "happo_adv",
         "starting": "adversarial_policies/anymalc_vs_leatherback_start_policy_soccer",
         "trained": None,
     }

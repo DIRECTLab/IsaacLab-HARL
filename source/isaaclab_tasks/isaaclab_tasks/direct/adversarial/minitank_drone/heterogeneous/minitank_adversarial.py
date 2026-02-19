@@ -135,6 +135,8 @@ class MinitankAdversarialEnvCfg(DirectMARLEnvCfg):
     action_scale = 0.5
     max_vel = 100
     # MINITANKAdversarial CONFIGURATION #
+    # minimum radians that must be achieved between the arm of the minitankAdversarial and the drone for the minitankAdversarial to be considered as having "captured" the drone
+    min_rad_for_capture = 0.05 # 2.8 degrees
 
     # CRAZYFLIE CONFIGURATION #
     robot_1: ArticulationCfg = CRAZYFLIE_CFG.replace(prim_path="/World/envs/env_.*/Robot_1")
@@ -149,6 +151,8 @@ class MinitankAdversarialEnvCfg(DirectMARLEnvCfg):
     distance_to_goal_reward_scale = 15.0
     debug_vis = True
     # CRAZYFLIE CONFIGURATION #
+    # the minimum distance the drone must be from the goal for the drone to be considered as having "reached" the goal
+    min_dist_to_goal = 0.2
 
 
 def define_markers() -> VisualizationMarkers:
@@ -166,7 +170,7 @@ def define_markers() -> VisualizationMarkers:
                 visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(0.0, 0.8, 0.0)),
             ),
             "sphere1": sim_utils.SphereCfg(
-                radius=0.1,
+                radius=0.01,
                 visual_material=sim_utils.PreviewSurfaceCfg(
                     diffuse_color=(0.0, 1.0, 1.0),
                 ),
@@ -203,16 +207,6 @@ class MinitankAdversarialEnv(DirectMARLEnv):
             for agent, action_space in self.cfg.action_spaces.items()
         }
         self._drone_desired_pos_w = torch.zeros((self.num_envs, 3), device=self.device)
-
-        self._episode_sums = {
-            key: torch.zeros(self.num_envs, dtype=torch.float, device=self.device)
-            for key in [
-                "lin_vel",
-                "ang_vel",
-                "distance_to_goal",
-                "tank_angle_reward",
-            ]
-        }
 
         if not self.headless:
             self.my_visualizer = define_markers()
@@ -291,9 +285,9 @@ class MinitankAdversarialEnv(DirectMARLEnv):
         base_pos = base_pos + base_pos_offset
 
         # if the target is the drone
-        # diff = self.robots["robot_1"].data.root_pos_w - arm_pos
+        diff = self.robots["robot_1"].data.root_pos_w - arm_pos
         # if the target is the sphere
-        diff = self._drone_desired_pos_w - arm_pos
+        # diff = self._drone_desired_pos_w - arm_pos
         arm_diff = arm_pos - base_pos
         arm_direction = arm_diff / torch.linalg.norm(arm_diff, dim=1, keepdim=True)
 
@@ -317,14 +311,16 @@ class MinitankAdversarialEnv(DirectMARLEnv):
         self.desired_orientation = normalize(quat_from_angle_axis(angle, r))
         self.arm_orientation = normalize(quat_from_angle_axis(angle_arm, r_arm))
 
+
         a = torch.sum(torch.abs(self.desired_orientation - self.arm_orientation), dim=1)
         b = torch.sum(torch.abs(self.desired_orientation + self.arm_orientation), dim=1)
 
         res = torch.stack([a, b], dim=1)
-        reward = torch.min(res, dim=1)
-        reward_mapped = torch.exp(-reward.values)
-        return reward_mapped, self.arm_orientation, self.desired_orientation
-        # return reward
+        diff = torch.min(res, dim=1)
+
+        captured_drone = (diff.values < self.cfg.min_rad_for_capture).to(torch.float32)
+
+        return captured_drone, self.arm_orientation, self.desired_orientation
 
     def _setup_scene(self):
         self.num_robots = sum(1 for key in self.cfg.__dict__.keys() if "robot_" in key)
@@ -384,7 +380,8 @@ class MinitankAdversarialEnv(DirectMARLEnv):
 
     def _get_observations(self) -> dict:
         # OBSERVATIONS FOR MINITANKAdversarial #
-        self.arm_orientation_reward, self.arm_orientation, self.desired_orientation = self._get_vector_angle_reward()
+        self.tank_reward, self.arm_orientation, self.desired_orientation = self._get_vector_angle_reward()
+        self.crazyflie_reward = self.get_crazyflie_reward()
 
         tank_obs = torch.cat(
             [self.processed_actions["robot_0"], self.desired_orientation, self.arm_orientation],
@@ -420,87 +417,80 @@ class MinitankAdversarialEnv(DirectMARLEnv):
         w, x, y, z = quaternion[:, 0], quaternion[:, 1], quaternion[:, 2], quaternion[:, 3]
         y_euler_angle = torch.arcsin(2 * (w * y - z * x))
         return y_euler_angle
+    
+    def get_crazyflie_reward(self):
+        distance_to_goal = torch.linalg.norm(
+            self.robots["robot_1"].data.root_pos_w - self._drone_desired_pos_w, dim=1
+        )
+        drone_made_it_to_goal = (distance_to_goal < self.cfg.min_dist_to_goal).to(torch.float32)
+
+        return drone_made_it_to_goal
 
     def _get_rewards(self) -> dict:
         if not self.headless:
             self._draw_markers()
 
         # MINITANK REWARDS #
-        minitank_reward = self.arm_orientation_reward * self.step_dt
+        minitank_reward = self.tank_reward
         # MINITANK REWARDS #
 
-        # CRAZYFLIE REWARDS #
-        lin_vel = torch.sum(torch.square(self.robots["robot_0"].data.root_lin_vel_b), dim=1)
-        ang_vel = torch.sum(torch.square(self.robots["robot_0"].data.root_ang_vel_b), dim=1)
-        distance_to_goal = torch.linalg.norm(self._drone_desired_pos_w - self.robots["robot_1"].data.root_pos_w, dim=1)
-        distance_to_goal_mapped = 1 - torch.tanh(distance_to_goal / 0.8)
-        rewards = {
-            "lin_vel": lin_vel * self.cfg.lin_vel_reward_scale * self.step_dt,
-            "ang_vel": ang_vel * self.cfg.ang_vel_reward_scale * self.step_dt,
-            "distance_to_goal": distance_to_goal_mapped * self.cfg.distance_to_goal_reward_scale * self.step_dt,
-        }
-        drone_reward = torch.sum(torch.stack(list(rewards.values())), dim=0)
-        # Logging
-        for key, value in rewards.items():
-            self._episode_sums[key] += value
-        # CRAZYFLIE REWARDS #
+        crazyflie_reward = self.get_crazyflie_reward()
 
-        self._episode_sums["tank_angle_reward"] = minitank_reward
-
-        return {"team_0": minitank_reward.to(self.device), "team_1": drone_reward.to(self.device)}
+        return {"team_0": minitank_reward.to(self.device), "team_1": crazyflie_reward.to(self.device)}
 
     def _get_dones(self) -> tuple[dict, dict]:
         time_out = (self.episode_length_buf >= self.max_episode_length - 1).to(self.device)
-        # died = self.robots["robot_1"].data.root_pos_w[:, 2] < 0.1
-        # dones = {}
-        # dones["robot_0"] = torch.zeros(self.num_envs).to(torch.int8).to(self.device)
+        died = self.robots["robot_1"].data.root_pos_w[:, 2] < 0.1
+        dones = {}
+        dones["team_0"] = self.tank_reward.to(torch.bool)
 
-        # dones["robot_1"] = died.to(self.device)
+        dones["team_1"] = self.crazyflie_reward.to(torch.bool)
 
         # self.time_out_envs = torch.argwhere(time_out)
         time_out = {team: time_out for team in self.cfg.teams.keys()}
 
         # dones = {robot_id: torch.zeros(self.num_envs).to(torch.int8).to(self.device) for robot_id in self.robots.keys()}
 
-        return time_out, time_out
+        return dones, time_out
+        # return time_out, time_out
         # return dones, dones
 
     def _reset_idx(self, env_ids: torch.Tensor | None):
         super()._reset_idx(env_ids)
-        if len(env_ids) == self.num_envs:
+
+        num_reset_envs = len(env_ids)  # type: ignore
+        if num_reset_envs == self.num_envs:
             # Spread out the resets to avoid spikes in training when many environments reset at a similar time
             self.episode_length_buf[:] = torch.randint_like(self.episode_length_buf, high=int(self.max_episode_length))
-        final_distance_to_goal = torch.linalg.norm(
-            self._drone_desired_pos_w[env_ids] - self.robots["robot_1"].data.root_pos_w[env_ids], dim=1
-        ).mean()
-        extras = dict()
-        for key in self._episode_sums.keys():
-            episodic_sum_avg = torch.mean(self._episode_sums[key][env_ids])
-            extras["Episode_Reward/" + key] = episodic_sum_avg / self.max_episode_length_s
-            self._episode_sums[key][env_ids] = 0.0
+
+        team_0_percent_won = torch.sum(self.tank_reward.to(torch.float32)) / num_reset_envs if hasattr(self, "tank_reward") else 0.0
+        team_1_percent_won = torch.sum(self.crazyflie_reward.to(torch.float32)) / num_reset_envs if hasattr(self, "crazyflie_reward") else 0.0
+
+        extras = {}
+
+        extras["MiniTank_Win_Rate"] = team_0_percent_won
+        extras["Crazyflie_Win_Rate"] = team_1_percent_won
         self.extras["log"] = dict()
         self.extras["log"].update(extras)
-        extras = dict()
-        extras["Metrics/final_distance_to_goal"] = final_distance_to_goal.item()
-        self.extras["log"].update(extras)
+
 
         # MINITANK RESET #
-        robot = self.robots["robot_0"]
-        self.actions["robot_0"][env_ids] = 0.0
-        self.previous_actions["robot_0"][env_ids] = 0.0
-        if env_ids is None or len(env_ids) == self.num_envs:
-            env_ids = robot._ALL_INDICES
-        robot.reset(env_ids)
+        # robot = self.robots["robot_0"]
+        # self.actions["robot_0"][env_ids] = 0.0
+        # self.previous_actions["robot_0"][env_ids] = 0.0
+        # if env_ids is None or len(env_ids) == self.num_envs:
+        #     env_ids = robot._ALL_INDICES
+        # robot.reset(env_ids)
 
-        # Reset robot state
-        joint_pos = robot.data.default_joint_pos[env_ids]
-        joint_vel = robot.data.default_joint_vel[env_ids]
-        default_root_state = robot.data.default_root_state[env_ids]
+        # # Reset robot state
+        # joint_pos = robot.data.default_joint_pos[env_ids]
+        # joint_vel = robot.data.default_joint_vel[env_ids]
+        # default_root_state = robot.data.default_root_state[env_ids]
 
-        default_root_state[:, :3] += self._terrain.env_origins[env_ids]
-        robot.write_root_pose_to_sim(default_root_state[:, :7], env_ids)
-        robot.write_root_velocity_to_sim(default_root_state[:, 7:], env_ids)
-        robot.write_joint_state_to_sim(joint_pos, joint_vel, None, env_ids)
+        # default_root_state[:, :3] += self._terrain.env_origins[env_ids]
+        # robot.write_root_pose_to_sim(default_root_state[:, :7], env_ids)
+        # robot.write_root_velocity_to_sim(default_root_state[:, 7:], env_ids)
+        # robot.write_joint_state_to_sim(joint_pos, joint_vel, None, env_ids)
 
         # MINITANK RESET #
 

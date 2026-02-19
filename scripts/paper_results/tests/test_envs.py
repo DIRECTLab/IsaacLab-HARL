@@ -33,8 +33,8 @@ def build_args_from_policy_map(env_name: str, policy_info: dict) -> list:
 
 def run_config(name, script_path, args, successes, failures):
     command = ["python3", script_path] + args
-    print(f"\n{YELLOW}Running: {BOLD}{name}{RESET}")
-    print(f"{BOLD}Command:{RESET} {' '.join(command)}")
+    print(f"\n{YELLOW}Running: {BOLD}{name}{RESET}", flush=True)
+    print(f"{BOLD}Command:{RESET} {' '.join(command)}", flush=True)
 
     with open(LOG_FILE, "a") as log_file:
         log_file.write(f"\n===== Running: {name} =====\n")
@@ -44,10 +44,10 @@ def run_config(name, script_path, args, successes, failures):
             subprocess.run(command, stdout=log_file, stderr=log_file, text=True, check=True)
             success_str = f"SUCCESS, ENV: {name}"
             len_str = len(success_str)
-            print(GREEN + BOLD)
-            print("=" * len_str)
-            print(success_str)
-            print("=" * len_str + RESET)
+            print(GREEN + BOLD, flush=True)
+            print("=" * len_str, flush=True)
+            print(success_str, flush=True)
+            print("=" * len_str + RESET, flush=True)
             successes.append(name)
         except subprocess.CalledProcessError as e:
             # Also log the error for reference
@@ -56,22 +56,22 @@ def run_config(name, script_path, args, successes, failures):
             log_file.write(clean_err + "\n")
             failure_str = f"FAILURE, ENV: {name}"
             len_str = len(failure_str)
-            print(RED + BOLD + "=" * len_str)
-            print(clean_err)
-            print(failure_str)
-            print("=" * len_str + RESET)
+            print(RED + BOLD + "=" * len_str, flush=True)
+            print(clean_err, flush=True)
+            print(failure_str, flush=True)
+            print("=" * len_str + RESET, flush=True)
             failures.append((name, clean_err))
 
 def print_summary(successes, failures):
-    print(f"\n{BOLD}===== SUMMARY =====")
-    print(f"{GREEN}Successes: {len(successes)}")
+    print(f"\n{BOLD}===== SUMMARY =====", flush=True)
+    print(f"{GREEN}Successes: {len(successes)}", flush=True)
     for name in successes:
-        print(f"  - {name}")
+        print(f"  - {name}", flush=True)
 
-    print(f"\n{RED}Failures: {len(failures)}")
+    print(f"\n{RED}Failures: {len(failures)}", flush=True)
     for name, _ in failures:
-        print(f"  - {name}")
-    print(RESET)
+        print(f"  - {name}", flush=True)
+    print(RESET, flush=True)
     
 def main():
     # Clear old log

@@ -46,7 +46,7 @@ HF_POLICY_MAP = {
     "Minitank-Adversarial-Direct-v0": {
         "algorithm": "happo_adv",
         "starting": "adversarial_policies/3dg_model",
-        "trained": None,
+        "trained": "adversarial_policies/3d_galiga_trained",
     },
     "Anymal-C-Go-To-Point-Sumo": {
         "algorithm": "happo_adv",

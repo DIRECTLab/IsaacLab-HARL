@@ -1,6 +1,6 @@
 import subprocess
-import json
 import re
+from isaaclab.utils import HF_POLICY_MAP
 
 # ANSI color codes
 RED = "\033[91m"
@@ -13,9 +13,23 @@ ANSI_ESCAPE = re.compile(r'\x1B[@-_][0-?]*[ -/]*[@-~]')
 
 LOG_FILE = "test_output.log"
 
-def load_configs(json_path="test_envs.json"):
-    with open(json_path, "r") as f:
-        return json.load(f)
+def build_args_from_policy_map(env_name: str, policy_info: dict) -> list:
+    """Build training arguments from HF_POLICY_MAP entry."""
+    args = [
+        "--algorithm", policy_info["algorithm"],
+        "--task", env_name,
+        "--num_envs", "10",
+        "--num_env_steps", "100_000",  # Short test run
+        "--save_interval", "100",
+        "--log_interval", "10",
+        "--headless",
+    ]
+    
+    # Add starting policy if available
+    if policy_info.get("starting") is not None:
+        args.append("--load_starting_policy")
+    
+    return args
 
 def run_config(name, script_path, args, successes, failures):
     command = ["python3", script_path] + args
@@ -63,12 +77,13 @@ def main():
     # Clear old log
     open(LOG_FILE, "w").close()
 
-    configs = load_configs()
+    script_path = "../../reinforcement_learning/harl/train.py"
     successes = []
     failures = []
 
-    for config in configs:
-        run_config(config["name"], config["script"], config["args"], successes, failures)
+    for env_name, policy_info in HF_POLICY_MAP.items():
+        args = build_args_from_policy_map(env_name, policy_info)
+        run_config(env_name, script_path, args, successes, failures)
 
     print_summary(successes, failures)
 

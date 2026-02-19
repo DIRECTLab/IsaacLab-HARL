@@ -12,5 +12,4 @@
 source /home/software/miniforge3/etc/profile.d/conda.sh
 conda activate direct_isaaclab_env
 
-# Run the Dreamer Anymal C play script
 python ./benchmark_fps.py

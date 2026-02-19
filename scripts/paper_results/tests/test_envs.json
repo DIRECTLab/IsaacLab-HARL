@@ -21,7 +21,7 @@
       "--num_envs", "5",
       "--task", "Isaac-Quadcopter-Direct-HARL-v0",
       "--seed", "1",
-      "--num_env_steps", "2000"
+      "--num_env_steps", "200"
     ]
   },
   {

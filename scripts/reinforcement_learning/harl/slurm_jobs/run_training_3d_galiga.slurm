@@ -23,5 +23,6 @@ python ../train.py \
     --save_interval 5 \
     --log_interval 1 \
     --adversarial_training_mode leapfrog \
+    --exp_name "3d_galaga" \
     --save_checkpoints \
     --checkpoint_interval 200

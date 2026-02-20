@@ -1,0 +1,40 @@
+# Example configuration file for paper_results.py
+# 
+# Most parameters are automatically extracted from configs.json found in checkpoint_path
+# Only specify parameters here if you want to override the extracted values
+
+# Required parameters
+# checkpoint_path should point to the parent directory containing configs.json
+# (e.g., /path/to/test/no_update_for_cf where configs.json is in that directory)
+checkpoint_path: "/path/to/test/no_update_for_cf"
+
+# Required for evaluation
+learned_agents_names: "robot_0,robot_1"
+unlearned_agents_names: "agent_2"
+
+# Evaluation script
+eval_script: "./get_adversarial_results.py"
+
+# Output directory (optional - defaults to checkpoint_path/../../results_analysis)
+outdir: null
+
+# Target step to evaluate a specific checkpoint
+# If not specified, all checkpoints will be evaluated
+# Formula: target_episode = target_step / (num_envs * episode_length)
+# The script will find the closest episode if exact match not found
+target_step: null
+
+# Override evaluation parameters (num_envs is for eval_script, not for step calculations)
+num_envs: 1000
+
+# Optional overrides for parameters extracted from configs.json
+# Uncomment to override the values automatically extracted from configs.json
+# seed: 1
+# algo: "happo_adv"
+# task: "Minitank-Adversarial-Direct-v0"
+# this parameter is how many steps will be evaluated for each checkpoint, num_seconds = 1/dt * num_steps * num_envs
+num_env_steps: 10_000_000
+
+# Execution flags
+debug: false
+headless: true

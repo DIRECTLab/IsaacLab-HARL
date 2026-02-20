@@ -15,7 +15,7 @@ conda activate direct_isaaclab_env
 # Run training job: leatherback team vs anymal team sumo with HAPPO-ADV
 python ../train.py \
     --algorithm happo_adv \
-    --num_envs 10_000 \
+    --num_envs 5_000 \
     --num_env_steps 10_000_000_000 \
     --headless \
     --task "Sumo-Stage2-Hetero-By-Team-v0" \

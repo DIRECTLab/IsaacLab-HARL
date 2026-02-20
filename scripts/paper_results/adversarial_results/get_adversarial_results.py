@@ -3,7 +3,39 @@
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
-"""Train an algorithm."""
+"""Evaluate adversarial training checkpoints.
+
+This script is a utility used by paper_results.py to evaluate individual trained agent checkpoints.
+It runs inference on a trained model checkpoint and collects metrics during evaluation.
+
+Workflow:
+    1. paper_results.py orchestrates evaluation across multiple training checkpoints
+    2. For each checkpoint, it calls this script with the checkpoint directory
+    3. This script loads the trained models and runs them in the environment
+    4. Collected metrics (rewards, task success, etc.) are saved to an NPZ file
+    5. paper_results.py aggregates results from all checkpoints and creates plots
+
+Key Features:
+    - Loads pre-trained actor and critic models from a checkpoint directory
+    - Runs inference without training (no gradient updates)
+    - Collects environment metrics during evaluation (task-specific rewards, etc.)
+    - Supports multi-agent environments with team-based organization
+    - Saves results in NPZ format for easy aggregation and analysis
+
+The metrics collected depend on the environment's log_info output and can include:
+    - Episode rewards
+    - Task completion metrics
+    - Distance to goal
+    - Other environment-specific metrics
+
+Usage (typically called by paper_results.py):
+    python get_adversarial_results.py \\
+        --algorithm happo_adv \\
+        --num_envs 100 \\
+        --task "Minitank-Adversarial-Direct-v0" \\
+        --dir checkpoint_path/models/checkpoints/curr_checkpoint \\
+        --save_path results.npz
+"""
 
 import argparse
 

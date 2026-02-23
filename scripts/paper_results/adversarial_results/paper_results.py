@@ -65,7 +65,7 @@ def main(config):
     if config.get('outdir'):
         outdir = Path(config['outdir'])
     else:
-        outdir = checkpoint_parent_path.parent.parent / "results_analysis"
+        outdir = checkpoint_parent_path / "results_analysis"
     outdir.mkdir(parents=True, exist_ok=True)
 
     learned_agent_names = list(config['learned_agents_names'].split(','))

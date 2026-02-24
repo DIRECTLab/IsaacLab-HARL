@@ -8,9 +8,13 @@
 # (e.g., /path/to/test/no_update_for_cf where configs.json is in that directory)
 checkpoint_path: "/path/to/test/no_update_for_cf"
 
+# Experiment name (optional)
+# If specified, results will be saved under: checkpoint_path/results_analysis/experiment_name/timestamp/
+experiment_name: "my_experiment"
+
 # Required for evaluation
 learned_agents_names: "robot_0,robot_1"
-unlearned_agents_names: "agent_2"
+unlearned_agents_names: "robot_2,robot_3"
 
 # Evaluation script
 eval_script: "./get_adversarial_results.py"

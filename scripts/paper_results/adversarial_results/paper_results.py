@@ -7,6 +7,7 @@ import subprocess
 import numpy as np
 import matplotlib.pyplot as plt
 from pathlib import Path
+from datetime import datetime
 import yaml
 
 
@@ -66,6 +67,12 @@ def main(config):
         outdir = Path(config['outdir'])
     else:
         outdir = checkpoint_parent_path / "results_analysis"
+    
+    # Add experiment name and timestamp to output directory
+    if config.get('experiment_name'):
+        timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        outdir = outdir / config['experiment_name'] / timestamp
+    
     outdir.mkdir(parents=True, exist_ok=True)
 
     learned_agent_names = list(config['learned_agents_names'].split(','))

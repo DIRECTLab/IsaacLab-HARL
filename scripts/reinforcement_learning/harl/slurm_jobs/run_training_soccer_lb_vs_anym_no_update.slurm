@@ -1,6 +1,6 @@
 #!/bin/bash
 
-#SBATCH --job-name=train-soccer-lb-vs-anym
+#SBATCH --job-name=train-soccer-lb-vs-anym-no-updates
 #SBATCH --nodelist=kuma
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
@@ -24,7 +24,7 @@ python ../train.py \
     --save_interval 5 \
     --log_interval 1 \
     --adversarial_training_mode leapfrog \
-    --exp_name "soccer_lb_vs_anym_happo_adv" \
+    --exp_name "soccer_lb_vs_anym_happo_adv_no_updates" \
     --save_checkpoints \
     --checkpoint_interval 200 \
     --adversarial_training_iterations 10_000_000_000

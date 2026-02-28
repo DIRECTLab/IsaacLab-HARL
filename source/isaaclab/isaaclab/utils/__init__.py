@@ -38,6 +38,16 @@ HF_POLICY_MAP = {
         "starting": "adversarial_policies/hetero_by_team_start_policies_sumo",
         "trained": None,
     },
+    "Sumo-Stage2-Hetero-Same-Critic-v0": {
+        "algorithm": "happo_adv",
+        "starting": "adversarial_policies/hetero_by_team_start_policies_sumo",
+        "trained": None,
+    },
+    "Sumo-Stage2-Hetero-Same-Critic-No-Negative-v0": {
+        "algorithm": "happo_adv",
+        "starting": "adversarial_policies/hetero_by_team_start_policies_sumo",
+        "trained": None,
+    },
     "Sumo-Stage2-Hetero-v0": {
         "algorithm": "happo_adv",
         "starting": "adversarial_policies/hetero_within_team_start_policies_sumo",

@@ -24,6 +24,7 @@ repos:
       - id: check-toml
       - id: end-of-file-fixer
       - id: check-shebang-scripts-are-executable
+        exclude: ".*\\.slurm"
       - id: detect-private-key
       - id: debug-statements
   - repo: https://github.com/pycqa/isort

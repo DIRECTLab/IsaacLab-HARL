@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 # Copyright (c) 2022-2026, The Isaac Lab Project Developers.
 # All rights reserved.
 #

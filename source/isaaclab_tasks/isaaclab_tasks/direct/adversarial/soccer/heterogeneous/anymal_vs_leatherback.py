@@ -1,4 +1,4 @@
-# Copyright (c) 2022-2025, The Isaac Lab Project Developers.
+# Copyright (c) 2022-2026, The Isaac Lab Project Developers.
 # All rights reserved.
 #
 # SPDX-License-Identifier: BSD-3-Clause
@@ -416,7 +416,6 @@ class AnymalVsLeatherbackSoccerEnv(DirectMARLEnv):
                 # in the 1 v 1 scenario there isn't a teammate or second enemy so the zero buffer is kept
                 teammate_pos_buf = torch.zeros_like(enemy_0_pos)
                 enemy_1_pos_buf = torch.zeros_like(enemy_0_pos)
-
 
                 obs = torch.cat(
                     robot_state

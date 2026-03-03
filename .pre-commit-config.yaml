@@ -45,7 +45,8 @@ repos:
       - id: codespell
         additional_dependencies:
         - tomli
-        exclude: "CONTRIBUTORS.md"
+        exclude: "CONTRIBUTORS.md|\\.drawio|\\.ipynb"
+
   # FIXME: Figure out why this is getting stuck under VPN.
   # - repo: https://github.com/RobertCraigie/pyright-python
   #   rev: v1.1.315

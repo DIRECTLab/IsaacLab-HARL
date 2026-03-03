@@ -1,8 +1,7 @@
-# Copyright (c) 2022-2025, The Isaac Lab Project Developers.
+# Copyright (c) 2022-2026, The Isaac Lab Project Developers.
 # All rights reserved.
 #
 # SPDX-License-Identifier: BSD-3-Clause
-
 
 
 """Play an algorithm (supports both coordination + adversarial HARL runners)."""
@@ -13,14 +12,17 @@ import pprint
 import sys
 import torch
 from tqdm import tqdm
+
 from huggingface_hub import snapshot_download
 
-from isaaclab.utils import HF_POLICY_MAP, HF_REPO_ID, policies_summary
 from isaaclab.app import AppLauncher
+from isaaclab.utils import HF_POLICY_MAP, HF_REPO_ID, policies_summary
 
-
-
-parser = argparse.ArgumentParser(description="Play an RL agent with HARL.", formatter_class=argparse.RawTextHelpFormatter, epilog=policies_summary(HF_POLICY_MAP))
+parser = argparse.ArgumentParser(
+    description="Play an RL agent with HARL.",
+    formatter_class=argparse.RawTextHelpFormatter,
+    epilog=policies_summary(HF_POLICY_MAP),
+)
 
 parser.add_argument(
     "--algorithm",
@@ -89,7 +91,6 @@ algorithm = args_cli.algorithm.lower()
 agent_cfg_entry_point = f"harl_{algorithm}_cfg_entry_point"
 
 
-
 def _max_action_dim(action_space) -> int:
     """Recursively find the maximum action dimension across nested dict action spaces."""
     if isinstance(action_space, dict):
@@ -154,6 +155,7 @@ def _configure_model_dir(args: dict, algo_args: dict) -> None:
         algo_args["train"]["model_dir"] = os.path.join(base, policy_location)
         return
     return
+
 
 @hydra_task_config(args_cli.task, agent_cfg_entry_point)
 def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agent_cfg: dict):

@@ -1,4 +1,4 @@
-# Copyright (c) 2022-2025, The Isaac Lab Project Developers.
+# Copyright (c) 2022-2026, The Isaac Lab Project Developers.
 # All rights reserved.
 #
 # SPDX-License-Identifier: BSD-3-Clause
@@ -311,9 +311,6 @@ class AnymalStage1SoccerEnv(DirectMARLEnv):
 
         goal_pos[self.target_goal == 0] = self.goal1_pos[self.target_goal == 0]
         goal_pos[self.target_goal == 1] = self.goal2_pos[self.target_goal == 1]
-
-        ball_distance_to_goal = torch.linalg.norm(self.ball.data.root_pos_w - goal_pos, dim=1)
-        ball_distance_to_goal_mapped = 1 - torch.tanh(ball_distance_to_goal / 0.8)
 
         robot_distance_to_ball = torch.linalg.norm(
             self.robots["robot_0"].data.root_pos_w[:, :3] - self.ball.data.root_pos_w, dim=1

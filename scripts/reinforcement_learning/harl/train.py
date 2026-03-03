@@ -1,4 +1,4 @@
-# Copyright (c) 2022-2025, The Isaac Lab Project Developers.
+# Copyright (c) 2022-2026, The Isaac Lab Project Developers.
 # All rights reserved.
 #
 # SPDX-License-Identifier: BSD-3-Clause
@@ -13,7 +13,12 @@ from huggingface_hub import snapshot_download
 
 from isaaclab.app import AppLauncher
 from isaaclab.utils import HF_POLICY_MAP, HF_REPO_ID, policies_summary
-parser = argparse.ArgumentParser(description="Train an RL agent with HARL.", formatter_class=argparse.RawTextHelpFormatter, epilog=policies_summary(HF_POLICY_MAP))
+
+parser = argparse.ArgumentParser(
+    description="Train an RL agent with HARL.",
+    formatter_class=argparse.RawTextHelpFormatter,
+    epilog=policies_summary(HF_POLICY_MAP),
+)
 
 parser.add_argument("--video", action="store_true", help="Record videos during training.")
 parser.add_argument("--video_length", type=int, default=500, help="Length of the recorded video (in steps).")
@@ -23,7 +28,12 @@ parser.add_argument("--task", type=str, default=None, help="Name of the task.")
 parser.add_argument("--seed", type=int, default=1, help="Seed used for the environment")
 parser.add_argument("--save_interval", type=int, default=None, help="How often to save the model")
 parser.add_argument("--save_checkpoints", action="store_true", default=False, help="Whether or not to save checkpoints")
-parser.add_argument("--checkpoint_interval", type=int, default=200, help="How often to save a model checkpoint (episodes, episodes = num_envs*episode_length steps)")
+parser.add_argument(
+    "--checkpoint_interval",
+    type=int,
+    default=200,
+    help="How often to save a model checkpoint (episodes, episodes = num_envs*episode_length steps)",
+)
 parser.add_argument("--log_interval", type=int, default=None, help="How often to log outputs")
 parser.add_argument("--exp_name", type=str, default="test", help="Name of the Experiment")
 parser.add_argument("--num_env_steps", type=int, default=None, help="RL Policy training iterations.")
@@ -91,6 +101,7 @@ from isaaclab_tasks.utils.hydra import hydra_task_config
 
 algorithm = args_cli.algorithm.lower()
 agent_cfg_entry_point = f"harl_{algorithm}_cfg_entry_point"
+
 
 def _configure_model_dir(args: dict, algo_args: dict) -> None:
     """Apply HF/local policy loading rules and set algo_args['train']['model_dir']."""

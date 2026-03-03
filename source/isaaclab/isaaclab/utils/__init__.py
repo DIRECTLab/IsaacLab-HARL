@@ -1,4 +1,4 @@
-# Copyright (c) 2022-2025, The Isaac Lab Project Developers.
+# Copyright (c) 2022-2026, The Isaac Lab Project Developers.
 # All rights reserved.
 #
 # SPDX-License-Identifier: BSD-3-Clause
@@ -97,8 +97,9 @@ HF_POLICY_MAP = {
         "algorithm": "happo_adv",
         "starting": "adversarial_policies/anymalc_vs_leatherback_start_policy_soccer",
         "trained": None,
-    }
+    },
 }
+
 
 def policies_summary(policy_map: dict) -> str:
     # Build rows
@@ -116,11 +117,7 @@ def policies_summary(policy_map: dict) -> str:
     w_train = max(len(headers[2]), *(len(r[2]) for r in rows)) if rows else len(headers[2])
 
     def sep(char="-", cross="+"):
-        return (
-            f"{cross}{char*(w_env+2)}"
-            f"{cross}{char*(w_start+2)}"
-            f"{cross}{char*(w_train+2)}{cross}"
-        )
+        return f"{cross}{char*(w_env+2)}{cross}{char*(w_start+2)}{cross}{char*(w_train+2)}{cross}"
 
     def fmt_row(a, b, c):
         return f"| {a:<{w_env}} | {b:<{w_start}} | {c:<{w_train}} |"

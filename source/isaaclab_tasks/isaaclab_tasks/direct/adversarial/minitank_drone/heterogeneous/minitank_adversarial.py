@@ -1,4 +1,4 @@
-# Copyright (c) 2022-2025, The Isaac Lab Project Developers.
+# Copyright (c) 2022-2026, The Isaac Lab Project Developers.
 # All rights reserved.
 #
 # SPDX-License-Identifier: BSD-3-Clause
@@ -136,7 +136,7 @@ class MinitankAdversarialEnvCfg(DirectMARLEnvCfg):
     max_vel = 100
     # MINITANKAdversarial CONFIGURATION #
     # minimum radians that must be achieved between the arm of the minitankAdversarial and the drone for the minitankAdversarial to be considered as having "captured" the drone
-    min_rad_for_capture = 0.05 # 2.8 degrees
+    min_rad_for_capture = 0.05  # 2.8 degrees
 
     # CRAZYFLIE CONFIGURATION #
     robot_1: ArticulationCfg = CRAZYFLIE_CFG.replace(prim_path="/World/envs/env_.*/Robot_1")
@@ -311,7 +311,6 @@ class MinitankAdversarialEnv(DirectMARLEnv):
         self.desired_orientation = normalize(quat_from_angle_axis(angle, r))
         self.arm_orientation = normalize(quat_from_angle_axis(angle_arm, r_arm))
 
-
         a = torch.sum(torch.abs(self.desired_orientation - self.arm_orientation), dim=1)
         b = torch.sum(torch.abs(self.desired_orientation + self.arm_orientation), dim=1)
 
@@ -417,11 +416,9 @@ class MinitankAdversarialEnv(DirectMARLEnv):
         w, x, y, z = quaternion[:, 0], quaternion[:, 1], quaternion[:, 2], quaternion[:, 3]
         y_euler_angle = torch.arcsin(2 * (w * y - z * x))
         return y_euler_angle
-    
+
     def get_crazyflie_reward(self):
-        distance_to_goal = torch.linalg.norm(
-            self.robots["robot_1"].data.root_pos_w - self._drone_desired_pos_w, dim=1
-        )
+        distance_to_goal = torch.linalg.norm(self.robots["robot_1"].data.root_pos_w - self._drone_desired_pos_w, dim=1)
         drone_made_it_to_goal = (distance_to_goal < self.cfg.min_dist_to_goal).to(torch.float32)
 
         return drone_made_it_to_goal
@@ -440,20 +437,15 @@ class MinitankAdversarialEnv(DirectMARLEnv):
 
     def _get_dones(self) -> tuple[dict, dict]:
         time_out = (self.episode_length_buf >= self.max_episode_length - 1).to(self.device)
-        died = self.robots["robot_1"].data.root_pos_w[:, 2] < 0.1
-        dones = {}
-        dones["team_0"] = self.tank_reward.to(torch.bool)
-
-        dones["team_1"] = self.crazyflie_reward.to(torch.bool)
+        dones = {
+            "team_0": self.tank_reward.to(torch.bool),
+            "team_1": self.crazyflie_reward.to(torch.bool),
+        }
 
         # self.time_out_envs = torch.argwhere(time_out)
         time_out = {team: time_out for team in self.cfg.teams.keys()}
 
-        # dones = {robot_id: torch.zeros(self.num_envs).to(torch.int8).to(self.device) for robot_id in self.robots.keys()}
-
         return dones, time_out
-        # return time_out, time_out
-        # return dones, dones
 
     def _reset_idx(self, env_ids: torch.Tensor | None):
         super()._reset_idx(env_ids)
@@ -463,16 +455,21 @@ class MinitankAdversarialEnv(DirectMARLEnv):
             # Spread out the resets to avoid spikes in training when many environments reset at a similar time
             self.episode_length_buf[:] = torch.randint_like(self.episode_length_buf, high=int(self.max_episode_length))
 
-        team_0_percent_won = torch.sum(self.tank_reward.to(torch.float32)) / num_reset_envs if hasattr(self, "tank_reward") else 0.0
-        team_1_percent_won = torch.sum(self.crazyflie_reward.to(torch.float32)) / num_reset_envs if hasattr(self, "crazyflie_reward") else 0.0
+        team_0_percent_won = (
+            torch.sum(self.tank_reward.to(torch.float32)) / num_reset_envs if hasattr(self, "tank_reward") else 0.0
+        )
+        team_1_percent_won = (
+            torch.sum(self.crazyflie_reward.to(torch.float32)) / num_reset_envs
+            if hasattr(self, "crazyflie_reward")
+            else 0.0
+        )
 
-        extras = {}
-
-        extras["MiniTank_Win_Rate"] = team_0_percent_won
-        extras["Crazyflie_Win_Rate"] = team_1_percent_won
+        extras = {
+            "MiniTank_Win_Rate": team_0_percent_won,
+            "Crazyflie_Win_Rate": team_1_percent_won,
+        }
         self.extras["log"] = dict()
         self.extras["log"].update(extras)
-
 
         # MINITANK RESET #
         # robot = self.robots["robot_0"]

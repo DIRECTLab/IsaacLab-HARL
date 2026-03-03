@@ -1,5 +1,11 @@
-import subprocess
+# Copyright (c) 2022-2026, The Isaac Lab Project Developers.
+# All rights reserved.
+#
+# SPDX-License-Identifier: BSD-3-Clause
+
 import re
+import subprocess
+
 from isaaclab.utils import HF_POLICY_MAP
 
 # ANSI color codes
@@ -9,27 +15,35 @@ YELLOW = "\033[93m"
 BOLD = "\033[1m"
 RESET = "\033[0m"
 
-ANSI_ESCAPE = re.compile(r'\x1B[@-_][0-?]*[ -/]*[@-~]')
+ANSI_ESCAPE = re.compile(r"\x1B[@-_][0-?]*[ -/]*[@-~]")
 
 LOG_FILE = "test_output.log"
+
 
 def build_args_from_policy_map(env_name: str, policy_info: dict) -> list:
     """Build training arguments from HF_POLICY_MAP entry."""
     args = [
-        "--algorithm", policy_info["algorithm"],
-        "--task", env_name,
-        "--num_envs", "10",
-        "--num_env_steps", "100_000",  # Short test run
-        "--save_interval", "100",
-        "--log_interval", "10",
+        "--algorithm",
+        policy_info["algorithm"],
+        "--task",
+        env_name,
+        "--num_envs",
+        "10",
+        "--num_env_steps",
+        "100_000",  # Short test run
+        "--save_interval",
+        "100",
+        "--log_interval",
+        "10",
         "--headless",
     ]
-    
+
     # Add starting policy if available
     if policy_info.get("starting") is not None:
         args.append("--load_starting_policy")
-    
+
     return args
+
 
 def run_config(name, script_path, args, successes, failures):
     command = ["python3", script_path] + args
@@ -52,7 +66,7 @@ def run_config(name, script_path, args, successes, failures):
         except subprocess.CalledProcessError as e:
             # Also log the error for reference
             log_file.write("\n[ERROR OCCURRED]\n")
-            clean_err = ANSI_ESCAPE.sub('', e.stderr if e.stderr else "")
+            clean_err = ANSI_ESCAPE.sub("", e.stderr if e.stderr else "")
             log_file.write(clean_err + "\n")
             failure_str = f"FAILURE, ENV: {name}"
             len_str = len(failure_str)
@@ -61,6 +75,7 @@ def run_config(name, script_path, args, successes, failures):
             print(failure_str, flush=True)
             print("=" * len_str + RESET, flush=True)
             failures.append((name, clean_err))
+
 
 def print_summary(successes, failures):
     print(f"\n{BOLD}===== SUMMARY =====", flush=True)
@@ -72,10 +87,12 @@ def print_summary(successes, failures):
     for name, _ in failures:
         print(f"  - {name}", flush=True)
     print(RESET, flush=True)
-    
+
+
 def main():
     # Clear old log
-    open(LOG_FILE, "w").close()
+    with open(LOG_FILE, "w"):
+        pass
 
     script_path = "../../reinforcement_learning/harl/train.py"
     successes = []
@@ -86,6 +103,7 @@ def main():
         run_config(env_name, script_path, args, successes, failures)
 
     print_summary(successes, failures)
+
 
 if __name__ == "__main__":
     main()

@@ -1,4 +1,4 @@
-# Copyright (c) 2022-2025, The Isaac Lab Project Developers.
+# Copyright (c) 2022-2026, The Isaac Lab Project Developers.
 # All rights reserved.
 #
 # SPDX-License-Identifier: BSD-3-Clause
@@ -9,23 +9,32 @@ Leatherback Rover locomotion environment.
 
 import gymnasium as gym
 
-from isaaclab_tasks.direct.adversarial.sumo.heterogeneous.sumo_stage_2_hetero_by_team_same_critic_no_negative import SumoStage2HeteroByTeamSameCriticNoNegativeEnv, SumoStage2HeteroByTeamSameCriticNoNegativeEnvCfg
+from isaaclab_tasks.direct.adversarial.sumo.heterogeneous.sumo_stage_2_hetero_by_team_same_critic_no_negative import (
+    SumoStage2HeteroByTeamSameCriticNoNegativeEnv,
+    SumoStage2HeteroByTeamSameCriticNoNegativeEnvCfg,
+)
 
 from . import agents
-from .soccer.leatherback.leatherback_soccer_stage_1 import LeatherbackStage1SoccerEnv, LeatherbackStage1SoccerEnvCfg
-from .soccer.leatherback.leatherbacks_vs_leatherbacks import LeatherbacksVSLeatherbacksSoccerEnv, LeatherbacksVSLeatherbacksSoccerEnvCfg
-from .soccer.heterogeneous.anymals_vs_leatherbacks import AnymalSoccerHeteroByTeamEnv, AnymalSoccerHeteroByTeamEnvCfg
+from .minitank_drone.heterogeneous.minitank_adversarial import MinitankAdversarialEnv, MinitankAdversarialEnvCfg
 from .soccer.anymal_c.anymal_c_go_to_point_soccer import AnymalCGoToPointSoccerEnv, AnymalCGoToPointSoccerEnvCfg
-from .soccer.anymal_c.anymal_c_soccer_stage_2 import AnymalStage2SoccerEnv, AnymalStage2SoccerEnvCfg
 from .soccer.anymal_c.anymal_c_soccer_stage_1 import AnymalStage1SoccerEnv, AnymalStage1SoccerEnvCfg
+from .soccer.anymal_c.anymal_c_soccer_stage_2 import AnymalStage2SoccerEnv, AnymalStage2SoccerEnvCfg
 from .soccer.heterogeneous.anymal_vs_leatherback import AnymalVsLeatherbackSoccerEnv, AnymalVsLeatherbackSoccerEnvCfg
+from .soccer.heterogeneous.anymals_vs_leatherbacks import AnymalSoccerHeteroByTeamEnv, AnymalSoccerHeteroByTeamEnvCfg
+from .soccer.leatherback.leatherback_soccer_stage_1 import LeatherbackStage1SoccerEnv, LeatherbackStage1SoccerEnvCfg
+from .soccer.leatherback.leatherbacks_vs_leatherbacks import (
+    LeatherbacksVSLeatherbacksSoccerEnv,
+    LeatherbacksVSLeatherbacksSoccerEnvCfg,
+)
+from .sumo.anymal_c.anymal_c_go_to_point_sumo import AnymalCGoToPointSumo, AnymalCGoToPointSumoCfg
+from .sumo.anymal_c.sumo_stage_1_blocks_push import AnymalCBlocksPushEnv, AnymalCBlocksPushEnvCfg
 from .sumo.heterogeneous.sumo_stage_2_hetero_by_team import SumoStage2HeteroByTeamEnv, SumoStage2HeteroByTeamEnvCfg
-from .sumo.heterogeneous.sumo_stage_2_hetero_by_team_same_critic import SumoStage2HeteroByTeamSameCriticEnv, SumoStage2HeteroByTeamSameCriticEnvCfg
+from .sumo.heterogeneous.sumo_stage_2_hetero_by_team_same_critic import (
+    SumoStage2HeteroByTeamSameCriticEnv,
+    SumoStage2HeteroByTeamSameCriticEnvCfg,
+)
 from .sumo.heterogeneous.sumo_stage_2_hetero_within_team import SumoStage2HeteroEnv, SumoStage2HeteroEnvCfg
 from .sumo.leatherback.leatherback_sumo_ma_stage1 import LeatherbackSumoMAStage1Env, LeatherbackSumoMAStage1EnvCfg
-from .sumo.anymal_c.anymal_c_go_to_point_sumo import AnymalCGoToPointSumo, AnymalCGoToPointSumoCfg
-from .minitank_drone.heterogeneous.minitank_adversarial import MinitankAdversarialEnv, MinitankAdversarialEnvCfg
-from .sumo.anymal_c.sumo_stage_1_blocks_push import AnymalCBlocksPushEnv, AnymalCBlocksPushEnvCfg
 
 ##
 # Register Gym environments.

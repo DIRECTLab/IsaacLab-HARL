@@ -1,17 +1,20 @@
-# Copyright (c) 2022-2025, The Isaac Lab Project Developers.
+# Copyright (c) 2022-2026, The Isaac Lab Project Developers.
 # All rights reserved.
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
 """Configuration for the leatherback robot."""
 
+from pathlib import Path
+
 import isaaclab
 import isaaclab.sim as sim_utils
 from isaaclab.actuators import ImplicitActuatorCfg
 from isaaclab.assets import ArticulationCfg
-from pathlib import Path
 
-isaaclab_asset_path = Path(Path(isaaclab.__path__[0]).parent.parent, "isaaclab_assets", "isaaclab_assets", "custom", "assets")
+isaaclab_asset_path = Path(
+    Path(isaaclab.__path__[0]).parent.parent, "isaaclab_assets", "isaaclab_assets", "custom", "assets"
+)
 
 LEATHERBACK_CFG = ArticulationCfg(
     spawn=sim_utils.UsdFileCfg(

@@ -90,7 +90,6 @@ class ManagerTermBase(ABC):
             env_ids: The environment ids. Defaults to None, in which case
                 all environments are considered.
         """
-        pass
 
     def __call__(self, *args) -> Any:
         """Returns the value of the term required by the manager.

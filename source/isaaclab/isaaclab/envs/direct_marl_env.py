@@ -320,7 +320,16 @@ class DirectMARLEnv(gym.Env):
 
         # update observations and the list of current agents (sorted as in possible_agents)
         self.obs_dict = self._get_observations()
-        self.agents = [agent for agent in self.possible_agents if agent in self.obs_dict]
+
+        if hasattr(self.cfg, "teams"):
+            # if teams are defined, we need to update the agents list to be per team
+            self.agents = []
+            for _, agents in self.cfg.teams.items():
+                for agent in agents:
+                    if agent in self.possible_agents:
+                        self.agents.append(agent)
+        else:
+            self.agents = [agent for agent in self.possible_agents if agent in self.obs_dict]
 
         # return observations
         return self.obs_dict, self.extras
@@ -387,7 +396,9 @@ class DirectMARLEnv(gym.Env):
         self.common_step_counter += 1  # total step (common for all envs)
 
         self.terminated_dict, self.time_out_dict = self._get_dones()
-        self.reset_buf[:] = math.prod(self.terminated_dict.values()) | math.prod(self.time_out_dict.values())
+        self.reset_buf[:] = torch.logical_or(
+            torch.stack(list(self.terminated_dict.values())), torch.stack(list(self.time_out_dict.values()))
+        ).any(dim=0)
         self.reward_dict = self._get_rewards()
 
         # -- reset envs that terminated/timed-out and log the episode information
@@ -402,10 +413,19 @@ class DirectMARLEnv(gym.Env):
 
         # update observations and the list of current agents (sorted as in possible_agents)
         self.obs_dict = self._get_observations()
-        self.agents = [agent for agent in self.possible_agents if agent in self.obs_dict]
+        if hasattr(self.cfg, "teams"):
+            # if teams are defined, we need to update the agents list to be per team
+            self.agents = []
+            for _, agents in self.cfg.teams.items():
+                for agent in agents:
+                    if agent in self.possible_agents:
+                        self.agents.append(agent)
+        else:
+            self.agents = [agent for agent in self.possible_agents if agent in self.obs_dict]
 
         # add observation noise
         # note: we apply no noise to the state space (since it is used for centralized training or critic networks)
+        # TODO: Update this to allow for adversarial training as well
         if self.cfg.observation_noise_model:
             for agent, obs in self.obs_dict.items():
                 if agent in self._observation_noise_model:
@@ -662,7 +682,6 @@ class DirectMARLEnv(gym.Env):
         We leave the implementation of this function to the derived classes. If the environment does not require
         any explicit scene setup, the function can be left empty.
         """
-        pass
 
     @abstractmethod
     def _pre_physics_step(self, actions: dict[AgentID, ActionType]):

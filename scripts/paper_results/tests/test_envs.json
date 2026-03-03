@@ -1,0 +1,246 @@
+[
+  {
+    "name": "Train crazyflie harl",
+    "script": "./train.py",
+    "args": [
+      "--num_envs", "5",
+      "--task", "Isaac-Quadcopter-Direct-HARL-v0",
+      "--seed", "1",
+      "--save_interval", "5",
+      "--log_interval", "1",
+      "--exp_name", "drones_flight_training",
+      "--num_env_steps", "2000",
+      "--algorithm", "happo",
+      "--headless"
+    ]
+  },
+  {
+    "name": "Play crazyflie harl",
+    "script": "./play.py",
+    "args": [
+      "--num_envs", "5",
+      "--task", "Isaac-Quadcopter-Direct-HARL-v0",
+      "--seed", "1",
+      "--num_env_steps", "200"
+    ]
+  },
+  {
+    "name": "Train H1 Velocity Control",
+    "script": "./train.py",
+    "args": [
+      "--num_envs", "5",
+      "--task", "Isaac-H1-Velocity-Direct-v0",
+      "--seed", "1",
+      "--save_interval", "10000",
+      "--log_interval", "1",
+      "--exp_name", "multi_agent_anymal_harl",
+      "--num_env_steps", "2000",
+      "--algorithm", "happo",
+      "--headless"
+    ]
+  },
+  {
+    "name": "Train Anymal C Walking Policy with HARL",
+    "script": "./train.py",
+    "args": [
+      "--num_envs", "5",
+      "--task", "Isaac-Velocity-Flat-Anymal-C-Happo-Direct-v0",
+      "--seed", "1",
+      "--save_interval", "5",
+      "--log_interval", "1",
+      "--exp_name", "anymal_c_walking_policy_happo",
+      "--num_env_steps", "2000",
+      "--algorithm", "happo",
+      "--headless"
+    ]
+  },
+  {
+    "name": "Train anymal c find soccer ball teacher",
+    "script": "./train.py",
+    "args": [
+      "--num_envs", "5",
+      "--task", "Flat_AnymalC_Find_Ball_Teacher-v0",
+      "--seed", "1",
+      "--save_interval", "5",
+      "--log_interval", "1",
+      "--exp_name", "anymalc_find_soccer_teacher",
+      "--num_env_steps", "2000",
+      "--algorithm", "happo",
+      "--headless"
+    ]
+  },
+  {
+    "name": "Play Soccer Env Find Ball teacher",
+    "script": "./play.py",
+    "args": [
+      "--num_envs", "5",
+      "--task", "Flat_AnymalC_Find_Ball_Teacher-v0",
+      "--seed", "1",
+      "--num_env_steps", "200",
+      "--algorithm", "happo"
+    ]
+  },
+  {
+    "name": "Train anymal c play soccer with cameras",
+    "script": "./train.py",
+    "args": [
+      "--num_envs", "5",
+      "--task", "Flat_AnymalC_Soccer_Camera-v0",
+      "--seed", "1",
+      "--save_interval", "5",
+      "--log_interval", "1",
+      "--exp_name", "anymalc_play_soccer",
+      "--num_env_steps", "2000",
+      "--algorithm", "happo",
+      "--enable_cameras",
+      "--headless"
+    ]
+  },
+  {
+    "name": "Play Soccer Env with Cameras",
+    "script": "./play.py",
+    "args": [
+      "--num_envs", "5",
+      "--task", "Flat_AnymalC_Play_Soccer_Direct-v0",
+      "--seed", "1",
+      "--num_env_steps", "200",
+      "--algorithm", "happo",
+      "--enable_cameras"
+    ]
+  },
+  {
+    "name": "Play heter push env",
+    "script": "./play.py",
+    "args": [
+      "--num_envs", "5",
+      "--task", "Isaac-Anymal-H1-Push-Direct-v0",
+      "--num_env_steps", "200",
+      "--enable_cameras",
+      "--algorithm", "happo"
+    ]
+  },
+  {
+    "name": "Train heterogeneous push env",
+    "script": "./train.py",
+    "args": [
+      "--num_envs", "5",
+      "--task", "Isaac-Anymal-H1-Push-Direct-v0",
+      "--seed", "1",
+      "--save_interval", "5",
+      "--log_interval", "1",
+      "--exp_name", "heter_push_env",
+      "--num_env_steps", "2000",
+      "--algorithm", "happo",
+      "--headless"
+    ]
+  },
+  {
+    "name": "Train Drones",
+    "script": "./train.py",
+    "args": [
+      "--num_envs", "5",
+      "--task", "Drones-Env-v0",
+      "--seed", "1",
+      "--save_interval", "5",
+      "--log_interval", "1",
+      "--exp_name", "drones_flight_training",
+      "--num_env_steps", "2000",
+      "--algorithm", "happo",
+      "--headless"
+    ]
+  },
+  {
+    "name": "Train Minitank",
+    "script": "./train.py",
+    "args": [
+      "--num_envs", "5",
+      "--task", "Minitank-Direct-v0",
+      "--seed", "1",
+      "--save_interval", "5",
+      "--log_interval", "1",
+      "--exp_name", "minitank_training",
+      "--num_env_steps", "2000",
+      "--algorithm", "happo",
+      "--headless"
+    ]
+  },
+  {
+    "name": "Train Minitank + Drone",
+    "script": "./train.py",
+    "args": [
+      "--num_envs", "5",
+      "--task", "Minitank-Adversarial-Direct-v0",
+      "--seed", "1",
+      "--save_interval", "10000",
+      "--log_interval", "1",
+      "--exp_name", "3dg_training",
+      "--num_env_steps", "2000",
+      "--algorithm", "happo_adv",
+      "--headless"
+    ]
+  },
+  {
+    "name": "Play Minitank + Drone",
+    "script": "./play.py",
+    "args": [
+      "--num_envs", "5",
+      "--task", "Minitank-Adversarial-Direct-v0",
+      "--seed", "1",
+      "--num_env_steps", "200",
+      "--algorithm", "happo"
+    ]
+  },
+  {
+    "name": "Play Minitank + Drone with cameras",
+    "script": "./play.py",
+    "args": [
+      "--num_envs", "5",
+      "--task", "Minitank-Adversarial-Cameras-Direct-v0",
+      "--seed", "1",
+      "--num_env_steps", "200",
+      "--enable_cameras",
+      "--algorithm", "happo"
+    ]
+  },
+  {
+    "name": "Train 3dg",
+    "script": "./train.py",
+    "args": [
+      "--num_envs", "5",
+      "--task", "3dg-Direct-v0",
+      "--seed", "1",
+      "--save_interval", "5",
+      "--log_interval", "1",
+      "--exp_name", "3dg",
+      "--num_env_steps", "2000",
+      "--algorithm", "mappo",
+      "--headless"
+    ]
+  },
+  {
+    "name": "Play 3dg",
+    "script": "./play.py",
+    "args": [
+      "--num_envs", "5",
+      "--task", "3dg-Direct-v0",
+      "--seed", "1",
+      "--num_env_steps", "200",
+      "--algorithm", "happo"
+    ]
+  },
+  {
+    "name": "Run anymal bar",
+    "script": "./train.py",
+    "args": [
+      "--num_envs", "5",
+      "--task", "Isaac-Multi-Agent-Flat-Anymal-C-Direct-v0",
+      "--seed", "1",
+      "--save_interval", "100000",
+      "--log_interval", "1",
+      "--exp_name", "3dg",
+      "--num_env_steps", "2000",
+      "--algorithm", "happo",
+      "--headless"
+    ]
+  }
+]

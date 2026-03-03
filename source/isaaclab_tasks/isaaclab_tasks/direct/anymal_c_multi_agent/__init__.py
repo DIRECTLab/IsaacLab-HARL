@@ -18,7 +18,7 @@ from .anymal_c_multi_agent import AnymalCMultiAgentBar, AnymalCMultiAgentFlatEnv
 
 gym.register(
     id="Isaac-Multi-Agent-Flat-Anymal-C-Direct-v0",
-    entry_point="isaaclab_tasks.direct.anymal_c_multi_agent:AnymalCMultiAgentBar",
+    entry_point=AnymalCMultiAgentBar,
     disable_env_checker=True,
     kwargs={
         "env_cfg_entry_point": AnymalCMultiAgentFlatEnvCfg,
@@ -28,4 +28,3 @@ gym.register(
         "harl_happo_cfg_entry_point": f"{agents.__name__}:harl_happo_cfg.yaml",
     },
 )
-

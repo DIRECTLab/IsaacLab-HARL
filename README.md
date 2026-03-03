@@ -1,8 +1,22 @@
+
+<p align="center">
+   <img src="team_plot.svg" alt="NVIDIA Team">
+</p>
+
+# Install
+Make sure you have conda installed, for reference we used the following script to install conda
+
+```bash
+wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh
+```
+
+Once the script is installed, follow the prompts until conda is install and then follow the next steps.
+
 ![image](https://github.com/user-attachments/assets/dc883271-761c-4342-9b0b-15c584b33127)
 
 # Install
 
-Install the conda environment 
+Install the conda environment
 
 ```
 ./isaaclab.sh -c
@@ -14,9 +28,9 @@ conda activate env_isaaclab
 ./isaaclab.sh -i
 ```
 
-This will automatically install the modified HARL package that works with isaaclab that we developed located at [https://github.com/some45bucks/HARL](https://github.com/some45bucks/HARL).  
+This will automatically install the modified HARL package that works with isaaclab that we developed located at [https://github.com/some45bucks/HARL](https://github.com/some45bucks/HARL).
 
-Install isaacsim 
+Install isaacsim
 
 ```
 pip install isaacsim[all]==4.5.0 --extra-index-url https://pypi.nvidia.com
@@ -35,6 +49,42 @@ IsaacLab-HARL/
 ├── ...
 ```
 
+# Adversarial Multi-Agent Training with HARL
+
+Adversarial multi-agent training enables two teams of agents to compete against each other, leading to emergent behaviors and more robust policies through strategic gameplay. This framework supports multiple training modes for different competitive scenarios.
+
+## Command
+
+```bash
+cd scripts/reinforcement_learning/harl
+python train.py --algorithm happo_adv --num_envs 1000 --num_env_steps 10_000_000_000 --task "AnymalC_Soccer_Hetero_By_Team-v0" --save_interval 5 --log_interval 1 --adversarial_training_mode leapfrog --headless --load_starting_policy
+```
+
+## Adversarial Training Modes
+
+The framework supports three distinct adversarial training modes:
+
+* `parallel`: Both teams train simultaneously against each other in the same environment instance. This mode encourages dynamic strategy development as policies improve in tandem.
+* `ladder`: Teams alternate training iterations, with one team training while the other uses a frozen policy. This allows each team to optimize against a stable opponent before roles reverse (default: 50,000,000 iterations per swap).
+* `leapfrog`: Similar to ladder mode but with more frequent policy swaps. Teams alternate training more frequently to enable progressive skill development.
+
+## Adversarial-Specific Parameters
+
+* `--algorithm`: Use `happo_adv` for adversarial training with heterogeneous agents.
+* `--adversarial_training_mode`: Choose the training mode (`parallel`, `ladder`, or `leapfrog`). Default: `parallel`.
+* `--adversarial_training_iterations`: Number of training steps before swapping policies in `ladder` and `leapfrog` modes. Default: 50,000,000.
+
+**Note**: When using ladder training with teams composed of heterogeneous agents, both teams must place robots in the same order in their environment configuration for the mode to work correctly.
+
+## Playing Trained Adversarial Models
+
+```bash
+cd scripts/reinforcement_learning/harl
+python play.py --algorithm happo_adv --num_envs 64 --num_env_steps 10000000000 --task "Sumo-Stage2-Hetero-By-Team-v0" --dir <path_to_trained_model>
+```
+
+The play script supports rendering trained adversarial policies and can optionally load pre-trained models from local paths or HuggingFace Hub using `--load_starting_policy` or `--load_trained_policy` flags instead of the `--dir` flag.
+
 # Multi-Agent Training with HARL
 
 This command runs training on the multi-agent ANYmal environment using the HAPPO (Heterogeneous Agent Proximal Policy Optimization) algorithm in IsaacLab-HARL.
@@ -42,14 +92,14 @@ This command runs training on the multi-agent ANYmal environment using the HAPPO
 ## Command
 
 ```bash
-cd IsaacLab-HARL/scripts/reinforcement_learning/harl
+cd scripts/reinforcement_learning/harl
 python train.py --video --video_length 500 --video_interval 20000 --num_envs 64 --task "Isaac-Multi-Agent-Flat-Anymal-C-Direct-v0" --seed 1 --save_interval 10000 --log_interval 1 --exp_name "multi_agent_anymal_harl" --num_env_steps 1000000 --algorithm happo --headless
 ```
 
-Outputs will be located at `IsaacLab-HARL/scripts/reinforcement_learning/harl/results`, to view the progress in tensorboard run
+Outputs will be located at `scripts/reinforcement_learning/harl/results`, to view the progress in tensorboard run
 
 ```bash
-cd IsaacLab-HARL/scripts/reinforcement_learning/harl/results/
+cd scripts/reinforcement_learning/harl/results/
 tensorboard --logdir=./
 ```
 
@@ -67,10 +117,14 @@ tensorboard --logdir=./
 * `--num_env_steps`: Total number of environment steps for training (here, 1,000,000).
 * `--algorithm`: Specifies the RL algorithm to use.
 * `--headless`: Runs the simulation without rendering.
+* `--load_starting_policy`: Load a pre-trained starting policy from HuggingFace Hub for transfer learning. Cannot be used with `--load_trained_policy` or `--dir`.
+* `--load_trained_policy`: Load a fully trained policy from HuggingFace Hub to resume training. Cannot be used with `--load_starting_policy` or `--dir`.
+* `--dir`: Path to local directory containing model checkpoints to continue training from. Cannot be used with `--load_starting_policy` or `--load_trained_policy`.
 
 ## Available Algorithms
 
 * `happo`: Heterogeneous Agent Proximal Policy Optimization
+* `happo_adv`: Heterogeneous Agent Proximal Policy Optimization (adversarial variant for competitive multi-agent training)
 * `hatrpo`: Heterogeneous Agent Trust Region Policy Optimization
 * `haa2c`: Heterogeneous Agent Advantage Actor-Critic
 * `mappo`: Multi-Agent Proximal Policy Optimization (shared policy)
@@ -81,7 +135,7 @@ tensorboard --logdir=./
 These environments are located in:
 
 ```
-IsaacLab-HARL/source/isaaclab_tasks/isaaclab_tasks/direct
+source/isaaclab_tasks/isaaclab_tasks/direct
 ```
 
 * `Isaac-Multi-Agent-Flat-Anymal-C-Direct-v0`
@@ -93,6 +147,34 @@ IsaacLab-HARL/source/isaaclab_tasks/isaaclab_tasks/direct
 
 ## Playing an Environment
 
+<<<<<<< HEAD
+To play and visualize a trained policy:
+
+```bash
+cd scripts/reinforcement_learning/harl
+python play.py --algorithm happo --num_envs 32 --task "Isaac-Multi-Agent-Flat-Anymal-C-Direct-v0" --dir <path_to_trained_model> --headless
+```
+
+### Playing Parameters
+
+* `--algorithm`: Specifies which algorithm was used during training (e.g., `happo`, `happo_adv`, `mappo`).
+* `--num_envs`: Number of parallel environments to run during playback. Default: 1.
+* `--task`: Name of the task to play.
+* `--dir`: Path to the directory containing trained model checkpoints. Cannot be used together with `--load_starting_policy` or `--load_trained_policy`.
+* `--load_starting_policy`: Load a pre-trained starting policy from HuggingFace Hub. Mutually exclusive with `--dir` and `--load_trained_policy`. Policies are automatically downloaded if available for the specified task.
+* `--load_trained_policy`: Load a fully trained policy from HuggingFace Hub for evaluation. Mutually exclusive with `--dir` and `--load_starting_policy`. Use this to play with published benchmark policies.
+* `--num_env_steps`: Total environment steps to run before stopping. Default: unlimited until interrupted.
+* `--debug`: Enable visualization debug mode for interactive rendering.
+
+### Loading Policies from HuggingFace
+
+Both training and playing scripts support loading pre-trained policies from the HuggingFace Hub when available. This enables:
+
+* **Transfer learning**: Start training with a pre-trained policy using `--load_starting_policy`
+* **Benchmark evaluation**: Load published trained policies using `--load_trained_policy` in play.py
+* **Policy continuation**: Resume training from a checkpoint by specifying `--load_starting_policy`
+
+**Important**: Policy loading is task-specific and depends on the availability of entries in the HuggingFace repository linked in the code (`HF_POLICY_MAP`). If a policy is not available for your chosen task, the scripts will display a message and continue with default initialization. You can run `play.py -h` or `train.py -h` for more details on these options.
 ## Citation
 
 If you find this work useful in your research, please consider citing our paper:
@@ -110,6 +192,7 @@ If you find this work useful in your research, please consider citing our paper:
 }
 ```
 
+>>>>>>> main
 
 
 # Isaac Lab

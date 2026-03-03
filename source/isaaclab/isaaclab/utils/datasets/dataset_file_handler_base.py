@@ -15,7 +15,6 @@ class DatasetFileHandlerBase(ABC):
 
     def __init__(self):
         """Initializes the dataset file handler."""
-        pass
 
     @abstractmethod
     def open(self, file_path: str, mode: str = "r"):

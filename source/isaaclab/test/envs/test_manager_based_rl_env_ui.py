@@ -40,14 +40,10 @@ enable_extension("isaacsim.gui.components")
 class EmptyManagerCfg:
     """Empty manager specifications for the environment."""
 
-    pass
-
 
 @configclass
 class EmptySceneCfg(InteractiveSceneCfg):
     """Configuration for an empty scene."""
-
-    pass
 
 
 def get_empty_base_env_cfg(device: str = "cuda:0", num_envs: int = 1, env_spacing: float = 1.0):

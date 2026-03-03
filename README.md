@@ -174,8 +174,7 @@ Both training and playing scripts support loading pre-trained policies from the 
 * **Benchmark evaluation**: Load published trained policies using `--load_trained_policy` in play.py
 * **Policy continuation**: Resume training from a checkpoint by specifying `--load_starting_policy`
 
-**Important**: Policy loading is task-specific and depends on the availability of entries in the HuggingFace repository linked in the code (`HF_POLICY_MAP`). If a policy is not available for your chosen task, the scripts will display a message and continue with default initialization.
-=======
+**Important**: Policy loading is task-specific and depends on the availability of entries in the HuggingFace repository linked in the code (`HF_POLICY_MAP`). If a policy is not available for your chosen task, the scripts will display a message and continue with default initialization. You can run `play.py -h` or `train.py -h` for more details on these options.
 ## Citation
 
 If you find this work useful in your research, please consider citing our paper:

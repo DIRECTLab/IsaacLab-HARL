@@ -1,13 +1,9 @@
 
-<p align="center">
-   <img src="team_plot.svg" alt="NVIDIA Team">
-</p>
-
 # Install
 Make sure you have conda installed, for reference we used the following script to install conda
 
 ```bash
-wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh
+wget "https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-$(uname)-$(uname -m).sh"
 ```
 
 Once the script is installed, follow the prompts until conda is install and then follow the next steps.
@@ -28,7 +24,7 @@ conda activate env_isaaclab
 ./isaaclab.sh -i
 ```
 
-This will automatically install the modified HARL package that works with isaaclab that we developed located at [https://github.com/some45bucks/HARL](https://github.com/some45bucks/HARL).
+This will automatically install the modified HARL package that works with isaaclab that we developed located at [https://github.com/DIRECTLab/HARL](https://github.com/DIRECTLab/HARL).
 
 Install isaacsim
 
@@ -37,17 +33,6 @@ pip install isaacsim[all]==4.5.0 --extra-index-url https://pypi.nvidia.com
 pip install isaacsim[extscache]==4.5.0 --extra-index-url https://pypi.nvidia.com
 ```
 
-download the 3D assets form here:
-[https://usu.box.com/s/af10jukvqp4gun3xx2cjqbd4vsq840ek](https://usu.box.com/s/af10jukvqp4gun3xx2cjqbd4vsq840ek)
-Place the downloaded files into a new folder named `assets` located in the root directory of the project:
-
-```
-IsaacLab-HARL/
-├── assets/
-│   └── <downloaded unzipped files>
-├── README.md
-├── ...
-```
 
 # Adversarial Multi-Agent Training with HARL
 
@@ -138,17 +123,29 @@ These environments are located in:
 source/isaaclab_tasks/isaaclab_tasks/direct
 ```
 
-* `Isaac-Multi-Agent-Flat-Anymal-C-Direct-v0`
-* `Isaac-Anymal-H1-Ball-Direct-v0`
-* `Isaac-Anymal-H1-Piano-Direct-v0`
-* `Isaac-Anymal-H1-Push-Direct-v0`
-* `Isaac-Anymal-H1-Surf-Flat-Direct`
+Policy availability by environment:
+
+| Environment                                   | Starting | Trained |
+|-----------------------------------------------|----------|---------|
+| Leatherback-Stage1-Soccer-v0                  | NO       | YES     |
+| Leatherback-Stage2-Soccer-v0                  | YES      | YES     |
+| AnymalC_Soccer_Hetero_By_Team-v0              | YES      | NO      |
+| Sumo-Stage2-Hetero-By-Team-v0                 | YES      | YES     |
+| Sumo-Stage2-Hetero-Same-Critic-v0             | YES      | NO      |
+| Sumo-Stage2-Hetero-Same-Critic-No-Negative-v0 | YES      | NO      |
+| Sumo-Stage2-Hetero-v0                         | YES      | YES     |
+| Minitank-Adversarial-Direct-v0                | YES      | YES     |
+| Anymal-C-Go-To-Point-Sumo                     | NO       | YES     |
+| Isaac-Multi-Agent-Flat-Anymal-C-Direct-v0    | YES      | YES     |
+| Anymal-C-Sumo-Stage1-Blocks-Push-v0           | YES      | YES     |
+| AnymalC_Soccer_Go_To_Point_Stage_0            | NO       | YES     |
+| AnymalC_Soccer_Go_To_Ball_Stage_1             | YES      | YES     |
+| AnymalC_Soccer_Score_Goals_Stage_2            | YES      | YES     |
+| leatherback-Sumo-Direct-MA-Stage1-v0          | NO       | YES     |
+| AnymalC-VS-Leatherback-Soccer-v0              | YES      | NO      |
 
 
 ## Playing an Environment
-
-<<<<<<< HEAD
-To play and visualize a trained policy:
 
 ```bash
 cd scripts/reinforcement_learning/harl
@@ -172,7 +169,6 @@ Both training and playing scripts support loading pre-trained policies from the 
 
 * **Transfer learning**: Start training with a pre-trained policy using `--load_starting_policy`
 * **Benchmark evaluation**: Load published trained policies using `--load_trained_policy` in play.py
-* **Policy continuation**: Resume training from a checkpoint by specifying `--load_starting_policy`
 
 **Important**: Policy loading is task-specific and depends on the availability of entries in the HuggingFace repository linked in the code (`HF_POLICY_MAP`). If a policy is not available for your chosen task, the scripts will display a message and continue with default initialization. You can run `play.py -h` or `train.py -h` for more details on these options.
 ## Citation
@@ -191,9 +187,6 @@ If you find this work useful in your research, please consider citing our paper:
   url       = {https://directlab.github.io/IsaacLab-HARL/}
 }
 ```
-
->>>>>>> main
-
 
 # Isaac Lab
 

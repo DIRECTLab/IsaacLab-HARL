@@ -57,7 +57,7 @@ Adversarial multi-agent training enables two teams of agents to compete against 
 
 ```bash
 cd scripts/reinforcement_learning/harl
-python train.py --algorithm happo_adv --num_envs 1000 --num_env_steps 10_000_000_000 --task "AnymalC_Soccer_Hetero_By_Team-v0" --save_interval 5 --log_interval 1 --adversarial_training_mode leapfrog --headless --load_starting_policy
+python train.py --algorithm happo_adv --num_envs 1000 --num_env_steps 10000000000 --task "AnymalC_Soccer_Hetero_By_Team-v0" --save_interval 5 --log_interval 1 --adversarial_training_mode leapfrog --headless --load_starting_policy
 ```
 
 ## Adversarial Training Modes

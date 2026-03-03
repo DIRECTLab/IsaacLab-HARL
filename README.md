@@ -147,6 +147,7 @@ source/isaaclab_tasks/isaaclab_tasks/direct
 
 ## Playing an Environment
 
+<<<<<<< HEAD
 To play and visualize a trained policy:
 
 ```bash
@@ -174,6 +175,25 @@ Both training and playing scripts support loading pre-trained policies from the 
 * **Policy continuation**: Resume training from a checkpoint by specifying `--load_starting_policy`
 
 **Important**: Policy loading is task-specific and depends on the availability of entries in the HuggingFace repository linked in the code (`HF_POLICY_MAP`). If a policy is not available for your chosen task, the scripts will display a message and continue with default initialization.
+=======
+## Citation
+
+If you find this work useful in your research, please consider citing our paper:
+
+```bibtex
+@inproceedings{haight2025harl,
+  author    = {Haight, Jacob and Peterson, Isaac and Allred, Christopher and Harper, Mario},
+  booktitle = {2025 IEEE/RSJ International Conference on Intelligent Robots and Systems (IROS)},
+  title     = {Heterogeneous Multi-Agent Learning in Isaac Lab: Scalable Simulation for Robotic Collaboration},
+  year      = {2025},
+  pages     = {13446-13451},
+  keywords  = {Training;Autonomous systems;Robot kinematics;Scalability;Collaboration;Reinforcement learning;Robots;Physics;Optimization;Videos},
+  doi       = {10.1109/IROS60139.2025.11247098},
+  url       = {https://directlab.github.io/IsaacLab-HARL/}
+}
+```
+
+>>>>>>> main
 
 
 # Isaac Lab

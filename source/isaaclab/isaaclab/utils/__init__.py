@@ -36,7 +36,7 @@ HF_POLICY_MAP = {
     "Sumo-Stage2-Hetero-By-Team-v0": {
         "algorithm": "happo_adv",
         "starting": "adversarial_policies/hetero_by_team_start_policies_sumo",
-        "trained": None,
+        "trained": "adversarial_policies/hetero_by_team_sumo",
     },
     "Sumo-Stage2-Hetero-Same-Critic-v0": {
         "algorithm": "happo_adv",

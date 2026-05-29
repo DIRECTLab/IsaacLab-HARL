@@ -47,6 +47,7 @@ EXTRAS_REQUIRE = {
         "gym",
     ],  # rl-games still needs gym :(
     "rsl-rl": ["rsl-rl-lib==3.0.1", "onnxscript>=0.5"],  # linux aarch 64 requires manual onnxscript installation
+    "harl": ["harl@git+https://github.com/DIRECTLab/HARL.git"],
 }
 # Add the names with hyphens as aliases for convenience
 EXTRAS_REQUIRE["rl_games"] = EXTRAS_REQUIRE["rl-games"]

@@ -1,4 +1,4 @@
-# Copyright (c) 2022-2026, The Isaac Lab Project Developers.
+# Copyright (c) 2022-2025, The Isaac Lab Project Developers (https://github.com/isaac-sim/IsaacLab/blob/main/CONTRIBUTORS.md).
 # All rights reserved.
 #
 # SPDX-License-Identifier: BSD-3-Clause
@@ -136,9 +136,11 @@ class JointImpedanceController:
 
     def initialize(self):
         """Initialize the internals."""
+        pass
 
     def reset_idx(self, robot_ids: torch.Tensor = None):
         """Reset the internals."""
+        pass
 
     def set_command(self, command: torch.Tensor):
         """Set target end-effector pose command.

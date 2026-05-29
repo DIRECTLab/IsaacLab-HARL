@@ -68,4 +68,10 @@ _build
 /.pretrained_checkpoints/
 
 # Teleop Recorded Dataset
-datasets
+/datasets/
+
+# Tests
+tests/
+
+# Docker history
+.isaac-lab-docker-history

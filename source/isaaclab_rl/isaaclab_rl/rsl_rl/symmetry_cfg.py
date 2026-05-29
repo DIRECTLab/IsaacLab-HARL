@@ -1,4 +1,4 @@
-# Copyright (c) 2022-2026, The Isaac Lab Project Developers.
+# Copyright (c) 2022-2025, The Isaac Lab Project Developers (https://github.com/isaac-sim/IsaacLab/blob/main/CONTRIBUTORS.md).
 # All rights reserved.
 #
 # SPDX-License-Identifier: BSD-3-Clause
@@ -39,13 +39,11 @@ class RslRlSymmetryCfg:
     Args:
 
         env (VecEnv): The environment object. This is used to access the environment's properties.
-        obs (torch.Tensor | None): The observation tensor. If None, the observation is not used.
+        obs (tensordict.TensorDict | None): The observation tensor dictionary. If None, the observation is not used.
         action (torch.Tensor | None): The action tensor. If None, the action is not used.
-        obs_type (str): The name of the observation type. Defaults to "policy".
-            This is useful when handling augmentation for different observation groups.
 
     Returns:
-        A tuple containing the augmented observation and action tensors. The tensors can be None,
+        A tuple containing the augmented observation dictionary and action tensors. The tensors can be None,
         if their respective inputs are None.
     """
 

@@ -1,4 +1,4 @@
-# Copyright (c) 2022-2026, The Isaac Lab Project Developers.
+# Copyright (c) 2022-2025, The Isaac Lab Project Developers (https://github.com/isaac-sim/IsaacLab/blob/main/CONTRIBUTORS.md).
 # All rights reserved.
 #
 # SPDX-License-Identifier: BSD-3-Clause
@@ -20,6 +20,7 @@ class DexRetargeter(RetargeterBase):
         """Initialize the DEX retargeter."""
         super().__init__()
         # TODO: Add any initialization parameters and state variables needed
+        pass
 
     def retarget(self, joint_data: dict[str, np.ndarray]) -> Any:
         """Convert OpenXR hand joint poses to DEX robot commands.

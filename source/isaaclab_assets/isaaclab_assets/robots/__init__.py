@@ -1,4 +1,4 @@
-# Copyright (c) 2022-2026, The Isaac Lab Project Developers.
+# Copyright (c) 2022-2025, The Isaac Lab Project Developers (https://github.com/isaac-sim/IsaacLab/blob/main/CONTRIBUTORS.md).
 # All rights reserved.
 #
 # SPDX-License-Identifier: BSD-3-Clause
@@ -14,9 +14,12 @@ from .cart_double_pendulum import *
 from .cartpole import *
 from .fourier import *
 from .franka import *
+from .galbot import *
 from .humanoid import *
 from .humanoid_28 import *
 from .kinova import *
+from .kuka_allegro import *
+from .pick_and_place import *
 from .quadcopter import *
 from .ridgeback_franka import *
 from .sawyer import *

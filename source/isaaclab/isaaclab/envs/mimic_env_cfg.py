@@ -1,8 +1,7 @@
-# Copyright (c) 2024-2026, The Isaac Lab Project Developers.
+# Copyright (c) 2022-2025, The Isaac Lab Project Developers (https://github.com/isaac-sim/IsaacLab/blob/main/CONTRIBUTORS.md).
 # All rights reserved.
 #
 # SPDX-License-Identifier: BSD-3-Clause
-
 # Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 #
 # Licensed under the NVIDIA Source Code License [see LICENSE for details].
@@ -74,6 +73,9 @@ class DataGenConfig:
     generation_interpolate_from_last_target_pose: bool = True
     """Whether to interpolate from last target pose."""
 
+    use_skillgen: bool = False
+    """Whether to use skillgen to generate motion trajectories."""
+
 
 @configclass
 class SubTaskConfig:
@@ -115,6 +117,12 @@ class SubTaskConfig:
 
     first_subtask_start_offset_range: tuple = (0, 0)
     """Range for start offset of the first subtask."""
+
+    subtask_start_offset_range: tuple = (0, 0)
+    """Range for start offset of the subtask (only used if use_skillgen is True)
+
+    Note: This value overrides the first_subtask_start_offset_range when skillgen is enabled
+    """
 
     subtask_term_offset_range: tuple = (0, 0)
     """Range for offsetting subtask termination."""

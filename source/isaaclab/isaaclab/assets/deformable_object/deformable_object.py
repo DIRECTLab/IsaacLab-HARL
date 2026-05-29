@@ -1,4 +1,4 @@
-# Copyright (c) 2022-2026, The Isaac Lab Project Developers.
+# Copyright (c) 2022-2025, The Isaac Lab Project Developers (https://github.com/isaac-sim/IsaacLab/blob/main/CONTRIBUTORS.md).
 # All rights reserved.
 #
 # SPDX-License-Identifier: BSD-3-Clause
@@ -357,6 +357,11 @@ class DeformableObject(AssetBase):
         self._create_buffers()
         # update the deformable body data
         self.update(0.0)
+
+        # Initialize debug visualization handle
+        if self._debug_vis_handle is None:
+            # set initial state of debug visualization
+            self.set_debug_vis(self.cfg.debug_vis)
 
     def _create_buffers(self):
         """Create buffers for storing data."""

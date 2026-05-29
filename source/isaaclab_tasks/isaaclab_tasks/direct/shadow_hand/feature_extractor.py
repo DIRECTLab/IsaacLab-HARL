@@ -1,4 +1,4 @@
-# Copyright (c) 2022-2026, The Isaac Lab Project Developers.
+# Copyright (c) 2022-2025, The Isaac Lab Project Developers (https://github.com/isaac-sim/IsaacLab/blob/main/CONTRIBUTORS.md).
 # All rights reserved.
 #
 # SPDX-License-Identifier: BSD-3-Clause
@@ -73,12 +73,13 @@ class FeatureExtractor:
     If the train flag is set to True, the CNN is trained during the rollout process.
     """
 
-    def __init__(self, cfg: FeatureExtractorCfg, device: str):
+    def __init__(self, cfg: FeatureExtractorCfg, device: str, log_dir: str | None = None):
         """Initialize the feature extractor model.
 
         Args:
-            cfg (FeatureExtractorCfg): Configuration for the feature extractor model.
-            device (str): Device to run the model on.
+            cfg: Configuration for the feature extractor model.
+            device: Device to run the model on.
+            log_dir: Directory to save checkpoints. If None, uses local "logs" folder resolved with respect to this file.
         """
 
         self.cfg = cfg
@@ -89,7 +90,10 @@ class FeatureExtractor:
         self.feature_extractor.to(self.device)
 
         self.step_count = 0
-        self.log_dir = os.path.join(os.path.dirname(os.path.realpath(__file__)), "logs")
+        if log_dir is not None:
+            self.log_dir = log_dir
+        else:
+            self.log_dir = os.path.join(os.path.dirname(os.path.realpath(__file__)), "logs")
         if not os.path.exists(self.log_dir):
             os.makedirs(self.log_dir)
 

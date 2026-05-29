@@ -1,9 +1,17 @@
-# Copyright (c) 2022-2026, The Isaac Lab Project Developers.
+# Copyright (c) 2022-2025, The Isaac Lab Project Developers (https://github.com/isaac-sim/IsaacLab/blob/main/CONTRIBUTORS.md).
 # All rights reserved.
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
-"""Package containing task implementations for various robotic environments."""
+"""Package containing task implementations for various robotic environments.
+
+The package is structured as follows:
+
+- ``direct``: These include single-file implementations of tasks.
+- ``manager_based``: These include task implementations that use the manager-based API.
+- ``utils``: These include utility functions for the tasks.
+
+"""
 
 import os
 import toml

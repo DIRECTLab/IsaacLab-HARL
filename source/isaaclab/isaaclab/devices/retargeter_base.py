@@ -1,10 +1,18 @@
-# Copyright (c) 2022-2026, The Isaac Lab Project Developers.
+# Copyright (c) 2022-2025, The Isaac Lab Project Developers (https://github.com/isaac-sim/IsaacLab/blob/main/CONTRIBUTORS.md).
 # All rights reserved.
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
 from typing import Any
+
+
+@dataclass
+class RetargeterCfg:
+    """Base configuration for hand tracking retargeters."""
+
+    sim_device: str = "cpu"
 
 
 class RetargeterBase(ABC):
@@ -18,6 +26,14 @@ class RetargeterBase(ABC):
     - Sensor data to control signals
     """
 
+    def __init__(self, cfg: RetargeterCfg):
+        """Initialize the retargeter.
+
+        Args:
+            cfg: Configuration for the retargeter
+        """
+        self._sim_device = cfg.sim_device
+
     @abstractmethod
     def retarget(self, data: Any) -> Any:
         """Retarget input data to desired output format.
@@ -28,3 +44,4 @@ class RetargeterBase(ABC):
         Returns:
             Retargeted data in implementation-specific format
         """
+        pass

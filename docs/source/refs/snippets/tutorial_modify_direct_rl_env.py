@@ -1,4 +1,4 @@
-# Copyright (c) 2022-2026, The Isaac Lab Project Developers.
+# Copyright (c) 2022-2025, The Isaac Lab Project Developers (https://github.com/isaac-sim/IsaacLab/blob/main/CONTRIBUTORS.md).
 # All rights reserved.
 #
 # SPDX-License-Identifier: BSD-3-Clause
@@ -6,7 +6,7 @@
 # fmt: off
 
 # [start-init-import]
-from .h1_env import H1EnvCfg
+from .h1_env import H1Env, H1EnvCfg
 # [end-init-import]
 
 # [start-init-register]

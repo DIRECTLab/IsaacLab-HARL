@@ -1,4 +1,9 @@
-# Copyright (c) 2024-2026, The Isaac Lab Project Developers.
+# Copyright (c) 2022-2025, The Isaac Lab Project Developers (https://github.com/isaac-sim/IsaacLab/blob/main/CONTRIBUTORS.md).
+# All rights reserved.
+#
+# SPDX-License-Identifier: BSD-3-Clause
+
+# Copyright (c) 2024-2025, The Isaac Lab Project Developers.
 # All rights reserved.
 #
 # SPDX-License-Identifier: BSD-3-Clause
@@ -15,6 +20,7 @@ class DatasetFileHandlerBase(ABC):
 
     def __init__(self):
         """Initializes the dataset file handler."""
+        pass
 
     @abstractmethod
     def open(self, file_path: str, mode: str = "r"):

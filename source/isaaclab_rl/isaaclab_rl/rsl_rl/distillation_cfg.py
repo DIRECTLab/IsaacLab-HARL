@@ -1,4 +1,4 @@
-# Copyright (c) 2022-2026, The Isaac Lab Project Developers.
+# Copyright (c) 2022-2025, The Isaac Lab Project Developers (https://github.com/isaac-sim/IsaacLab/blob/main/CONTRIBUTORS.md).
 # All rights reserved.
 #
 # SPDX-License-Identifier: BSD-3-Clause
@@ -9,6 +9,8 @@ from dataclasses import MISSING
 from typing import Literal
 
 from isaaclab.utils import configclass
+
+from .rl_cfg import RslRlBaseRunnerCfg
 
 #########################
 # Policy configurations #
@@ -27,6 +29,12 @@ class RslRlDistillationStudentTeacherCfg:
 
     noise_std_type: Literal["scalar", "log"] = "scalar"
     """The type of noise standard deviation for the policy. Default is scalar."""
+
+    student_obs_normalization: bool = MISSING
+    """Whether to normalize the observation for the student network."""
+
+    teacher_obs_normalization: bool = MISSING
+    """Whether to normalize the observation for the teacher network."""
 
     student_hidden_dims: list[int] = MISSING
     """The hidden dimensions of the student network."""
@@ -78,3 +86,31 @@ class RslRlDistillationAlgorithmCfg:
 
     gradient_length: int = MISSING
     """The number of environment steps the gradient flows back."""
+
+    max_grad_norm: None | float = None
+    """The maximum norm the gradient is clipped to."""
+
+    optimizer: Literal["adam", "adamw", "sgd", "rmsprop"] = "adam"
+    """The optimizer to use for the student policy."""
+
+    loss_type: Literal["mse", "huber"] = "mse"
+    """The loss type to use for the student policy."""
+
+
+#########################
+# Runner configurations #
+#########################
+
+
+@configclass
+class RslRlDistillationRunnerCfg(RslRlBaseRunnerCfg):
+    """Configuration of the runner for distillation algorithms."""
+
+    class_name: str = "DistillationRunner"
+    """The runner class name. Default is DistillationRunner."""
+
+    policy: RslRlDistillationStudentTeacherCfg = MISSING
+    """The policy configuration."""
+
+    algorithm: RslRlDistillationAlgorithmCfg = MISSING
+    """The algorithm configuration."""

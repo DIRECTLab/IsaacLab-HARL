@@ -15,7 +15,7 @@ from isaaclab.scene import InteractiveSceneCfg
 from isaaclab.sim import SimulationCfg
 from isaaclab.sim.spawners.from_files import GroundPlaneCfg, spawn_ground_plane
 from isaaclab.utils import configclass
-from isaaclab.utils.math import quat_from_euler_xyz, quat_rotate_inverse, subtract_frame_transforms
+from isaaclab.utils.math import quat_from_euler_xyz, quat_apply_inverse, subtract_frame_transforms
 
 from isaaclab_assets.robots.leatherback import LEATHERBACK_CFG  # isort: skip
 from isaaclab_assets.custom.soccer_ball import SOCCERBALL_CFG  # isort: skip
@@ -253,7 +253,7 @@ class LeatherbackStage1SoccerEnv(DirectMARLEnv):
         Returns:
             torch.Tensor: (E, 3) velocity in the reference's local frame
         """
-        return quat_rotate_inverse(ref_rot_w, obj_vel_w)
+        return quat_apply_inverse(ref_rot_w, obj_vel_w)
 
     def _get_observations(self) -> dict:
         robot_vel = self.robots["robot_0"].data.root_lin_vel_b
@@ -265,7 +265,7 @@ class LeatherbackStage1SoccerEnv(DirectMARLEnv):
         )
 
         # ball velocity in robot frame
-        ball_vel = quat_rotate_inverse(
+        ball_vel = quat_apply_inverse(
             self.robots["robot_0"].data.root_state_w[:, 3:7],
             self.ball.data.root_vel_w[:, :3] - self.robots["robot_0"].data.root_vel_w[:, :3],
         )

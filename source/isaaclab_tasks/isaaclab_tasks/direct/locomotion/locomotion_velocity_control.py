@@ -17,7 +17,7 @@ from isaaclab.envs import DirectMARLEnv, DirectMARLEnvCfg
 from isaaclab.markers import VisualizationMarkers, VisualizationMarkersCfg
 from isaaclab.sensors import ContactSensor
 from isaaclab.utils.assets import ISAAC_NUCLEUS_DIR
-from isaaclab.utils.math import quat_from_angle_axis, quat_rotate_inverse, yaw_quat
+from isaaclab.utils.math import quat_from_angle_axis, quat_apply_inverse, yaw_quat
 
 from . import rewards_funcs as rewards
 
@@ -340,7 +340,7 @@ class LocomotionVelocityEnv(DirectMARLEnv):
 
         # linear velocity tracking
 
-        vel_yaw = quat_rotate_inverse(yaw_quat(robot.data.root_quat_w), robot.data.root_lin_vel_w[:, :3])
+        vel_yaw = quat_apply_inverse(yaw_quat(robot.data.root_quat_w), robot.data.root_lin_vel_w[:, :3])
         lin_vel_error = torch.sum(torch.square(commands[:, :2] - vel_yaw[:, :2]), dim=1)
         lin_vel_error_mapped = torch.exp(-lin_vel_error / 0.25)
 

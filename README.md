@@ -29,8 +29,8 @@ This will automatically install the modified HARL package that works with isaacl
 Install isaacsim
 
 ```
-pip install isaacsim[all]==4.5.0 --extra-index-url https://pypi.nvidia.com
-pip install isaacsim[extscache]==4.5.0 --extra-index-url https://pypi.nvidia.com
+pip install isaacsim[all]==5.1.0 --extra-index-url https://pypi.nvidia.com
+pip install isaacsim[extscache]==5.1.0 --extra-index-url https://pypi.nvidia.com
 ```
 
 

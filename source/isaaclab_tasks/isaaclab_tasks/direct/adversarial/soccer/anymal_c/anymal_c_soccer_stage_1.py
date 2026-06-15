@@ -19,7 +19,7 @@ from isaaclab.scene import InteractiveSceneCfg
 from isaaclab.sim import SimulationCfg
 from isaaclab.sim.spawners.from_files import GroundPlaneCfg, spawn_ground_plane
 from isaaclab.utils import configclass
-from isaaclab.utils.math import quat_from_euler_xyz, quat_rotate_inverse, subtract_frame_transforms
+from isaaclab.utils.math import quat_from_euler_xyz, subtract_frame_transforms, quat_apply_inverse
 
 from isaaclab_assets.robots.anymal import ANYMAL_C_CFG  # isort: skip
 from isaaclab_assets.custom.soccer_ball import SOCCERBALL_CFG  # isort: skip
@@ -196,6 +196,11 @@ class AnymalStage1SoccerEnv(DirectMARLEnv):
         self.wall_2 = RigidObject(self.cfg.wall_2)
         self.wall_3 = RigidObject(self.cfg.wall_3)
         self.ball = RigidObject(self.cfg.ball)
+        self.scene.rigid_objects["wall_0"] = self.wall_0
+        self.scene.rigid_objects["wall_1"] = self.wall_1
+        self.scene.rigid_objects["wall_2"] = self.wall_2
+        self.scene.rigid_objects["wall_3"] = self.wall_3
+        self.scene.rigid_objects["ball"] = self.ball
 
         spawn_ground_plane(
             prim_path="/World/ground",
@@ -263,9 +268,9 @@ class AnymalStage1SoccerEnv(DirectMARLEnv):
             self.robots["robot_0"].data.root_state_w[:, 3:7],
             self.ball.data.root_pos_w,
         )
-
+        
         # ball velocity in robot frame
-        ball_vel = quat_rotate_inverse(
+        ball_vel = quat_apply_inverse(
             self.robots["robot_0"].data.root_state_w[:, 3:7],
             self.ball.data.root_vel_w[:, :3] - self.robots["robot_0"].data.root_vel_w[:, :3],
         )

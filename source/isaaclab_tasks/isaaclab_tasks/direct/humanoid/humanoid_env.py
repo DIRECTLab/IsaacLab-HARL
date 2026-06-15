@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+from isaaclab_assets.robots.humanoid import HUMANOID_CFG
 import isaaclab.sim as sim_utils
 from isaaclab.assets import ArticulationCfg
 from isaaclab.envs import DirectRLEnvCfg
@@ -14,8 +15,6 @@ from isaaclab.terrains import TerrainImporterCfg
 from isaaclab.utils import configclass
 
 from isaaclab_tasks.direct.locomotion.locomotion_env import LocomotionEnv
-
-from isaaclab_assets import HUMANOID_CFG
 
 
 @configclass

@@ -20,7 +20,7 @@ from isaaclab.scene import InteractiveSceneCfg
 from isaaclab.sim import SimulationCfg
 from isaaclab.sim.spawners.from_files import GroundPlaneCfg, spawn_ground_plane
 from isaaclab.utils import configclass
-from isaaclab.utils.math import quat_from_euler_xyz, quat_rotate_inverse, subtract_frame_transforms
+from isaaclab.utils.math import quat_from_euler_xyz, quat_apply_inverse, subtract_frame_transforms
 
 from isaaclab_assets.robots.leatherback import LEATHERBACK_CFG  # isort: skip
 from isaaclab_assets.robots.anymal import ANYMAL_C_CFG  # isort: skip
@@ -391,7 +391,7 @@ class AnymalVsLeatherbackSoccerEnv(DirectMARLEnv):
                 )
 
                 # ball velocity in robot frame
-                ball_vel = quat_rotate_inverse(
+                ball_vel = quat_apply_inverse(
                     self.robots[robot_id].data.root_state_w[:, 3:7],
                     self.ball.data.root_vel_w[:, :3] - self.robots[robot_id].data.root_vel_w[:, :3],
                 )

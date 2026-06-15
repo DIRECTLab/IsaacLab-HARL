@@ -68,10 +68,25 @@ python executable provided by Omniverse. This is specified in the
       "python.defaultInterpreterPath": "${workspaceFolder}/_isaac_sim/python.sh",
    }
 
-If you want to use a different python interpreter (for instance, from your conda environment),
+If you want to use a different python interpreter (for instance, from your conda or uv environment),
 you need to change the python interpreter used by selecting and activating the python interpreter
 of your choice in the bottom left corner of VSCode, or opening the command palette (``Ctrl+Shift+P``)
 and selecting ``Python: Select Interpreter``.
 
 For more information on how to set python interpreter for VSCode, please
 refer to the `VSCode documentation <https://code.visualstudio.com/docs/python/environments#_working-with-python-interpreters>`_.
+
+
+Setting up formatting and linting
+---------------------------------
+
+We use `ruff <https://github.com/astral-sh/ruff/>`_ as a formatter and linter.
+These are configured in the ``.vscode/settings.json`` file:
+
+.. code-block:: json
+
+   {
+      "ruff.configuration": "${workspaceFolder}/pyproject.toml",
+   }
+
+The ruff linter will show warnings and errors in your code to help you follow Python best practices and the project's coding standards.

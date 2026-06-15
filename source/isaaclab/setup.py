@@ -1,4 +1,4 @@
-# Copyright (c) 2022-2025, The Isaac Lab Project Developers (https://github.com/isaac-sim/IsaacLab/blob/main/CONTRIBUTORS.md).
+# Copyright (c) 2022-2026, The Isaac Lab Project Developers (https://github.com/isaac-sim/IsaacLab/blob/main/CONTRIBUTORS.md).
 # All rights reserved.
 #
 # SPDX-License-Identifier: BSD-3-Clause
@@ -6,8 +6,8 @@
 """Installation script for the 'isaaclab' python package."""
 
 import os
-import toml
 
+import toml
 from setuptools import setup
 
 # Obtain the extension data from the extension.toml file
@@ -26,12 +26,12 @@ INSTALL_REQUIRES = [
     # devices
     "hidapi==0.14.0.post2",
     # reinforcement learning
-    "gymnasium==1.2.0",
+    "gymnasium==1.2.1",
     # procedural-generation
     "trimesh",
     "pyglet<2",
     # image processing
-    "transformers",
+    "transformers==4.57.6",
     "einops",  # needed for transformers, doesn't always auto-install
     "warp-lang>=1.8.1,<1.9.0",
     # make sure this is consistent with isaac sim version
@@ -44,6 +44,7 @@ INSTALL_REQUIRES = [
     "junitparser",
     "flatdict>=4.0.1",
     "flaky",
+    "packaging",
 ]
 
 # Append Linux x86_64 and ARM64 deps via PEP 508 markers
@@ -52,6 +53,7 @@ SUPPORTED_ARCHS = "platform_machine in 'x86_64,AMD64'"
 INSTALL_REQUIRES += [
     # required by isaaclab.isaaclab.controllers.pink_ik
     f"pin-pink==3.1.0 ; platform_system == 'Linux' and ({SUPPORTED_ARCHS_ARM})",
+    f"daqp==0.7.2 ; platform_system == 'Linux' and ({SUPPORTED_ARCHS_ARM})",
     # required by isaaclab.devices.openxr.retargeters.humanoid.fourier.gr1_t2_dex_retargeting_utils
     f"dex-retargeting==0.4.6 ; platform_system == 'Linux' and ({SUPPORTED_ARCHS})",
 ]

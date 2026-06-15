@@ -16,7 +16,8 @@ from tqdm import tqdm
 from huggingface_hub import snapshot_download
 
 from isaaclab.app import AppLauncher
-from isaaclab.utils import HF_POLICY_MAP, HF_REPO_ID, policies_summary
+
+from harl.utils.hf_policies import HF_POLICY_MAP, HF_REPO_ID, policies_summary
 
 parser = argparse.ArgumentParser(
     description="Play an RL agent with HARL.",

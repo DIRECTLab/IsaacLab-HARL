@@ -12,7 +12,8 @@ import time
 from huggingface_hub import snapshot_download
 
 from isaaclab.app import AppLauncher
-from isaaclab.utils import HF_POLICY_MAP, HF_REPO_ID, policies_summary
+
+from harl.utils.hf_policies import HF_POLICY_MAP, HF_REPO_ID, policies_summary
 
 parser = argparse.ArgumentParser(
     description="Train an RL agent with HARL.",

@@ -1,4 +1,4 @@
-# Copyright (c) 2022-2026, The Isaac Lab Project Developers.
+# Copyright (c) 2022-2026, The Isaac Lab Project Developers (https://github.com/isaac-sim/IsaacLab/blob/main/CONTRIBUTORS.md).
 # All rights reserved.
 #
 # SPDX-License-Identifier: BSD-3-Clause
@@ -7,60 +7,28 @@
 """Play an algorithm (supports both coordination + adversarial HARL runners)."""
 
 import argparse
-import os
-import pprint
 import sys
-import torch
-from tqdm import tqdm
-
-from huggingface_hub import snapshot_download
-
 from isaaclab.app import AppLauncher
 
-from harl.utils.hf_policies import HF_POLICY_MAP, HF_REPO_ID, policies_summary
+# local imports
+import cli_args  # isort: skip
+
+
 
 parser = argparse.ArgumentParser(
     description="Play an RL agent with HARL.",
     formatter_class=argparse.RawTextHelpFormatter,
-    epilog=policies_summary(HF_POLICY_MAP),
 )
 
-parser.add_argument(
-    "--algorithm",
-    type=str,
-    default="happo",
-    choices=[
-        "happo",
-        "hatrpo",
-        "haa2c",
-        "haddpg",
-        "hatd3",
-        "hasac",
-        "had3qn",
-        "maddpg",
-        "matd3",
-        "mappo",
-        "happo_adv",
-    ],
-    help="Algorithm name.",
-)
+parser.add_argument("--video", action="store_true", default=False, help="Record videos during training.")
+parser.add_argument("--video_length", type=int, default=200, help="Length of the recorded video (in steps).")
+parser.add_argument("--video_interval", type=int, default=20000, help="Interval between video recordings (in steps).")
 parser.add_argument("--num_envs", type=int, default=None, help="Number of environments to simulate.")
 parser.add_argument("--task", type=str, default=None, help="Name of the task.")
 parser.add_argument("--seed", type=int, default=None, help="Seed used for the environment.")
-parser.add_argument("--num_env_steps", type=int, default=None, help="Total environment steps to play.")
-parser.add_argument("--dir", type=str, default=None, help="Folder with trained models (local path).")
-parser.add_argument("--debug", action="store_true", help="Run in debug mode for visualization.")
-parser.add_argument(
-    "--load_starting_policy",
-    action="store_true",
-    help="If set, load the starting policy for this env from HuggingFace (if one exists).",
-)
-parser.add_argument(
-    "--load_trained_policy",
-    action="store_true",
-    help="If set, load the trained policy for this env from HuggingFace (if one exists).",
-)
 
+# append HARL cli argumnets
+cli_args.add_harl_args(parser)
 # append AppLauncher cli args
 AppLauncher.add_app_launcher_args(parser)
 
@@ -80,6 +48,16 @@ simulation_app = app_launcher.app
 # --------------------------------------------------------------------------------------
 # Imports that require the app
 # --------------------------------------------------------------------------------------
+
+import os
+import pprint
+import torch
+import time
+from tqdm import tqdm
+
+from huggingface_hub import snapshot_download
+
+from harl.utils.hf_policies import HF_POLICY_MAP, HF_REPO_ID, policies_summary
 
 from harl.runners import RUNNER_REGISTRY  # noqa: E402
 
@@ -189,9 +167,24 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
 
     env_args["task"] = args["task"]
     env_args["config"] = env_cfg
-    env_args["video_settings"] = {"video": False}
     env_args["headless"] = args["headless"]
     env_args["debug"] = args["debug"]
+    hms_time = time.strftime("%Y-%m-%d-%H-%M-%S", time.localtime())
+    env_args["video_settings"] = {
+        "video": bool(args["video"]),
+        "video_length": args["video_length"],
+        "video_interval": args["video_interval"],
+        "log_dir": os.path.join(
+            algo_args["logger"]["log_dir"],
+            "isaaclab",
+            args["task"],
+            args["algorithm"],
+            args["exp_name"],
+            "-".join(["seed-{:0>5}".format(agent_cfg["seed"]["seed"]), hms_time]),
+            "videos",
+        ),
+    }
+
 
     # create runner
     runner = RUNNER_REGISTRY[args["algo"]](args, algo_args, env_args)

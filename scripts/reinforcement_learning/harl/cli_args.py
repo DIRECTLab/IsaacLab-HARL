@@ -1,5 +1,4 @@
 from __future__ import annotations
-
 import argparse
 from harl.utils.hf_policies import HF_POLICY_MAP, policies_summary
 
@@ -16,8 +15,8 @@ def add_harl_args(parser: argparse.ArgumentParser):
     arg_group = parser.add_argument_group("HARL", description="Arguments for the HARL agent(s)")
 
 
-    arg_group.add_argument("--exp_name", type=str, default="test", help="Name of the Experiment")
-    parser.add_argument("--save_interval", type=int, default=None, help="How often to save the model")
+    arg_group.add_argument("--exp_name", type=str, default="train", help="Name of the Experiment")
+    parser.add_argument("--save_interval", type=int, default=20000, help="How often to save the model")
     parser.add_argument("--save_checkpoints", action="store_true", default=False, help="Whether or not to save checkpoints")
     parser.add_argument(
         "--checkpoint_interval",
@@ -25,8 +24,8 @@ def add_harl_args(parser: argparse.ArgumentParser):
         default=200,
         help="How often to save a model checkpoint (episodes, episodes = num_envs*episode_length steps)",
     )
-    parser.add_argument("--log_interval", type=int, default=None, help="How often to log outputs")
-    parser.add_argument("--num_env_steps", type=int, default=None, help="RL Policy training iterations.")
+    parser.add_argument("--log_interval", type=int, default=20000, help="How often to log outputs")
+    parser.add_argument("--num_env_steps", type=int, default=1000000, help="RL Policy training iterations.")
     parser.add_argument("--dir", type=str, default=None, help="folder with trained models")
     parser.add_argument("--debug", action="store_true", help="whether to run in debug mode for visualization")
 

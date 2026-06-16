@@ -1,85 +1,36 @@
-# Copyright (c) 2022-2026, The Isaac Lab Project Developers.
+# Copyright (c) 2022-2026, The Isaac Lab Project Developers (https://github.com/isaac-sim/IsaacLab/blob/main/CONTRIBUTORS.md).
 # All rights reserved.
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
-"""Train an algorithm."""
+"""Script to train RL agent with HARL."""
+
+"""Launch Isaac Sim Simulator first."""
 
 import argparse
 import sys
-import time
 
-from huggingface_hub import snapshot_download
 
 from isaaclab.app import AppLauncher
 
-from harl.utils.hf_policies import HF_POLICY_MAP, HF_REPO_ID, policies_summary
+# local imports
+import cli_args # isort: skip
 
-parser = argparse.ArgumentParser(
-    description="Train an RL agent with HARL.",
-    formatter_class=argparse.RawTextHelpFormatter,
-    epilog=policies_summary(HF_POLICY_MAP),
-)
 
+# add argparse arguments
+parser = argparse.ArgumentParser(description="Train an RL agent with HARL.")
 parser.add_argument("--video", action="store_true", help="Record videos during training.")
 parser.add_argument("--video_length", type=int, default=500, help="Length of the recorded video (in steps).")
 parser.add_argument("--video_interval", type=int, default=20000, help="Interval between video recordings (in steps).")
 parser.add_argument("--num_envs", type=int, default=None, help="Number of environments to simulate.")
 parser.add_argument("--task", type=str, default=None, help="Name of the task.")
 parser.add_argument("--seed", type=int, default=1, help="Seed used for the environment")
-parser.add_argument("--save_interval", type=int, default=None, help="How often to save the model")
-parser.add_argument("--save_checkpoints", action="store_true", default=False, help="Whether or not to save checkpoints")
-parser.add_argument(
-    "--checkpoint_interval",
-    type=int,
-    default=200,
-    help="How often to save a model checkpoint (episodes, episodes = num_envs*episode_length steps)",
-)
-parser.add_argument("--log_interval", type=int, default=None, help="How often to log outputs")
-parser.add_argument("--exp_name", type=str, default="test", help="Name of the Experiment")
-parser.add_argument("--num_env_steps", type=int, default=None, help="RL Policy training iterations.")
-parser.add_argument("--dir", type=str, default=None, help="folder with trained models")
-parser.add_argument("--debug", action="store_true", help="whether to run in debug mode for visualization")
-parser.add_argument(
-    "--adversarial_training_mode",
-    default="parallel",
-    choices=["parallel", "ladder", "leapfrog"],
-    help=(
-        "the mode type for adversarial training,                     note on ladder training with teams that are"
-        " composed of heterogeneous agents, the two teams must place the robots in the same order in their environment "
-        "                    for ladder to work"
-    ),
-)
-parser.add_argument(
-    "--adversarial_training_iterations",
-    default=50_000_000,
-    type=int,
-    help="the number of iterations to swap training for adversarial modes like ladder and leapfrog",
-)
-
-parser.add_argument(
-    "--algorithm",
-    type=str,
-    default="happo",
-    choices=["happo", "hatrpo", "haa2c", "mappo", "mappo_unshare", "happo_adv"],
-    help="Algorithm name. Choose from: happo, hatrpo, haa2c, mappo, and mappo_unshare.",
-)
-parser.add_argument(
-    "--load_starting_policy",
-    action="store_true",
-    help="If set, load the starting policy for this env from HuggingFace (if one exists).",
-)
-parser.add_argument(
-    "--load_trained_policy",
-    action="store_true",
-    help="If set, load the trained policy for this env from HuggingFace (if one exists).",
-)
-
-
+# append HARL cli arguments
+cli_args.add_harl_args(parser)
 # append AppLauncher cli args
 AppLauncher.add_app_launcher_args(parser)
-# parse the arguments
 args_cli, hydra_args = parser.parse_known_args()
+
 # always enable cameras to record video
 if args_cli.video:
     args_cli.enable_cameras = True
@@ -99,6 +50,11 @@ from isaaclab.envs import DirectMARLEnvCfg, DirectRLEnvCfg, ManagerBasedRLEnvCfg
 
 import isaaclab_tasks  # noqa: F401
 from isaaclab_tasks.utils.hydra import hydra_task_config
+
+from huggingface_hub import snapshot_download
+from harl.utils.hf_policies import HF_POLICY_MAP, HF_REPO_ID
+
+import time
 
 algorithm = args_cli.algorithm.lower()
 agent_cfg_entry_point = f"harl_{algorithm}_cfg_entry_point"

@@ -13,6 +13,7 @@ from isaaclab_tasks.direct.adversarial.sumo.heterogeneous.sumo_stage_2_hetero_by
     SumoStage2HeteroByTeamSameCriticNoNegativeEnv,
     SumoStage2HeteroByTeamSameCriticNoNegativeEnvCfg,
 )
+from .soccer.anymal_c.anymal_c_soccer_stage_2_rosa import AnymalStage2SoccerRosaEnv, AnymalStage2SoccerRosaEnvCfg
 
 from . import agents
 from .minitank_drone.heterogeneous.minitank_adversarial import MinitankAdversarialEnv, MinitankAdversarialEnvCfg
@@ -157,6 +158,16 @@ gym.register(
     disable_env_checker=True,
     kwargs={
         "env_cfg_entry_point": AnymalStage2SoccerEnvCfg,
+        "harl_happo_cfg_entry_point": f"{agents.__name__}:harl_happo_cfg.yaml",
+    },
+)
+
+gym.register(
+    id="AnymalC_Soccer_Score_Goals_Stage_2_Rosa",
+    entry_point=AnymalStage2SoccerRosaEnv,
+    disable_env_checker=True,
+    kwargs={
+        "env_cfg_entry_point": AnymalStage2SoccerRosaEnvCfg,
         "harl_happo_cfg_entry_point": f"{agents.__name__}:harl_happo_cfg.yaml",
     },
 )

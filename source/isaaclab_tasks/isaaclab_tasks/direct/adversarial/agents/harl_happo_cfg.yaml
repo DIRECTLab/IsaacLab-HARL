@@ -116,6 +116,8 @@ algo:
   share_param: False
   # whether to use a fixed optimisation order
   fixed_order: False
+  use_rosa: True
+  n_rosa_actions: 4   # optional, default 8
 logger:
   # logging directory
   log_dir: "./results"

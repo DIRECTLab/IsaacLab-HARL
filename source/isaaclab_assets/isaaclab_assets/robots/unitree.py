@@ -294,7 +294,9 @@ R1_CFG = ArticulationCfg(
         ),
     ),
     init_state=ArticulationCfg.InitialStateCfg(
-        pos=(0.0, 0.0, 1.05),
+        # R1 pelvis stands at ~0.68 m in the default pose (straight-leg reach is 0.74 m).
+        # 1.05 m was inherited from the much taller H1 and dropped the robot ~0.37 m at every reset.
+        pos=(0.0, 0.0, 0.70),
         joint_pos={
             ".*_hip_yaw_joint": 0.0,
             ".*_hip_roll_joint": 0.0,
@@ -370,7 +372,7 @@ R1_CFG = ArticulationCfg(
         ),
     },
 )
-"""Configuration for the Unitree H1 Humanoid robot."""
+"""Configuration for the Unitree R1 Humanoid robot."""
 
 
 G1_CFG = ArticulationCfg(

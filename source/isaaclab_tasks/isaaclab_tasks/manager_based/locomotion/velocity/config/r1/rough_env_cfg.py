@@ -5,6 +5,7 @@
 
 from isaaclab.managers import RewardTermCfg as RewTerm
 from isaaclab.managers import SceneEntityCfg
+from isaaclab.managers import TerminationTermCfg as DoneTerm
 from isaaclab.utils import configclass
 
 import isaaclab_tasks.manager_based.locomotion.velocity.mdp as mdp
@@ -69,6 +70,11 @@ class R1Rewards(RewardsCfg):
         weight=-0.1,
         params={"asset_cfg": SceneEntityCfg("robot", joint_names=["waist_roll_joint", "waist_yaw_joint"])},
     )
+    joint_deviation_head = RewTerm(
+        func=mdp.joint_deviation_l1,
+        weight=-0.1,
+        params={"asset_cfg": SceneEntityCfg("robot", joint_names=["head_pitch_joint", "head_yaw_joint"])},
+    )
 
 
 @configclass
@@ -102,8 +108,7 @@ class R1RoughEnvCfg(LocomotionVelocityRoughEnvCfg):
         self.events.base_com = None
 
         # Rewards
-        self.rewards.undesired_contacts.params["sensor_cfg"].body_names = ["pelvis_link", "waist_.*_link", "head_.*_link", ".*_elbow_link", ".*_shoulder_.*_link", ".*_wrist_.*_link", ".*_hip_.*_link", ".*_knee_link"]
-        self.rewards.undesired_contacts.weight = -0.5
+        self.rewards.undesired_contacts = None
         self.rewards.flat_orientation_l2.weight = -1.0
         self.rewards.dof_torques_l2.weight = 0.0
         self.rewards.action_rate_l2.weight = -0.005
@@ -116,6 +121,14 @@ class R1RoughEnvCfg(LocomotionVelocityRoughEnvCfg):
 
         # Terminations
         self.terminations.base_contact.params["sensor_cfg"].body_names = "pelvis_link"
+        # The pelvis is the *root* of the R1, sitting mid-body with the torso/head/arms above it
+        # and the legs below. When the robot topples it lands on knees/feet/arms/head, so a
+        # pelvis-only contact check often misses the fall and the robot never resets. An
+        # orientation check is a body-agnostic catch-all: terminate once the base tips past ~1 rad.
+        self.terminations.base_orientation = DoneTerm(
+            func=mdp.bad_orientation,
+            params={"limit_angle": 1.0},
+        )
 
 
 @configclass

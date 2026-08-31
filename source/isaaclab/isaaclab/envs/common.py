@@ -1,24 +1,43 @@
-# Copyright (c) 2022-2026, The Isaac Lab Project Developers.
+# Copyright (c) 2022-2026, The Isaac Lab Project Developers (https://github.com/isaac-sim/IsaacLab/blob/main/CONTRIBUTORS.md).
 # All rights reserved.
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
 from __future__ import annotations
 
+import warnings
+from dataclasses import MISSING, fields
+from typing import Dict, Literal, TypeVar  # noqa: UP035
+
 import gymnasium as gym
 import torch
-from typing import Dict, Literal, TypeVar
 
-from isaaclab.utils import configclass
+from isaaclab.utils.configclass import configclass
 
 ##
 # Configuration.
 ##
 
 
+def _viewer_cfg_value_matches_default(current: object, default: object) -> bool:
+    """Return True if ``current`` matches the dataclass field default (including list/tuple equivalence)."""
+    if current == default:
+        return True
+    if isinstance(current, (list, tuple)) and isinstance(default, (list, tuple)):
+        if len(current) != len(default):
+            return False
+        return all(a == b for a, b in zip(current, default, strict=True))
+    return False
+
+
 @configclass
 class ViewerCfg:
-    """Configuration of the scene viewport camera."""
+    """Configuration of the scene viewport camera.
+
+    Note:
+        ViewerCfg is deprecated. In a future release, this config will be streamlined with
+        the KitVisualizerCfg.
+    """
 
     eye: tuple[float, float, float] = (7.5, 7.5, 7.5)
     """Initial camera position (in m). Default is (7.5, 7.5, 7.5)."""
@@ -44,7 +63,8 @@ class ViewerCfg:
     * ``"world"``: The origin of the world.
     * ``"env"``: The origin of the environment defined by :attr:`env_index`.
     * ``"asset_root"``: The center of the asset defined by :attr:`asset_name` in environment :attr:`env_index`.
-    * ``"asset_body"``: The center of the body defined by :attr:`body_name` in asset defined by :attr:`asset_name` in environment :attr:`env_index`.
+    * ``"asset_body"``: The center of the body defined by :attr:`body_name` in asset defined by
+      :attr:`asset_name` in environment :attr:`env_index`.
     """
 
     env_index: int = 0
@@ -64,6 +84,31 @@ class ViewerCfg:
 
     This quantity is only effective if :attr:`origin` is set to "asset_body".
     """
+
+    def __post_init__(self) -> None:
+        # Dataclasses do not record which arguments were passed explicitly vs defaulted, and
+        # warning only on ``**kwargs`` would miss positional arguments. Comparing each field to
+        # its declared default catches any non-default effective configuration (including
+        # ``replace()`` and ``from_dict``), while keeping ``ViewerCfg()`` silent.
+        differing: list[str] = []
+        for f in fields(self):
+            if not f.init:
+                continue
+            if f.default is not MISSING:
+                default_val = f.default
+            elif f.default_factory is not MISSING:
+                default_val = f.default_factory()
+            else:
+                continue
+            if not _viewer_cfg_value_matches_default(getattr(self, f.name), default_val):
+                differing.append(f.name)
+        if differing:
+            warnings.warn(
+                "ViewerCfg is deprecated. In a future release, this config will be streamlined with "
+                "the KitVisualizerCfg.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
 
 
 ##

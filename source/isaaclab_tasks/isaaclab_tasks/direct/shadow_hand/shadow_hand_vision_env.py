@@ -1,4 +1,4 @@
-# Copyright (c) 2022-2026, The Isaac Lab Project Developers.
+# Copyright (c) 2022-2026, The Isaac Lab Project Developers (https://github.com/isaac-sim/IsaacLab/blob/main/CONTRIBUTORS.md).
 # All rights reserved.
 #
 # SPDX-License-Identifier: BSD-3-Clause
@@ -6,58 +6,21 @@
 
 from __future__ import annotations
 
+from typing import TYPE_CHECKING
+
 import torch
-
-import omni.usd
-
-# from Isaac Sim 4.2 onwards, pxr.Semantics is deprecated
-try:
-    import Semantics
-except ModuleNotFoundError:
-    from pxr import Semantics
 
 import isaaclab.sim as sim_utils
 from isaaclab.assets import Articulation, RigidObject
-from isaaclab.scene import InteractiveSceneCfg
-from isaaclab.sensors import TiledCamera, TiledCameraCfg
-from isaaclab.utils import configclass
+from isaaclab.sensors import Camera
 from isaaclab.utils.math import quat_apply
 
 from isaaclab_tasks.direct.inhand_manipulation.inhand_manipulation_env import InHandManipulationEnv, unscale
 
-from .feature_extractor import FeatureExtractor, FeatureExtractorCfg
-from .shadow_hand_env_cfg import ShadowHandEnvCfg
+from .feature_extractor import FeatureExtractor
 
-
-@configclass
-class ShadowHandVisionEnvCfg(ShadowHandEnvCfg):
-    # scene
-    scene: InteractiveSceneCfg = InteractiveSceneCfg(num_envs=1225, env_spacing=2.0, replicate_physics=True)
-
-    # camera
-    tiled_camera: TiledCameraCfg = TiledCameraCfg(
-        prim_path="/World/envs/env_.*/Camera",
-        offset=TiledCameraCfg.OffsetCfg(pos=(0, -0.35, 1.0), rot=(0.7071, 0.0, 0.7071, 0.0), convention="world"),
-        data_types=["rgb", "depth", "semantic_segmentation"],
-        spawn=sim_utils.PinholeCameraCfg(
-            focal_length=24.0, focus_distance=400.0, horizontal_aperture=20.955, clipping_range=(0.1, 20.0)
-        ),
-        width=120,
-        height=120,
-    )
-    feature_extractor = FeatureExtractorCfg()
-
-    # env
-    observation_space = 164 + 27  # state observation + vision CNN embedding
-    state_space = 187 + 27  # asymettric states + vision CNN embedding
-
-
-@configclass
-class ShadowHandVisionEnvPlayCfg(ShadowHandVisionEnvCfg):
-    # scene
-    scene: InteractiveSceneCfg = InteractiveSceneCfg(num_envs=64, env_spacing=2.0, replicate_physics=True)
-    # inference for CNN
-    feature_extractor = FeatureExtractorCfg(train=False, load_checkpoint=True)
+if TYPE_CHECKING:
+    from .shadow_hand_vision_env_cfg import ShadowHandVisionEnvCfg
 
 
 class ShadowHandVisionEnv(InHandManipulationEnv):
@@ -65,7 +28,17 @@ class ShadowHandVisionEnv(InHandManipulationEnv):
 
     def __init__(self, cfg: ShadowHandVisionEnvCfg, render_mode: str | None = None, **kwargs):
         super().__init__(cfg, render_mode, **kwargs)
-        self.feature_extractor = FeatureExtractor(self.cfg.feature_extractor, self.device)
+        # Derive CNN input data types from the resolved camera config so that any camera
+        # preset (e.g. presets=rgb, presets=albedo) automatically configures the right
+        # network input channels without requiring a separate env config class.
+        self.feature_extractor = FeatureExtractor(
+            self.cfg.feature_extractor,
+            self.device,
+            self.cfg.tiled_camera.data_types,
+            self.cfg.log_dir,
+            height=self.cfg.tiled_camera.height,
+            width=self.cfg.tiled_camera.width,
+        )
         # hide goal cubes
         self.goal_pos[:, :] = torch.tensor([-0.2, 0.1, 0.6], device=self.device)
         # keypoints buffer
@@ -75,22 +48,15 @@ class ShadowHandVisionEnv(InHandManipulationEnv):
     def _setup_scene(self):
         # add hand, in-hand object, and goal object
         self.hand = Articulation(self.cfg.robot_cfg)
-        self.object = RigidObject(self.cfg.object_cfg)
-        self._tiled_camera = TiledCamera(self.cfg.tiled_camera)
-        # get stage
-        stage = omni.usd.get_context().get_stage()
-        # add semantics for in-hand cube
-        prim = stage.GetPrimAtPath("/World/envs/env_0/object")
-        sem = Semantics.SemanticsAPI.Apply(prim, "Semantics")
-        sem.CreateSemanticTypeAttr()
-        sem.CreateSemanticDataAttr()
-        sem.GetSemanticTypeAttr().Set("class")
-        sem.GetSemanticDataAttr().Set("cube")
+        self.object: Articulation | RigidObject = self.cfg.object_cfg.class_type(self.cfg.object_cfg)
+        self._joint_wrench_sensor = self._create_joint_wrench_sensor()
+        self._tiled_camera = Camera(self.cfg.tiled_camera)
         # clone and replicate (no need to filter for this environment)
         self.scene.clone_environments(copy_from_source=False)
         # add articulation to scene - we must register to scene to randomize with EventManager
         self.scene.articulations["robot"] = self.hand
         self.scene.rigid_objects["object"] = self.object
+        self.scene.sensors["joint_wrench"] = self._joint_wrench_sensor
         self.scene.sensors["tiled_camera"] = self._tiled_camera
         # add lights
         light_cfg = sim_utils.DomeLightCfg(intensity=2000.0, color=(0.75, 0.75, 0.75))
@@ -104,9 +70,7 @@ class ShadowHandVisionEnv(InHandManipulationEnv):
 
         # train CNN to regress on keypoint positions
         pose_loss, embeddings = self.feature_extractor.step(
-            self._tiled_camera.data.output["rgb"],
-            self._tiled_camera.data.output["depth"],
-            self._tiled_camera.data.output["semantic_segmentation"][..., :3],
+            self._tiled_camera.data.output,
             object_pose,
         )
 
@@ -124,10 +88,11 @@ class ShadowHandVisionEnv(InHandManipulationEnv):
             dim=-1,
         )
 
-        # log pose loss from CNN training
-        if "log" not in self.extras:
-            self.extras["log"] = dict()
-        self.extras["log"]["pose_loss"] = pose_loss
+        # log pose loss from CNN training (None when disabled or in inference mode)
+        if pose_loss is not None:
+            if "log" not in self.extras:
+                self.extras["log"] = dict()
+            self.extras["log"]["pose_loss"] = pose_loss
 
         return obs
 
@@ -164,8 +129,7 @@ class ShadowHandVisionEnv(InHandManipulationEnv):
         # vision observations from CMM
         image_obs = self._compute_image_observations()
         obs = torch.cat((state_obs, image_obs), dim=-1)
-        # asymmetric critic states
-        self.fingertip_force_sensors = self.hand.root_physx_view.get_link_incoming_joint_force()[:, self.finger_bodies]
+        self._update_fingertip_force_sensors()
         state = self._compute_states()
 
         observations = {"policy": obs, "critic": state}

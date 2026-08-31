@@ -1,4 +1,4 @@
-# Copyright (c) 2022-2026, The Isaac Lab Project Developers.
+# Copyright (c) 2022-2026, The Isaac Lab Project Developers (https://github.com/isaac-sim/IsaacLab/blob/main/CONTRIBUTORS.md).
 # All rights reserved.
 #
 # SPDX-License-Identifier: BSD-3-Clause
@@ -16,7 +16,6 @@ This script demonstrates how to simulate bipedal robots.
 """Launch Isaac Sim Simulator first."""
 
 import argparse
-import torch
 
 from isaaclab.app import AppLauncher
 
@@ -24,6 +23,8 @@ from isaaclab.app import AppLauncher
 parser = argparse.ArgumentParser(description="This script demonstrates how to simulate bipedal robots.")
 # append AppLauncher cli args
 AppLauncher.add_app_launcher_args(parser)
+# demos should open Kit visualizer by default
+parser.set_defaults(visualizer=["kit"])
 # parse the arguments
 args_cli = parser.parse_args()
 
@@ -32,6 +33,8 @@ app_launcher = AppLauncher(args_cli)
 simulation_app = app_launcher.app
 
 """Rest everything follows."""
+
+import torch
 
 import isaaclab.sim as sim_utils
 from isaaclab.assets import Articulation
@@ -55,11 +58,13 @@ def design_scene(sim: sim_utils.SimulationContext) -> tuple[list, torch.Tensor]:
     cfg.func("/World/Light", cfg)
 
     # Define origins
-    origins = torch.tensor([
-        [0.0, -1.0, 0.0],
-        [0.0, 0.0, 0.0],
-        [0.0, 1.0, 0.0],
-    ]).to(device=sim.device)
+    origins = torch.tensor(
+        [
+            [0.0, -1.0, 0.0],
+            [0.0, 0.0, 0.0],
+            [0.0, 1.0, 0.0],
+        ]
+    ).to(device=sim.device)
 
     # Robots
     cassie = Articulation(CASSIE_CFG.replace(prim_path="/World/Cassie"))
@@ -85,18 +90,23 @@ def run_simulator(sim: sim_utils.SimulationContext, robots: list[Articulation], 
             count = 0
             for index, robot in enumerate(robots):
                 # reset dof state
-                joint_pos, joint_vel = robot.data.default_joint_pos, robot.data.default_joint_vel
-                robot.write_joint_state_to_sim(joint_pos, joint_vel)
-                root_state = robot.data.default_root_state.clone()
-                root_state[:, :3] += origins[index]
-                robot.write_root_pose_to_sim(root_state[:, :7])
-                robot.write_root_velocity_to_sim(root_state[:, 7:])
+                joint_pos, joint_vel = (
+                    robot.data.default_joint_pos.torch,
+                    robot.data.default_joint_vel.torch,
+                )
+                robot.write_joint_position_to_sim_index(position=joint_pos)
+                robot.write_joint_velocity_to_sim_index(velocity=joint_vel)
+                root_pose = robot.data.default_root_pose.torch.clone()
+                root_pose[:, :3] += origins[index]
+                robot.write_root_pose_to_sim_index(root_pose=root_pose)
+                root_vel = robot.data.default_root_vel.torch.clone()
+                robot.write_root_velocity_to_sim_index(root_velocity=root_vel)
                 robot.reset()
             # reset command
             print(">>>>>>>> Reset!")
         # apply action to the robot
         for robot in robots:
-            robot.set_joint_position_target(robot.data.default_joint_pos.clone())
+            robot.set_joint_position_target_index(target=robot.data.default_joint_pos.torch.clone())
             robot.write_data_to_sim()
         # perform step
         sim.step()

@@ -110,6 +110,8 @@ to understand the entire simulation scene. This helps speed up the simulation sc
 
 However, in the case of spawning different assets in different environments, this assumption does not hold
 anymore. Hence the flag :attr:`scene.InteractiveScene.replicate_physics` must be disabled.
+For a full guide on the template-based cloning system including strategies and collision filtering,
+see :doc:`cloning`.
 
 .. literalinclude:: ../../../scripts/demos/multi_asset.py
    :language: python
@@ -123,7 +125,7 @@ To execute the script with multiple environments and randomized assets, use the 
 
 .. code-block:: bash
 
-  ./isaaclab.sh -p scripts/demos/multi_asset.py --num_envs 2048
+   python scripts/demos/multi_asset.py --num_envs 2048
 
 This command runs the simulation with 2048 environments, each with randomly selected assets.
 To stop the simulation, you can close the window, or press ``Ctrl+C`` in the terminal.

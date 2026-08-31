@@ -1,4 +1,4 @@
-# Copyright (c) 2022-2026, The Isaac Lab Project Developers.
+# Copyright (c) 2022-2026, The Isaac Lab Project Developers (https://github.com/isaac-sim/IsaacLab/blob/main/CONTRIBUTORS.md).
 # All rights reserved.
 #
 # SPDX-License-Identifier: BSD-3-Clause
@@ -12,6 +12,8 @@ parser = argparse.ArgumentParser(description="Example on using the frame transfo
 parser.add_argument("--num_envs", type=int, default=1, help="Number of environments to spawn.")
 # append AppLauncher cli args
 AppLauncher.add_app_launcher_args(parser)
+# demos should open Kit visualizer by default
+parser.set_defaults(visualizer=["kit"])
 # parse the arguments
 args_cli = parser.parse_args()
 
@@ -27,7 +29,7 @@ import isaaclab.sim as sim_utils
 from isaaclab.assets import AssetBaseCfg, RigidObjectCfg
 from isaaclab.scene import InteractiveScene, InteractiveSceneCfg
 from isaaclab.sensors import FrameTransformerCfg
-from isaaclab.utils import configclass
+from isaaclab.utils.configclass import configclass
 
 ##
 # Pre-defined configs
@@ -95,7 +97,6 @@ def run_simulator(sim: sim_utils.SimulationContext, scene: InteractiveScene):
 
     # Simulate physics
     while simulation_app.is_running():
-
         if count % 500 == 0:
             # reset counter
             count = 0
@@ -103,25 +104,27 @@ def run_simulator(sim: sim_utils.SimulationContext, scene: InteractiveScene):
             # root state
             # we offset the root state by the origin since the states are written in simulation world frame
             # if this is not done, then the robots will be spawned at the (0, 0, 0) of the simulation world
-            root_state = scene["robot"].data.default_root_state.clone()
-            root_state[:, :3] += scene.env_origins
-            scene["robot"].write_root_pose_to_sim(root_state[:, :7])
-            scene["robot"].write_root_velocity_to_sim(root_state[:, 7:])
+            root_pose = scene["robot"].data.default_root_pose.torch.clone()
+            root_pose[:, :3] += scene.env_origins
+            scene["robot"].write_root_pose_to_sim_index(root_pose=root_pose)
+            root_vel = scene["robot"].data.default_root_vel.torch.clone()
+            scene["robot"].write_root_velocity_to_sim_index(root_velocity=root_vel)
             # set joint positions with some noise
             joint_pos, joint_vel = (
-                scene["robot"].data.default_joint_pos.clone(),
-                scene["robot"].data.default_joint_vel.clone(),
+                scene["robot"].data.default_joint_pos.torch.clone(),
+                scene["robot"].data.default_joint_vel.torch.clone(),
             )
             joint_pos += torch.rand_like(joint_pos) * 0.1
-            scene["robot"].write_joint_state_to_sim(joint_pos, joint_vel)
+            scene["robot"].write_joint_position_to_sim_index(position=joint_pos)
+            scene["robot"].write_joint_velocity_to_sim_index(velocity=joint_vel)
             # clear internal buffers
             scene.reset()
             print("[INFO]: Resetting robot state...")
         # Apply default actions to the robot
         # -- generate actions/commands
-        targets = scene["robot"].data.default_joint_pos
+        targets = scene["robot"].data.default_joint_pos.torch
         # -- apply action to the robot
-        scene["robot"].set_joint_position_target(targets)
+        scene["robot"].set_joint_position_target_index(target=targets)
         # -- write data to sim
         scene.write_data_to_sim()
         # perform step

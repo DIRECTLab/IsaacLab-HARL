@@ -1,7 +1,9 @@
-# Copyright (c) 2022-2026, The Isaac Lab Project Developers.
+# Copyright (c) 2022-2026, The Isaac Lab Project Developers (https://github.com/isaac-sim/IsaacLab/blob/main/CONTRIBUTORS.md).
 # All rights reserved.
 #
 # SPDX-License-Identifier: BSD-3-Clause
+
+from isaaclab_physx.physics import PhysxCfg
 
 import isaaclab.envs.mdp as mdp
 import isaaclab.sim as sim_utils
@@ -13,7 +15,7 @@ from isaaclab.scene import InteractiveSceneCfg
 from isaaclab.sensors import ContactSensorCfg, RayCasterCfg, patterns
 from isaaclab.sim import SimulationCfg
 from isaaclab.terrains import TerrainImporterCfg
-from isaaclab.utils import configclass
+from isaaclab.utils.configclass import configclass
 
 ##
 # Pre-defined configs
@@ -63,6 +65,7 @@ class AnymalCFlatEnvCfg(DirectRLEnvCfg):
     sim: SimulationCfg = SimulationCfg(
         dt=1 / 200,
         render_interval=decimation,
+        physics=PhysxCfg(gpu_max_rigid_patch_count=2**20),
         physics_material=sim_utils.RigidBodyMaterialCfg(
             friction_combine_mode="multiply",
             restitution_combine_mode="multiply",
@@ -109,6 +112,15 @@ class AnymalCFlatEnvCfg(DirectRLEnvCfg):
     undesired_contact_reward_scale = -1.0
     flat_orientation_reward_scale = -5.0
 
+    # success criteria — episode success_rate = per-env binary check that the *episode-mean*
+    # error stayed below both thresholds, mean-reduced across resetting envs. Matches the
+    # manager-based ``UniformVelocityCommandCfg`` defaults so flat/rough/direct curves are
+    # comparable on the unified ``Metrics/success_rate`` card.
+    vel_xy_success_threshold: float = 0.5
+    """Threshold on the per-episode mean XY velocity error norm [m/s]."""
+    vel_yaw_success_threshold: float = 0.4
+    """Threshold on the per-episode mean yaw velocity error [rad/s]."""
+
 
 @configclass
 class AnymalCRoughEnvCfg(AnymalCFlatEnvCfg):
@@ -138,7 +150,7 @@ class AnymalCRoughEnvCfg(AnymalCFlatEnvCfg):
     height_scanner = RayCasterCfg(
         prim_path="/World/envs/env_.*/Robot/base",
         offset=RayCasterCfg.OffsetCfg(pos=(0.0, 0.0, 20.0)),
-        attach_yaw_only=True,
+        ray_alignment="yaw",
         pattern_cfg=patterns.GridPatternCfg(resolution=0.1, size=[1.6, 1.0]),
         debug_vis=False,
         mesh_prim_paths=["/World/ground"],

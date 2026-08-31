@@ -114,7 +114,7 @@ Here we make an Xform prim to group all the primitive shapes under it.
 .. literalinclude:: ../../../../scripts/tutorials/00_sim/spawn_prims.py
    :language: python
    :start-at: # create a new xform prim for all objects to be spawned under
-   :end-at: prim_utils.create_prim("/World/Objects", "Xform")
+   :end-at: sim_utils.create_prim("/World/Objects", "Xform")
 
 Next, we spawn a cone using the :class:`~sim.spawners.shapes.ConeCfg` class. It is possible to specify
 the radius, height, physics properties, and material properties of the cone. By default, the physics and material
@@ -139,7 +139,8 @@ default to the default values set by USD Physics.
 Lastly, we spawn a cuboid ``CuboidDeformable`` which contains deformable body physics properties. Unlike the
 rigid body simulation, a deformable body can have relative motion between its vertices. This is useful for simulating
 soft bodies like cloth, rubber, or jello. It is important to note that deformable bodies are only supported in
-GPU simulation and require a mesh object to be spawned with the deformable body physics properties.
+GPU simulation and require a mesh object to be spawned with deformable body physics properties and a deformable
+physics material. This example uses the PhysX-specific deformable property and material cfgs.
 
 .. literalinclude:: ../../../../scripts/tutorials/00_sim/spawn_prims.py
    :language: python
@@ -188,5 +189,5 @@ demonstrates the basic concepts of scene designing in Isaac Lab and how to use t
 we will now look at how to interact with the scene and the simulation.
 
 
-.. _`USD documentation`: https://graphics.pixar.com/usd/docs/index.html
+.. _`USD documentation`: https://openusd.org/release/index.html
 .. _`different light prims`: https://youtu.be/c7qyI8pZvF4?feature=shared

@@ -1,278 +1,274 @@
-# Copyright (c) 2022-2026, The Isaac Lab Project Developers.
+# Copyright (c) 2022-2026, The Isaac Lab Project Developers (https://github.com/isaac-sim/IsaacLab/blob/main/CONTRIBUTORS.md).
 # All rights reserved.
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
-import builtins
-import enum
-import numpy as np
+from __future__ import annotations
+
+import gc
+import logging
 import os
-import toml
-import torch
 import traceback
-import weakref
 from collections.abc import Iterator
 from contextlib import contextmanager
-from typing import Any
+from dataclasses import fields
+from typing import TYPE_CHECKING, Any
 
-import carb
-import flatdict
-import isaacsim.core.utils.stage as stage_utils
-import omni.log
-import omni.physx
-from isaacsim.core.api.simulation_context import SimulationContext as _SimulationContext
-from isaacsim.core.utils.carb import get_carb_setting, set_carb_setting
-from isaacsim.core.utils.viewports import set_camera_view
-from isaacsim.core.version import get_version
-from pxr import Gf, PhysxSchema, Usd, UsdPhysics
+import toml
+import torch
+
+import isaaclab.sim as sim_utils
+import isaaclab.sim.utils.stage as stage_utils
+from isaaclab.app.settings_manager import SettingsManager
+from isaaclab.envs.utils.recording_hooks import run_recording_hooks_after_visualizers
+from isaaclab.markers.vis_marker_registry import VisMarkerRegistry
+from isaaclab.physics import PhysicsEvent, PhysicsManager
+from isaaclab.physics.scene_data_requirements import (
+    SceneDataRequirement,
+    resolve_scene_data_requirements,
+)
+from isaaclab.renderers.render_context import RenderContext
+from isaaclab.scene_data import SceneDataProvider
+from isaaclab.sim.service_locator import ServiceLocator
+from isaaclab.sim.utils import create_new_stage
+from isaaclab.utils.string import clear_resolve_matching_names_cache
+from isaaclab.utils.version import has_kit
+from isaaclab.visualizers.base_visualizer import BaseVisualizer
+
+if TYPE_CHECKING:
+    from pxr import Usd
+
+    from isaaclab.cloner.clone_plan import ClonePlan
 
 from .simulation_cfg import SimulationCfg
 from .spawners import DomeLightCfg, GroundPlaneCfg
-from .utils import bind_physics_material
+
+logger = logging.getLogger(__name__)
+
+# Visualizer type names (CLI and config). App launcher parses CSV and stores as a space-separated setting.
+_VISUALIZER_TYPES = ("newton", "rerun", "viser", "kit")
 
 
-class SimulationContext(_SimulationContext):
-    """A class to control simulation-related events such as physics stepping and rendering.
+class SettingsHelper:
+    """Helper for typed settings access via SettingsManager."""
 
-    The simulation context helps control various simulation aspects. This includes:
+    def __init__(self, settings: SettingsManager):
+        self._settings = settings
 
-    * configure the simulator with different settings such as the physics time-step, the number of physics substeps,
-      and the physics solver parameters (for more information, see :class:`isaaclab.sim.SimulationCfg`)
-    * playing, pausing, stepping and stopping the simulation
-    * adding and removing callbacks to different simulation events such as physics stepping, rendering, etc.
+    def set(self, name: str, value: Any) -> None:
+        """Set a setting with automatic type routing."""
+        if isinstance(value, bool):
+            self._settings.set_bool(name, value)
+        elif isinstance(value, int):
+            self._settings.set_int(name, value)
+        elif isinstance(value, float):
+            self._settings.set_float(name, value)
+        elif isinstance(value, str):
+            self._settings.set_string(name, value)
+        elif isinstance(value, (list, tuple)):
+            self._settings.set(name, value)
+        else:
+            raise ValueError(f"Unsupported value type for setting '{name}': {type(value)}")
 
-    This class inherits from the :class:`isaacsim.core.api.simulation_context.SimulationContext` class and
-    adds additional functionalities such as setting up the simulation context with a configuration object,
-    exposing other commonly used simulator-related functions, and performing version checks of Isaac Sim
-    to ensure compatibility between releases.
+    def get(self, name: str) -> Any:
+        """Get a setting value."""
+        return self._settings.get(name)
 
-    The simulation context is a singleton object. This means that there can only be one instance
-    of the simulation context at any given time. This is enforced by the parent class. Therefore, it is
-    not possible to create multiple instances of the simulation context. Instead, the simulation context
-    can be accessed using the ``instance()`` method.
 
-    .. attention::
-        Since we only support the `PyTorch <https://pytorch.org/>`_ backend for simulation, the
-        simulation context is configured to use the ``torch`` backend by default. This means that
-        all the data structures used in the simulation are ``torch.Tensor`` objects.
+class SimulationContext:
+    """Controls simulation lifecycle including physics stepping and rendering.
 
-    The simulation context can be used in two different modes of operations:
+    This singleton class manages:
 
-    1. **Standalone python script**: In this mode, the user has full control over the simulation and
-       can trigger stepping events synchronously (i.e. as a blocking call). In this case the user
-       has to manually call :meth:`step` step the physics simulation and :meth:`render` to
-       render the scene.
-    2. **Omniverse extension**: In this mode, the user has limited control over the simulation stepping
-       and all the simulation events are triggered asynchronously (i.e. as a non-blocking call). In this
-       case, the user can only trigger the simulation to start, pause, and stop. The simulation takes
-       care of stepping the physics simulation and rendering the scene.
+    * Physics configuration (time-step, solver parameters via :class:`isaaclab.sim.SimulationCfg`)
+    * Simulation state (play, pause, step, stop)
+    * Rendering and visualization
 
-    Based on above, for most functions in this class there is an equivalent function that is suffixed
-    with ``_async``. The ``_async`` functions are used in the Omniverse extension mode and
-    the non-``_async`` functions are used in the standalone python script mode.
+    The singleton instance can be accessed using the ``instance()`` class method.
     """
 
-    class RenderMode(enum.IntEnum):
-        """Different rendering modes for the simulation.
+    # SINGLETON PATTERN
 
-        Render modes correspond to how the viewport and other UI elements (such as listeners to keyboard or mouse
-        events) are updated. There are three main components that can be updated when the simulation is rendered:
+    _instance: SimulationContext | None = None
 
-        1. **UI elements and other extensions**: These are UI elements (such as buttons, sliders, etc.) and other
-           extensions that are running in the background that need to be updated when the simulation is running.
-        2. **Cameras**: These are typically based on Hydra textures and are used to render the scene from different
-           viewpoints. They can be attached to a viewport or be used independently to render the scene.
-        3. **Viewports**: These are windows where you can see the rendered scene.
+    def __new__(cls, cfg: SimulationCfg | None = None):
+        """Enforce singleton pattern."""
+        if cls._instance is not None:
+            return cls._instance
+        return super().__new__(cls)
 
-        Updating each of the above components has a different overhead. For example, updating the viewports is
-        computationally expensive compared to updating the UI elements. Therefore, it is useful to be able to
-        control what is updated when the simulation is rendered. This is where the render mode comes in. There are
-        four different render modes:
-
-        * :attr:`NO_GUI_OR_RENDERING`: The simulation is running without a GUI and off-screen rendering flag is disabled,
-          so none of the above are updated.
-        * :attr:`NO_RENDERING`: No rendering, where only 1 is updated at a lower rate.
-        * :attr:`PARTIAL_RENDERING`: Partial rendering, where only 1 and 2 are updated.
-        * :attr:`FULL_RENDERING`: Full rendering, where everything (1, 2, 3) is updated.
-
-        .. _Viewports: https://docs.omniverse.nvidia.com/extensions/latest/ext_viewport.html
-        """
-
-        NO_GUI_OR_RENDERING = -1
-        """The simulation is running without a GUI and off-screen rendering is disabled."""
-        NO_RENDERING = 0
-        """No rendering, where only other UI elements are updated at a lower rate."""
-        PARTIAL_RENDERING = 1
-        """Partial rendering, where the simulation cameras and UI elements are updated."""
-        FULL_RENDERING = 2
-        """Full rendering, where all the simulation viewports, cameras and UI elements are updated."""
+    @classmethod
+    def instance(cls) -> SimulationContext | None:
+        """Get the singleton instance, or None if not created."""
+        return cls._instance
 
     def __init__(self, cfg: SimulationCfg | None = None):
-        """Creates a simulation context to control the simulator.
+        """Initialize the simulation context.
 
         Args:
-            cfg: The configuration of the simulation. Defaults to None,
-                in which case the default configuration is used.
+            cfg: Simulation configuration. Defaults to None (uses default config).
         """
-        # store input
-        if cfg is None:
-            cfg = SimulationCfg()
-        # check that the config is valid
-        cfg.validate()
-        self.cfg = cfg
-        # check that simulation is running
-        if stage_utils.get_current_stage() is None:
-            raise RuntimeError("The stage has not been created. Did you run the simulator?")
+        if type(self)._instance is not None:
+            return  # Already initialized
 
-        # acquire settings interface
-        self.carb_settings = carb.settings.get_settings()
+        from pxr import UsdUtils  # noqa: PLC0415
 
-        # apply carb physics settings
-        self._apply_physics_settings()
+        # Store config
+        self.cfg = SimulationCfg() if cfg is None else cfg
 
-        # note: we read this once since it is not expected to change during runtime
-        # read flag for whether a local GUI is enabled
-        self._local_gui = self.carb_settings.get("/app/window/enabled")
-        # read flag for whether livestreaming GUI is enabled
-        self._livestream_gui = self.carb_settings.get("/app/livestream/enabled")
-        # read flag for whether XR GUI is enabled
-        self._xr_gui = self.carb_settings.get("/app/xr/enabled")
-
-        # read flag for whether the Isaac Lab viewport capture pipeline will be used,
-        # casting None to False if the flag doesn't exist
-        # this flag is set from the AppLauncher class
-        self._offscreen_render = bool(self.carb_settings.get("/isaaclab/render/offscreen"))
-        # read flag for whether the default viewport should be enabled
-        self._render_viewport = bool(self.carb_settings.get("/isaaclab/render/active_viewport"))
-        # flag for whether any GUI will be rendered (local, livestreamed or viewport)
-        self._has_gui = self._local_gui or self._livestream_gui or self._xr_gui
-
-        # apply render settings from render config
-        self._apply_render_settings_from_cfg()
-
-        # store the default render mode
-        if not self._has_gui and not self._offscreen_render:
-            # set default render mode
-            # note: this is the terminal state: cannot exit from this render mode
-            self.render_mode = self.RenderMode.NO_GUI_OR_RENDERING
-            # set viewport context to None
-            self._viewport_context = None
-            self._viewport_window = None
-        elif not self._has_gui and self._offscreen_render:
-            # set default render mode
-            # note: this is the terminal state: cannot exit from this render mode
-            self.render_mode = self.RenderMode.PARTIAL_RENDERING
-            # set viewport context to None
-            self._viewport_context = None
-            self._viewport_window = None
+        # Get or create stage based on config
+        stage_cache = UsdUtils.StageCache.Get()
+        if self.cfg.create_stage_in_memory:
+            self.stage = create_new_stage()
         else:
-            # note: need to import here in case the UI is not available (ex. headless mode)
-            import omni.ui as ui
-            from omni.kit.viewport.utility import get_active_viewport
+            # Prefer the thread-local current stage (set by create_new_stage / test fixtures)
+            # over cache lookup, since the cache may contain stale stages from prior tests.
+            current = getattr(stage_utils._context, "stage", None)
+            if current is not None:
+                self.stage = current
+            else:
+                all_stages = stage_cache.GetAllStages() if stage_cache.Size() > 0 else []  # type: ignore[union-attr]
+                self.stage = all_stages[0] if all_stages else create_new_stage()
 
-            # set default render mode
-            # note: this can be changed by calling the `set_render_mode` function
-            self.render_mode = self.RenderMode.FULL_RENDERING
-            # acquire viewport context
-            self._viewport_context = get_active_viewport()
-            self._viewport_context.updates_enabled = True  # pyright: ignore [reportOptionalMemberAccess]
-            # acquire viewport window
-            # TODO @mayank: Why not just use get_active_viewport_and_window() directly?
-            self._viewport_window = ui.Workspace.get_window("Viewport")
-            # counter for periodic rendering
-            self._render_throttle_counter = 0
-            # rendering frequency in terms of number of render calls
-            self._render_throttle_period = 5
+        # Ensure stage is in the USD cache
+        stage_id = stage_cache.GetId(self.stage).ToLongInt()  # type: ignore[union-attr]
+        if stage_id < 0:
+            stage_cache.Insert(self.stage)  # type: ignore[union-attr]
 
-        # check the case where we don't need to render the viewport
-        # since render_viewport can only be False in headless mode, we only need to check for offscreen_render
-        if not self._render_viewport and self._offscreen_render:
-            # disable the viewport if offscreen_render is enabled
-            from omni.kit.viewport.utility import get_active_viewport
+        # Set as current stage in thread-local context for get_current_stage()
+        stage_utils._context.stage = self.stage
 
-            get_active_viewport().updates_enabled = False
+        # When Kit is running, attach the stage to Kit's USD context so that
+        # Kit extensions (PhysX views, Articulation, viewport) can discover it.
+        if has_kit():
+            import omni.usd
 
-        # override enable scene querying if rendering is enabled
-        # this is needed for some GUI features
-        if self._has_gui:
-            self.cfg.enable_scene_query_support = True
-        # set up flatcache/fabric interface (default is None)
-        # this is needed to flush the flatcache data into Hydra manually when calling `render()`
-        # ref: https://docs.omniverse.nvidia.com/prod_extensions/prod_extensions/ext_physics.html
-        # note: need to do this here because super().__init__ calls render and this variable is needed
-        self._fabric_iface = None
-        # read isaac sim version (this includes build tag, release tag etc.)
-        # note: we do it once here because it reads the VERSION file from disk and is not expected to change.
-        self._isaacsim_version = get_version()
+            kit_context = omni.usd.get_context()
+            if kit_context is not None and kit_context.get_stage() is not self.stage:
+                kit_context.attach_stage_with_callback(stage_cache.GetId(self.stage).ToLongInt())
 
-        # create a tensor for gravity
-        # note: this line is needed to create a "tensor" in the device to avoid issues with torch 2.1 onwards.
-        #   the issue is with some heap memory corruption when torch tensor is created inside the asset class.
-        #   you can reproduce the issue by commenting out this line and running the test `test_articulation.py`.
-        self._gravity_tensor = torch.tensor(self.cfg.gravity, dtype=torch.float32, device=self.cfg.device)
+        # Acquire settings interface (SettingsManager: standalone dict or Omniverse when available)
+        self.settings = SettingsManager.instance()
+        self._settings_helper = SettingsHelper(self.settings)
 
-        # add a callback to keep rendering when a stop is triggered through different GUI commands like (save as)
-        if not builtins.ISAAC_LAUNCHED_FROM_TERMINAL:
-            timeline_event_stream = omni.timeline.get_timeline_interface().get_timeline_event_stream()
-            self._app_control_on_stop_handle = timeline_event_stream.create_subscription_to_pop_by_type(
-                int(omni.timeline.TimelineEventType.STOP),
-                lambda *args, obj=weakref.proxy(self): obj._app_control_on_stop_handle_fn(*args),
-                order=15,
-            )
-        else:
-            self._app_control_on_stop_handle = None
-        self._disable_app_control_on_stop_handle = False
+        # Initialize USD physics scene and physics manager
+        self._init_usd_physics_scene()
 
-        # flatten out the simulation dictionary
-        sim_params = self.cfg.to_dict()
-        if sim_params is not None:
-            if "physx" in sim_params:
-                physx_params = sim_params.pop("physx")
-                sim_params.update(physx_params)
-        # create a simulation context to control the simulator
-        super().__init__(
-            stage_units_in_meters=1.0,
-            physics_dt=self.cfg.dt,
-            rendering_dt=self.cfg.dt * self.cfg.render_interval,
-            backend="torch",
-            sim_params=sim_params,
-            physics_prim_path=self.cfg.physics_prim_path,
-            device=self.cfg.device,
+        # Normalize "cuda" -> "cuda:<id>" now that the USD physics scene is initialized
+        # and /physics/cudaDevice is available. Update cfg.device in-place so all
+        # downstream code (physics backends, assets, sensors) sees a consistent value.
+        if "cuda" in self.cfg.device and ":" not in self.cfg.device:
+            cuda_device = self.get_setting("/physics/cudaDevice")
+            device_id = max(0, int(cuda_device) if cuda_device is not None else 0)
+            self.cfg.device = f"cuda:{device_id}"
+
+        # Set default physics backend if not specified
+        if self.cfg.physics is None:
+            from isaaclab_physx.physics import PhysxCfg
+
+            self.cfg.physics = PhysxCfg()
+        self._physics = self.cfg.physics
+        # If physics is a PresetCfg wrapper (has a 'default' field but no 'class_type'),
+        # resolve to the default preset so downstream code always sees a concrete PhysicsCfg.
+        if not hasattr(self._physics, "class_type") and hasattr(self._physics, "default"):
+            self._physics = self._physics.default
+            self.cfg.physics = self._physics
+        self.physics_manager: type[PhysicsManager] = self._physics.class_type
+        self.physics_manager.initialize(self)
+        self._apply_render_cfg_settings()
+
+        # Initialize visualizer state (visualizers are created lazily during initialize_visualizers()).
+        self._scene_data_provider = SceneDataProvider(self.physics_manager.get_scene_data_backend())
+        self._visualizers: list[BaseVisualizer] = []
+        self._scene_data_requirements = SceneDataRequirement()
+        # Clone plan published by InteractiveScene after cloning. Providers (e.g. the
+        # Newton visualizer model rebuilder on a PhysX backend) consume this to derive
+        # their own backend args. None until :meth:`InteractiveScene.clone_environments` runs.
+        self._clone_plan: ClonePlan | None = None
+        # Default visualization dt used before/without visualizer initialization.
+        physics_dt = getattr(self.cfg.physics, "dt", None)
+        self._viz_dt = (physics_dt if physics_dt is not None else self.cfg.dt) * self.cfg.render_interval
+
+        # Cache commonly-used settings (these don't change during runtime)
+        self._has_gui = bool(self.get_setting("/isaaclab/has_gui"))
+        self._has_offscreen_render = bool(self.get_setting("/isaaclab/render/offscreen"))
+        self._xr_enabled = bool(self.get_setting("/isaaclab/xr/enabled"))
+        # Note: has_rtx_sensors is NOT cached because it changes when Camera sensors are created
+        self._pending_camera_view: tuple[tuple[float, float, float], tuple[float, float, float]] | None = None
+        self.vis_marker_registry = VisMarkerRegistry()
+
+        # Simulation state
+        self._is_playing = False
+        self._is_stopped = True
+
+        # Monotonic physics-step counter used by camera sensors for
+        self._physics_step_count: int = 0
+        # Monotonic render-generation counter. This increments whenever render()
+        # is executed and lets downstream camera freshness logic distinguish
+        # render/reset transitions that occur without advancing physics steps.
+        self._render_generation: int = 0
+
+        # Shared renderers for all Camera sensors (compatible renderer_cfg only).
+        self._render_context = RenderContext()
+
+        # Run renderer post-physics setup.
+        self.physics_manager.register_callback(
+            lambda _payload: self._render_context.ensure_initialize(),
+            PhysicsEvent.PHYSICS_READY,
+            order=5,
         )
 
-    def _apply_physics_settings(self):
-        """Sets various carb physics settings."""
-        # enable hydra scene-graph instancing
-        # note: this allows rendering of instanceable assets on the GUI
-        set_carb_setting(self.carb_settings, "/persistent/omnihydra/useSceneGraphInstancing", True)
-        # change dispatcher to use the default dispatcher in PhysX SDK instead of carb tasking
-        # note: dispatcher handles how threads are launched for multi-threaded physics
-        set_carb_setting(self.carb_settings, "/physics/physxDispatcher", True)
-        # disable contact processing in omni.physx
-        # note: we disable it by default to avoid the overhead of contact processing when it isn't needed.
-        #   The physics flag gets enabled when a contact sensor is created.
-        if hasattr(self.cfg, "disable_contact_processing"):
-            omni.log.warn(
-                "The `disable_contact_processing` attribute is deprecated and always set to True"
-                " to avoid unnecessary overhead. Contact processing is automatically enabled when"
-                " a contact sensor is created, so manual configuration is no longer required."
-            )
-        # FIXME: From investigation, it seems this flag only affects CPU physics. For GPU physics, contacts
-        #  are always processed. The issue is reported to the PhysX team by @mmittal.
-        set_carb_setting(self.carb_settings, "/physics/disableContactProcessing", True)
-        # disable custom geometry for cylinder and cone collision shapes to allow contact reporting for them
-        # reason: cylinders and cones aren't natively supported by PhysX so we need to use custom geometry flags
-        # reference: https://nvidia-omniverse.github.io/PhysX/physx/5.4.1/docs/Geometry.html?highlight=capsule#geometry
-        set_carb_setting(self.carb_settings, "/physics/collisionConeCustomGeometry", False)
-        set_carb_setting(self.carb_settings, "/physics/collisionCylinderCustomGeometry", False)
-        # hide the Simulation Settings window
-        set_carb_setting(self.carb_settings, "/physics/autoPopupSimulationOutputWindow", False)
+        self._services = ServiceLocator()
 
-    def _apply_render_settings_from_cfg(self):
-        """Sets rtx settings specified in the RenderCfg."""
+        type(self)._instance = self  # Mark as valid singleton only after successful init
 
-        # define mapping of user-friendly RenderCfg names to native carb names
-        rendering_setting_name_mapping = {
+    def _apply_render_cfg_settings(self) -> None:
+        """Apply render preset and overrides from SimulationCfg.render."""
+        # TODO: Refactor render preset + override handling to a dedicated RenderingQualityCfg
+        # (name subject to change) to keep quality profiles and carb mappings centralized.
+        render_cfg = getattr(self.cfg, "render", None)
+        if render_cfg is None:
+            return
+
+        # Priority:
+        # 1) CLI/AppLauncher setting if present, 2) SimulationCfg.render.rendering_mode.
+        rendering_mode = self.get_setting("/isaaclab/rendering/rendering_mode")
+        if not rendering_mode:
+            rendering_mode = getattr(render_cfg, "rendering_mode", None)
+
+        if rendering_mode:
+            supported_rendering_modes = {"performance", "balanced", "quality"}
+            if rendering_mode not in supported_rendering_modes:
+                raise ValueError(
+                    f"RenderCfg rendering mode '{rendering_mode}' not in supported modes "
+                    f"{sorted(supported_rendering_modes)}."
+                )
+
+            isaaclab_app_exp_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), *[".."] * 4, "apps")
+            from isaaclab.utils.version import get_isaac_sim_version
+
+            if get_isaac_sim_version().major < 6:
+                isaaclab_app_exp_path = os.path.join(isaaclab_app_exp_path, "isaacsim_5")
+
+            preset_filename = os.path.join(isaaclab_app_exp_path, f"rendering_modes/{rendering_mode}.kit")
+            if os.path.exists(preset_filename):
+                with open(preset_filename) as file:
+                    preset_dict = toml.load(file)
+
+                def _apply_nested(data: dict[str, Any], path: str = "") -> None:
+                    for key, value in data.items():
+                        key_path = f"{path}/{key}" if path else f"/{key}"
+                        if isinstance(value, dict):
+                            _apply_nested(value, key_path)
+                        else:
+                            self.set_setting(key_path.replace(".", "/"), value)
+
+                _apply_nested(preset_dict)
+            else:
+                logger.warning("[SimulationContext] Render preset file not found: %s", preset_filename)
+
+        # RenderCfg fields mapped to setting paths (stored via SettingsManager)
+        field_to_setting = {
             "enable_translucency": "/rtx/translucency/enabled",
             "enable_reflections": "/rtx/reflections/enabled",
             "enable_global_illumination": "/rtx/indirectDiffuse/enabled",
@@ -283,465 +279,679 @@ class SimulationContext(_SimulationContext):
             "samples_per_pixel": "/rtx/directLighting/sampledLighting/samplesPerPixel",
             "enable_shadows": "/rtx/shadows/enabled",
             "enable_ambient_occlusion": "/rtx/ambientOcclusion/enabled",
+            "dome_light_upper_lower_strategy": "/rtx/domeLight/upperLowerStrategy",
+            "ambient_light_intensity": "/rtx/sceneDb/ambientLightIntensity",
+            "ambient_occlusion_denoiser_mode": "/rtx/ambientOcclusion/denoiserMode",
+            "subpixel_mode": "/rtx/raytracing/subpixel/mode",
+            "enable_cached_raytracing": "/rtx/raytracing/cached/enabled",
+            "max_samples_per_launch": "/rtx/pathtracing/maxSamplesPerLaunch",
+            "view_tile_limit": "/rtx/viewTile/limit",
+            # RT2 path tracing settings
+            "max_bounces": "/rtx/rtpt/maxBounces",
+            "split_glass": "/rtx/rtpt/splitGlass",
+            "split_clearcoat": "/rtx/rtpt/splitClearcoat",
+            "split_rough_reflection": "/rtx/rtpt/splitRoughReflection",
         }
 
-        not_carb_settings = ["rendering_mode", "carb_settings", "antialiasing_mode"]
-
-        # set preset settings (same behavior as the CLI arg --rendering_mode)
-        rendering_mode = self.cfg.render.rendering_mode
-        if rendering_mode is not None:
-            # check if preset is supported
-            supported_rendering_modes = ["performance", "balanced", "quality", "xr"]
-            if rendering_mode not in supported_rendering_modes:
-                raise ValueError(
-                    f"RenderCfg rendering mode '{rendering_mode}' not in supported modes {supported_rendering_modes}."
-                )
-
-            # parse preset file
-            repo_path = os.path.join(carb.tokens.get_tokens_interface().resolve("${app}"), "..")
-            preset_filename = os.path.join(repo_path, f"apps/rendering_modes/{rendering_mode}.kit")
-            with open(preset_filename) as file:
-                preset_dict = toml.load(file)
-            preset_dict = dict(flatdict.FlatDict(preset_dict, delimiter="."))
-
-            # set presets
-            for key, value in preset_dict.items():
-                key = "/" + key.replace(".", "/")  # convert to carb setting format
-                set_carb_setting(self.carb_settings, key, value)
-
-        # set user-friendly named settings
-        for key, value in vars(self.cfg.render).items():
-            if value is None or key in not_carb_settings:
-                # skip unset settings and non-carb settings
+        for key, value in vars(render_cfg).items():
+            if value is None or key in {"rendering_mode", "carb_settings", "antialiasing_mode"}:
                 continue
-            if key not in rendering_setting_name_mapping:
-                raise ValueError(
-                    f"'{key}' in RenderCfg not found. Note: internal 'rendering_setting_name_mapping' dictionary might"
-                    " need to be updated."
-                )
-            key = rendering_setting_name_mapping[key]
-            set_carb_setting(self.carb_settings, key, value)
+            setting_path = field_to_setting.get(key)
+            if setting_path is not None:
+                self.set_setting(setting_path, value)
 
-        # set general carb settings
-        carb_settings = self.cfg.render.carb_settings
-        if carb_settings is not None:
-            for key, value in carb_settings.items():
+        # Raw overrides from render_cfg (stored via SettingsManager)
+        extra_settings = getattr(render_cfg, "carb_settings", None)
+        if extra_settings:
+            for key, value in extra_settings.items():
                 if "_" in key:
-                    key = "/" + key.replace("_", "/")  # convert from python variable style string
+                    path = "/" + key.replace("_", "/")
                 elif "." in key:
-                    key = "/" + key.replace(".", "/")  # convert from .kit file style string
-                if get_carb_setting(self.carb_settings, key) is None:
-                    raise ValueError(f"'{key}' in RenderCfg.general_parameters does not map to a carb setting.")
-                set_carb_setting(self.carb_settings, key, value)
+                    path = "/" + key.replace(".", "/")
+                else:
+                    path = key
+                self.set_setting(path, value)
 
-        # set denoiser mode
-        if self.cfg.render.antialiasing_mode is not None:
+        # Optional anti-aliasing mode via Replicator (best-effort, may use Omniverse APIs)
+        antialiasing_mode = getattr(render_cfg, "antialiasing_mode", None)
+        if antialiasing_mode is not None:
             try:
                 import omni.replicator.core as rep
 
-                rep.settings.set_render_rtx_realtime(antialiasing=self.cfg.render.antialiasing_mode)
+                rep.settings.set_render_rtx_realtime(antialiasing=antialiasing_mode)
             except Exception:
                 pass
 
-        # WAR: Ensure /rtx/renderMode RaytracedLighting is correctly cased.
-        if get_carb_setting(self.carb_settings, "/rtx/rendermode").lower() == "raytracedlighting":
-            set_carb_setting(self.carb_settings, "/rtx/rendermode", "RaytracedLighting")
+    def _init_usd_physics_scene(self) -> None:
+        """Create and configure the USD physics scene."""
+        from pxr import Gf, UsdGeom, UsdPhysics  # noqa: PLC0415
 
-    """
-    Operations - New.
-    """
+        cfg = self.cfg
+        with sim_utils.use_stage(self.stage):
+            # Set stage conventions for metric units
+            UsdGeom.SetStageUpAxis(self.stage, "Z")
+            UsdGeom.SetStageMetersPerUnit(self.stage, 1.0)
+            UsdPhysics.SetStageKilogramsPerUnit(self.stage, 1.0)
 
+            # Find and delete any existing physics scene.
+            # Collect paths first to avoid mutating the stage while traversing,
+            # which can invalidate the USD iterator.
+            physics_scene_paths = [
+                prim.GetPath().pathString for prim in self.stage.Traverse() if prim.GetTypeName() == "PhysicsScene"
+            ]
+            for path in physics_scene_paths:
+                sim_utils.delete_prim(path, stage=self.stage)
+
+            # Create a new physics scene
+            if self.stage.GetPrimAtPath(cfg.physics_prim_path).IsValid():
+                raise RuntimeError(f"A prim already exists at path '{cfg.physics_prim_path}'.")
+
+            physics_scene = UsdPhysics.Scene.Define(self.stage, cfg.physics_prim_path)
+
+            # Pre-create gravity tensor to avoid torch heap corruption issues (torch 2.1+)
+            gravity = torch.tensor(cfg.gravity, dtype=torch.float32, device=self.cfg.device)
+            gravity_magnitude = torch.norm(gravity).item()
+
+            if gravity_magnitude == 0.0:
+                gravity_direction = [0.0, 0.0, -1.0]
+            else:
+                gravity_direction = (gravity / gravity_magnitude).tolist()
+
+            physics_scene.CreateGravityDirectionAttr(Gf.Vec3f(*gravity_direction))
+            physics_scene.CreateGravityMagnitudeAttr(gravity_magnitude)
+
+    @property
+    def physics_sim_view(self):
+        """Returns the physics simulation view."""
+        return self.physics_manager.get_physics_sim_view()
+
+    @property
+    def device(self) -> str:
+        """Returns the device on which the simulation is running."""
+        return self.physics_manager.get_device()
+
+    @property
+    def backend(self) -> str:
+        """Returns the tensor backend being used ("numpy" or "torch")."""
+        return self.physics_manager.get_backend()
+
+    @property
     def has_gui(self) -> bool:
-        """Returns whether the simulation has a GUI enabled.
-
-        True if the simulation has a GUI enabled either locally or live-streamed.
-        """
+        """Returns whether GUI is enabled (cached at init)."""
         return self._has_gui
 
-    def has_rtx_sensors(self) -> bool:
-        """Returns whether the simulation has any RTX-rendering related sensors.
+    @property
+    def has_offscreen_render(self) -> bool:
+        """Returns whether offscreen rendering is enabled (cached at init)."""
+        return self._has_offscreen_render
 
-        This function returns the value of the simulation parameter ``"/isaaclab/render/rtx_sensors"``.
-        The parameter is set to True when instances of RTX-related sensors (cameras or LiDARs) are
-        created using Isaac Lab's sensor classes.
+    def has_active_visualizers(self) -> bool:
+        """Return whether any visualizer path is active for rendering/camera control."""
+        return bool(self.get_setting("/isaaclab/visualizer/types")) or bool(
+            self.get_setting("/isaaclab/video/auto_start_kit")
+        )
 
-        True if the simulation has RTX sensors (such as USD Cameras or LiDARs).
+    def can_render_rgb_array(self) -> bool:
+        """Return whether rgb-array rendering is currently available."""
+        return self.has_gui or self.has_offscreen_render or self.has_active_visualizers()
 
-        For more information, please check `NVIDIA RTX documentation`_.
+    @property
+    def is_rendering(self) -> bool:
+        """Returns whether rendering is active (GUI, RTX sensors, visualizers, or XR)."""
+        return (
+            self._has_gui
+            or self._has_offscreen_render
+            or self.get_setting("/isaaclab/render/rtx_sensors")
+            or bool(self.resolve_visualizer_types())
+            or self._xr_enabled
+        )
 
-        .. _NVIDIA RTX documentation: https://developer.nvidia.com/rendering-technologies
+    def get_physics_dt(self) -> float:
+        """Returns the physics time step."""
+        return self.physics_manager.get_physics_dt()
+
+    def get_physics_step_count(self) -> int:
+        """Return the monotonic physics step counter (incremented each :meth:`step`)."""
+        return self._physics_step_count
+
+    @property
+    def render_context(self) -> RenderContext:
+        """Shared :class:`~isaaclab.renderers.render_context.RenderContext` for camera renderers."""
+        return self._render_context
+
+    @property
+    def render_generation(self) -> int:
+        """Returns a monotonic counter for render() executions."""
+        return self._render_generation
+
+    def _create_default_visualizer_configs(self, requested_visualizers: list[str]) -> list:
+        """Create default visualizer configs for requested types.
+
+        Loads only the requested visualizer submodule (e.g. isaaclab_visualizers.rerun)
+        so dependencies for other backends are not imported.
         """
-        return self._settings.get_as_bool("/isaaclab/render/rtx_sensors")
+        import importlib
 
-    def is_fabric_enabled(self) -> bool:
-        """Returns whether the fabric interface is enabled.
+        default_configs = []
+        cfg_class_names = {
+            "kit": "KitVisualizerCfg",
+            "newton": "NewtonVisualizerCfg",
+            "rerun": "RerunVisualizerCfg",
+            "viser": "ViserVisualizerCfg",
+        }
+        for viz_type in requested_visualizers:
+            try:
+                if viz_type not in _VISUALIZER_TYPES:
+                    logger.warning(
+                        f"[SimulationContext] Unknown visualizer type '{viz_type}' requested. "
+                        f"Valid types: {', '.join(repr(t) for t in _VISUALIZER_TYPES)}. Skipping."
+                    )
+                    continue
+                mod = importlib.import_module(f"isaaclab_visualizers.{viz_type}")
+                cfg_cls = getattr(mod, cfg_class_names[viz_type])
+                cfg = cfg_cls()
+                self._apply_default_visualizer_cfg(cfg)
+                default_configs.append(cfg)
+            except (ImportError, ModuleNotFoundError) as exc:
+                # isaaclab_visualizers is optional; log once at warning level
+                if "isaaclab_visualizers" in str(exc):
+                    logger.warning(
+                        "[SimulationContext] Visualizer '%s' skipped: isaaclab_visualizers is not installed. "
+                        "Install with: pip install isaaclab_visualizers[%s]",
+                        viz_type,
+                        viz_type,
+                    )
+                else:
+                    logger.error(
+                        "[SimulationContext] Failed to create default config for visualizer '%s': %s",
+                        viz_type,
+                        exc,
+                    )
+            except Exception as exc:
+                logger.error(f"[SimulationContext] Failed to create default config for visualizer '{viz_type}': {exc}")
+        return default_configs
 
-        When fabric interface is enabled, USD read/write operations are disabled. Instead all applications
-        read and write the simulation state directly from the fabric interface. This reduces a lot of overhead
-        that occurs during USD read/write operations.
-
-        For more information, please check `Fabric documentation`_.
-
-        .. _Fabric documentation: https://docs.omniverse.nvidia.com/kit/docs/usdrt/latest/docs/usd_fabric_usdrt.html
-        """
-        return self._fabric_iface is not None
-
-    def get_version(self) -> tuple[int, int, int]:
-        """Returns the version of the simulator.
-
-        This is a wrapper around the ``isaacsim.core.version.get_version()`` function.
-
-        The returned tuple contains the following information:
-
-        * Major version (int): This is the year of the release (e.g. 2022).
-        * Minor version (int): This is the half-year of the release (e.g. 1 or 2).
-        * Patch version (int): This is the patch number of the release (e.g. 0).
-        """
-        return int(self._isaacsim_version[2]), int(self._isaacsim_version[3]), int(self._isaacsim_version[4])
-
-    """
-    Operations - New utilities.
-    """
-
-    def set_camera_view(
-        self,
-        eye: tuple[float, float, float],
-        target: tuple[float, float, float],
-        camera_prim_path: str = "/OmniverseKit_Persp",
-    ):
-        """Set the location and target of the viewport camera in the stage.
-
-        Note:
-            This is a wrapper around the :math:`isaacsim.core.utils.viewports.set_camera_view` function.
-            It is provided here for convenience to reduce the amount of imports needed.
-
-        Args:
-            eye: The location of the camera eye.
-            target: The location of the camera target.
-            camera_prim_path: The path to the camera primitive in the stage. Defaults to
-                "/OmniverseKit_Persp".
-        """
-        # safe call only if we have a GUI or viewport rendering enabled
-        if self._has_gui or self._offscreen_render or self._render_viewport:
-            set_camera_view(eye, target, camera_prim_path)
-
-    def set_render_mode(self, mode: RenderMode):
-        """Change the current render mode of the simulation.
-
-        Please see :class:`RenderMode` for more information on the different render modes.
-
-        .. note::
-            When no GUI is available (locally or livestreamed), we do not need to choose whether the viewport
-            needs to render or not (since there is no GUI). Thus, in this case, calling the function will not
-            change the render mode.
-
-        Args:
-            mode (RenderMode): The rendering mode. If different than SimulationContext's rendering mode,
-            SimulationContext's mode is changed to the new mode.
-
-        Raises:
-            ValueError: If the input mode is not supported.
-        """
-        # check if mode change is possible -- not possible when no GUI is available
-        if not self._has_gui:
-            omni.log.warn(
-                f"Cannot change render mode when GUI is disabled. Using the default render mode: {self.render_mode}."
-            )
+    def _apply_default_visualizer_cfg(self, cfg: Any) -> None:
+        """Apply shared default visualizer settings to a backend-specific config."""
+        default_cfg = getattr(self.cfg, "default_visualizer_cfg", None)
+        if default_cfg is None:
             return
-        # check if there is a mode change
-        # note: this is mostly needed for GUI when we want to switch between full rendering and no rendering.
-        if mode != self.render_mode:
-            if mode == self.RenderMode.FULL_RENDERING:
-                # display the viewport and enable updates
-                self._viewport_context.updates_enabled = True  # pyright: ignore [reportOptionalMemberAccess]
-                self._viewport_window.visible = True  # pyright: ignore [reportOptionalMemberAccess]
-            elif mode == self.RenderMode.PARTIAL_RENDERING:
-                # hide the viewport and disable updates
-                self._viewport_context.updates_enabled = False  # pyright: ignore [reportOptionalMemberAccess]
-                self._viewport_window.visible = False  # pyright: ignore [reportOptionalMemberAccess]
-            elif mode == self.RenderMode.NO_RENDERING:
-                # hide the viewport and disable updates
-                if self._viewport_context is not None:
-                    self._viewport_context.updates_enabled = False  # pyright: ignore [reportOptionalMemberAccess]
-                    self._viewport_window.visible = False  # pyright: ignore [reportOptionalMemberAccess]
-                # reset the throttle counter
-                self._render_throttle_counter = 0
-            else:
-                raise ValueError(f"Unsupported render mode: {mode}! Please check `RenderMode` for details.")
-            # update render mode
-            self.render_mode = mode
+        for field in fields(default_cfg):
+            if field.name == "visualizer_type" or not hasattr(cfg, field.name):
+                continue
+            setattr(cfg, field.name, getattr(default_cfg, field.name))
 
-    def set_setting(self, name: str, value: Any):
-        """Set simulation settings using the Carbonite SDK.
+    def _get_cli_visualizer_types(self) -> list[str]:
+        """Return list of visualizer types requested via CLI (setting)."""
+        requested = self.get_setting("/isaaclab/visualizer/types")
+        if not isinstance(requested, str) or not requested.strip():
+            return []
+        # App launcher writes this as a single string; accept comma and/or whitespace separators.
+        return [value for chunk in requested.split(",") for value in chunk.split() if value]
 
-        .. note::
-            If the input setting name does not exist, it will be created. If it does exist, the value will be
-            overwritten. Please make sure to use the correct setting name.
+    def _apply_visualizer_cli_overrides(self, visualizer_cfgs: list[Any]) -> None:
+        """Apply ``--max_visible_envs`` to every resolved visualizer cfg when set in settings.
 
-            To understand the settings interface, please refer to the
-            `Carbonite SDK <https://docs.omniverse.nvidia.com/dev-guide/latest/programmer_ref/settings.html>`_
-            documentation.
-
-        Args:
-            name: The name of the setting.
-            value: The value of the setting.
+        AppLauncher stores ``/isaaclab/visualizer/max_visible_envs`` as ``-1`` when the flag was
+        omitted; any non-negative int overrides :attr:`VisualizerCfg.max_visible_envs` on each cfg.
         """
-        self._settings.set(name, value)
+        raw = self.get_setting("/isaaclab/visualizer/max_visible_envs")
+        try:
+            max_visible = int(raw) if raw is not None else -1
+        except (TypeError, ValueError):
+            logger.warning("[SimulationContext] Invalid /isaaclab/visualizer/max_visible_envs: %r", raw)
+            return
+        if max_visible < 0:
+            return
+        for cfg in visualizer_cfgs:
+            if hasattr(cfg, "max_visible_envs"):
+                cfg.max_visible_envs = max_visible
 
-    def get_setting(self, name: str) -> Any:
-        """Read the simulation setting using the Carbonite SDK.
+    def _is_cli_visualizer_explicit(self) -> bool:
+        """Return ``True`` when visualizers were explicitly provided via CLI."""
+        return bool(self.get_setting("/isaaclab/visualizer/explicit"))
 
-        Args:
-            name: The name of the setting.
+    def _is_cli_visualizer_disable_all(self) -> bool:
+        """Return ``True`` when CLI requested ``--viz none`` semantics."""
+        return bool(self.get_setting("/isaaclab/visualizer/disable_all"))
 
-        Returns:
-            The value of the setting.
+    def resolve_visualizer_types(self) -> list[str]:
+        """Resolve visualizer types from config or CLI settings."""
+        if self._is_cli_visualizer_disable_all():
+            return []
+        if self._is_cli_visualizer_explicit():
+            return self._get_cli_visualizer_types()
+
+        visualizer_cfgs = self.cfg.visualizer_cfgs
+        if visualizer_cfgs is None:
+            return []
+        if not isinstance(visualizer_cfgs, list):
+            visualizer_cfgs = [visualizer_cfgs]
+        return [cfg.visualizer_type for cfg in visualizer_cfgs if getattr(cfg, "visualizer_type", None)]
+
+    def _resolve_visualizer_cfgs(self) -> list[Any]:
+        """Resolve final visualizer configs from cfg and optional CLI override.
+
+        When visualizers are explicitly requested via ``--visualizer`` CLI flag,
+        a :class:`RuntimeError` is raised if any requested type cannot be
+        resolved (unknown type or missing package).
         """
-        return self._settings.get(name)
+        visualizer_cfgs: list[Any] = []
+        if self.cfg.visualizer_cfgs is not None:
+            visualizer_cfgs = (
+                self.cfg.visualizer_cfgs if isinstance(self.cfg.visualizer_cfgs, list) else [self.cfg.visualizer_cfgs]
+            )
+
+        cli_requested = self._get_cli_visualizer_types()
+        cli_explicit = self._is_cli_visualizer_explicit()
+        cli_disable_all = self._is_cli_visualizer_disable_all()
+
+        if cli_disable_all:
+            resolved = []
+        elif not cli_explicit:
+            self._apply_visualizer_cli_overrides(visualizer_cfgs)
+            resolved = visualizer_cfgs
+        elif not visualizer_cfgs:
+            resolved = self._create_default_visualizer_configs(cli_requested) if cli_requested else []
+            self._apply_visualizer_cli_overrides(resolved)
+        else:
+            # CLI selection is explicit: keep only requested cfg types, then add defaults for missing.
+            cli_requested_set = set(cli_requested)
+            resolved = [cfg for cfg in visualizer_cfgs if getattr(cfg, "visualizer_type", None) in cli_requested_set]
+            existing_types = {getattr(cfg, "visualizer_type", None) for cfg in resolved}
+            for viz_type in cli_requested:
+                if viz_type not in existing_types and viz_type in _VISUALIZER_TYPES:
+                    resolved.extend(self._create_default_visualizer_configs([viz_type]))
+                    existing_types.add(viz_type)
+            self._apply_visualizer_cli_overrides(resolved)
+
+        # When visualizers were explicitly requested via CLI, verify all
+        # requested types were resolved.  This catches unknown types and
+        # missing packages that _create_default_visualizer_configs silently
+        # skips.
+        if cli_explicit and cli_requested:
+            resolved_types = {getattr(cfg, "visualizer_type", None) for cfg in resolved}
+            missing = [t for t in cli_requested if t not in resolved_types]
+            if missing:
+                raise RuntimeError(
+                    f"Explicitly requested visualizer(s) {missing} could not be configured. "
+                    f"Valid types: {', '.join(repr(t) for t in _VISUALIZER_TYPES)}. "
+                    "Ensure the required package is installed "
+                    "(e.g., pip install isaaclab_visualizers[<type>])."
+                )
+
+        # XR auto-start: auto-inject a KitVisualizer when XR is active and no
+        # Kit visualizer is already present.  The KitVisualizer pumps
+        # app.update() and triggers forward() (via requires_forward_before_step)
+        # to sync Fabric data so the XR runtime receives up-to-date hand/joint
+        # transforms each frame.
+        if self._xr_enabled and bool(self.get_setting("/isaaclab/xr/auto_start")):
+            has_kit = any(getattr(cfg, "visualizer_type", None) == "kit" for cfg in resolved)
+            if not has_kit:
+                try:
+                    import importlib
+
+                    mod = importlib.import_module("isaaclab_visualizers.kit")
+                    kit_cfg_cls = getattr(mod, "KitVisualizerCfg")
+                    resolved.append(kit_cfg_cls())
+                    logger.info("[SimulationContext] Auto-injecting KitVisualizer for XR app-update pumping.")
+                except (ImportError, ModuleNotFoundError, AttributeError) as exc:
+                    logger.warning(
+                        "[SimulationContext] XR mode could not auto-inject a KitVisualizer: %s. "
+                        "Install isaaclab_visualizers[kit] or pass --visualizer kit.",
+                        exc,
+                    )
+
+        return resolved
+
+    def initialize_visualizers(self) -> None:
+        """Initialize visualizers from SimulationCfg.visualizer_cfgs."""
+        if self._visualizers:
+            return
+
+        physics_dt = getattr(self.cfg.physics, "dt", None)
+        self._viz_dt = (physics_dt if physics_dt is not None else self.cfg.dt) * self.cfg.render_interval
+
+        visualizer_cfgs = self._resolve_visualizer_cfgs()
+        if not visualizer_cfgs:
+            return
+
+        cli_explicit = self._is_cli_visualizer_explicit()
+
+        # Resolve visualizer-driven requirements once and keep optional artifact payload untouched.
+        visualizer_types = [
+            cfg.visualizer_type for cfg in visualizer_cfgs if getattr(cfg, "visualizer_type", None) is not None
+        ]
+        requirements = resolve_scene_data_requirements(visualizer_types=visualizer_types)
+        self._scene_data_requirements = requirements
+        self._visualizers = []
+
+        for cfg in visualizer_cfgs:
+            try:
+                visualizer = cfg.create_visualizer()
+                visualizer.initialize(self._scene_data_provider)
+                self._visualizers.append(visualizer)
+            except Exception as exc:
+                if cli_explicit:
+                    raise RuntimeError(
+                        f"Visualizer '{cfg.visualizer_type}' was explicitly requested "
+                        f"but failed to create or initialize: {exc}"
+                    ) from exc
+                logger.exception(
+                    "Failed to initialize visualizer '%s' (%s): %s",
+                    cfg.visualizer_type,
+                    type(cfg).__name__,
+                    exc,
+                )
+
+        # Replay any camera pose requested before visualizers were initialized.
+        pending = getattr(self, "_pending_camera_view", None)
+        if pending is not None:
+            eye, target = pending
+            for viz in self._visualizers:
+                viz.set_camera_view(eye, target)
+            self._pending_camera_view = None
+
+        if not self._visualizers and self._scene_data_provider is not None:
+            close_provider = getattr(self._scene_data_provider, "close", None)
+            if callable(close_provider):
+                close_provider()
+            self._scene_data_provider = None
+
+    def get_scene_data_provider(self) -> SceneDataProvider:
+        return self._scene_data_provider
+
+    def register_interactive_scene(self, scene) -> None:
+        """Register the active scene so scene data providers can expose scene-owned sensors."""
+        self._interactive_scene = scene
+        if self._scene_data_provider is not None:
+            self._scene_data_provider.set_interactive_scene(scene)
+
+    def get_scene_data_requirements(self) -> SceneDataRequirement:
+        """Return scene-data requirements resolved from visualizers/renderers."""
+        return self._scene_data_requirements
+
+    def update_scene_data_requirements(self, requirements: SceneDataRequirement) -> None:
+        """Update scene-data requirements."""
+        self._scene_data_requirements = requirements
+
+    def get_clone_plan(self) -> ClonePlan | None:
+        """Return the clone plan published by the scene.
+
+        Set by :meth:`InteractiveScene.clone_environments` after replication. Consumed by
+        scene data providers that build backend models (e.g. Newton visualizer model on a
+        PhysX backend) from the same plan the cloner used. ``None`` until the scene clones.
+        """
+        return self._clone_plan
+
+    def set_clone_plan(self, plan: ClonePlan | None) -> None:
+        """Set the cloner's clone plan."""
+        self._clone_plan = plan
+
+    @property
+    def visualizers(self) -> list[BaseVisualizer]:
+        """Returns the list of active visualizers."""
+        return self._visualizers
+
+    def get_rendering_dt(self) -> float:
+        """Return rendering dt, allowing visualizer-specific override."""
+        for viz in self._visualizers:
+            viz_dt = viz.get_rendering_dt()
+            if viz_dt is not None and viz_dt > 0:
+                return float(viz_dt)
+        return self._viz_dt
+
+    def set_camera_view(self, eye: tuple, target: tuple) -> None:
+        """Set camera view on all visualizers that support it."""
+        self._pending_camera_view = (tuple(eye), tuple(target))
+        for viz in self._visualizers:
+            viz.set_camera_view(eye, target)
 
     def forward(self) -> None:
-        """Updates articulation kinematics and fabric for rendering."""
-        if self._fabric_iface is not None:
-            if self.physics_sim_view is not None and self.is_playing():
-                # Update the articulations' link's poses before rendering
-                self.physics_sim_view.update_articulations_kinematic()
-            self._update_fabric(0.0, 0.0)
+        """Update kinematics without stepping physics."""
+        self.physics_manager.forward()
 
-    """
-    Operations - Override (standalone)
-    """
-
-    def reset(self, soft: bool = False):
-        self._disable_app_control_on_stop_handle = True
-        super().reset(soft=soft)
-        # app.update() may be changing the cuda device in reset, so we force it back to our desired device here
-        if "cuda" in self.device:
-            torch.cuda.set_device(self.device)
-        # enable kinematic rendering with fabric
-        if self.physics_sim_view:
-            self.physics_sim_view._backend.initialize_kinematic_bodies()
-        # perform additional rendering steps to warm up replicator buffers
-        # this is only needed for the first time we set the simulation
-        if not soft:
-            for _ in range(2):
-                self.render()
-        self._disable_app_control_on_stop_handle = False
-
-    def step(self, render: bool = True):
-        """Steps the simulation.
-
-        .. note::
-            This function blocks if the timeline is paused. It only returns when the timeline is playing.
+    def reset(self, soft: bool = False) -> None:
+        """Reset the simulation.
 
         Args:
-            render: Whether to render the scene after stepping the physics simulation.
-                    If set to False, the scene is not rendered and only the physics simulation is stepped.
+            soft: If True, skip full reinitialization.
         """
-        # check if the simulation timeline is paused. in that case keep stepping until it is playing
-        if not self.is_playing():
-            # step the simulator (but not the physics) to have UI still active
-            while not self.is_playing():
-                self.render()
-                # meantime if someone stops, break out of the loop
-                if self.is_stopped():
-                    break
-            # need to do one step to refresh the app
-            # reason: physics has to parse the scene again and inform other extensions like hydra-delegate.
-            #   without this the app becomes unresponsive.
-            # FIXME: This steps physics as well, which we is not good in general.
-            self.app.update()
+        self.physics_manager.reset(soft)
+        for viz in self._visualizers:
+            viz.reset(soft)
+        if not self._visualizers:
+            # Initialize visualizers after PhysX sim views are ready, but before play() pumps timeline events.
+            self.initialize_visualizers()
+        # Start the timeline so the play button is pressed
+        self.physics_manager.play()
+        self._is_playing = True
+        self._is_stopped = False
 
-        # step the simulation
-        super().step(render=render)
+    def step(self, render: bool = True) -> None:
+        """Step physics and optionally render.
 
-        # app.update() may be changing the cuda device in step, so we force it back to our desired device here
-        if "cuda" in self.device:
-            torch.cuda.set_device(self.device)
-
-    def render(self, mode: RenderMode | None = None):
-        """Refreshes the rendering components including UI elements and view-ports depending on the render mode.
-
-        This function is used to refresh the rendering components of the simulation. This includes updating the
-        view-ports, UI elements, and other extensions (besides physics simulation) that are running in the
-        background. The rendering components are refreshed based on the render mode.
-
-        Please see :class:`RenderMode` for more information on the different render modes.
+        If the timeline is paused (e.g. via the GUI), this method blocks and keeps
+        the visualizer responsive until the timeline is resumed or stopped.
 
         Args:
-            mode: The rendering mode. Defaults to None, in which case the current rendering mode is used.
+            render: Whether to render the scene after stepping. Defaults to True.
         """
-        # check if we need to change the render mode
-        if mode is not None:
-            self.set_render_mode(mode)
-        # render based on the render mode
-        if self.render_mode == self.RenderMode.NO_GUI_OR_RENDERING:
-            # we never want to render anything here (this is for complete headless mode)
-            pass
-        elif self.render_mode == self.RenderMode.NO_RENDERING:
-            # throttle the rendering frequency to keep the UI responsive
-            self._render_throttle_counter += 1
-            if self._render_throttle_counter % self._render_throttle_period == 0:
-                self._render_throttle_counter = 0
-                # here we don't render viewport so don't need to flush fabric data
-                # note: we don't call super().render() anymore because they do flush the fabric data
-                self.set_setting("/app/player/playSimulations", False)
-                self._app.update()
-                self.set_setting("/app/player/playSimulations", True)
-        else:
-            # manually flush the fabric data to update Hydra textures
-            self.forward()
-            # render the simulation
-            # note: we don't call super().render() anymore because they do above operation inside
-            #  and we don't want to do it twice. We may remove it once we drop support for Isaac Sim 2022.2.
-            self.set_setting("/app/player/playSimulations", False)
-            self._app.update()
-            self.set_setting("/app/player/playSimulations", True)
+        # Block while the GUI timeline is paused so the entire training loop freezes.
+        # See: https://github.com/isaac-sim/IsaacLab/issues/4279
+        self.physics_manager.wait_for_playing()
+        self._physics_step_count += 1
+        self.physics_manager.step()
+        if render and self.is_rendering:
+            self.render()
 
-        # app.update() may be changing the cuda device, so we force it back to our desired device here
-        if "cuda" in self.device:
-            torch.cuda.set_device(self.device)
+    def render(self, mode: int | None = None, skip_app_pumping: bool = False) -> None:
+        """Update visualizers and render the scene.
 
-    """
-    Operations - Override (extension)
-    """
+        Calls update_visualizers() so visualizers run at the render cadence (not at
+        every physics step). Camera sensors drive their configured renderer when
+        fetching data. Recording-related follow-up (Kit/RTX headless video, Newton GL
+        video, etc.) runs in :mod:`isaaclab.envs.utils.recording_hooks` so it is not tied to a
+        specific :class:`~isaaclab.physics.PhysicsManager` subclass.
 
-    async def reset_async(self, soft: bool = False):
-        # need to load all "physics" information from the USD file
-        if not soft:
-            omni.physx.acquire_physx_interface().force_load_physics_from_usd()
-        # play the simulation
-        await super().reset_async(soft=soft)
+        **Kit vs. standalone visualizers:**  The Kit app loop (``app.update()``) is the
+        only way to drive camera/RTX sensor rendering and viewport GUI updates; it
+        cannot be split into "cameras only" and "GUI only".  Standalone visualizers
+        (Newton, Rerun, Viser) have self-contained ``step()`` methods that never call
+        ``app.update()``, so they can run independently of camera rendering.  The
+        ``skip_app_pumping`` flag exploits this distinction: when True, Kit is skipped
+        while standalone visualizers continue to update.
 
-    """
-    Initialization/Destruction - Override.
-    """
+        Args:
+            mode: Unused. Kept for backward compatibility.
+            skip_app_pumping: When True, skip visualizers whose :meth:`~BaseVisualizer.pumps_app_update`
+                returns True (e.g. KitVisualizer).  This disables the Kit app loop and camera
+                updates while still stepping standalone visualizers (Newton, Rerun, Viser).
+                Used by environment ``step()`` when ``render_enabled`` is False.
+        """
+        self.physics_manager.pre_render()
+        self.update_visualizers(self.get_rendering_dt(), skip_app_pumping=skip_app_pumping)
+        self.physics_manager.after_visualizers_render()
+        run_recording_hooks_after_visualizers(self)
+        self._render_generation += 1
 
-    def _init_stage(self, *args, **kwargs) -> Usd.Stage:
-        _ = super()._init_stage(*args, **kwargs)
-        # a stage update here is needed for the case when physics_dt != rendering_dt, otherwise the app crashes
-        # when in headless mode
-        self.set_setting("/app/player/playSimulations", False)
-        self._app.update()
-        self.set_setting("/app/player/playSimulations", True)
-        # set additional physx parameters and bind material
-        self._set_additional_physx_params()
-        # load flatcache/fabric interface
-        self._load_fabric_interface()
-        # return the stage
-        return self.stage
+        # Call render callbacks
+        if hasattr(self, "_render_callbacks"):
+            for callback in self._render_callbacks.values():
+                callback(None)  # Pass None as event data
 
-    async def _initialize_stage_async(self, *args, **kwargs) -> Usd.Stage:
-        await super()._initialize_stage_async(*args, **kwargs)
-        # set additional physx parameters and bind material
-        self._set_additional_physx_params()
-        # load flatcache/fabric interface
-        self._load_fabric_interface()
-        # return the stage
-        return self.stage
+    def update_visualizers(self, dt: float, skip_app_pumping: bool = False) -> None:
+        """Update visualizers without triggering renderer/GUI.
+
+        Args:
+            dt: Simulation time-step in seconds.
+            skip_app_pumping: When True, skip visualizers whose :meth:`~BaseVisualizer.pumps_app_update`
+                returns True (e.g. KitVisualizer). This is used when the environment's ``render_enabled``
+                flag is False — cameras and the Kit app loop are skipped, but standalone visualizers
+                (Newton, Rerun, Viser) still receive updates.
+        """
+        if not self._visualizers:
+            return
+
+        for viz in self._visualizers:
+            viz.flush_startup_messages()
+
+        if self._should_forward_before_visualizer_update():
+            self.physics_manager.forward()
+
+        # Marker callbacks update VisualizationMarkers state; visualizer step()
+        # consumes that state later in this method.
+        if any(viz.supports_markers() for viz in self._visualizers):
+            self.vis_marker_registry.dispatch_callbacks()
+
+        visualizers_to_remove = []
+        for viz in self._visualizers:
+            try:
+                # When skip_app_pumping is set, skip Kit-like visualizers that call app.update()
+                if skip_app_pumping and viz.pumps_app_update():
+                    continue
+                if viz.is_closed or not viz.is_running():
+                    if viz.is_closed:
+                        logger.info("Visualizer closed: %s", type(viz).__name__)
+                    else:
+                        logger.info("Visualizer not running: %s", type(viz).__name__)
+                    visualizers_to_remove.append(viz)
+                    continue
+                if viz.is_rendering_paused():
+                    # Keep non-Kit visualizer event loops responsive while rendering is paused.
+                    # Newton/Rerun/Viser need step(0.0) so GL/UI can process input (e.g. Resume).
+                    # Kit is skipped: step() would call app.update(), which must not run during pause.
+                    if not viz.pumps_app_update():
+                        viz.step(0.0)
+                    continue
+                while viz.is_training_paused() and viz.is_running():
+                    viz.step(0.0)
+                viz.step(dt)
+            except Exception as exc:
+                logger.error("Error stepping visualizer '%s': %s", type(viz).__name__, exc)
+                visualizers_to_remove.append(viz)
+
+        for viz in visualizers_to_remove:
+            try:
+                viz.close()
+                self._visualizers.remove(viz)
+                logger.info("Removed visualizer: %s", type(viz).__name__)
+            except Exception as exc:
+                logger.error("Error closing visualizer: %s", exc)
+
+    def _should_forward_before_visualizer_update(self) -> bool:
+        """Return True if any visualizer requires pre-step forward kinematics."""
+        return any(viz.requires_forward_before_step() for viz in self._visualizers)
+
+    def play(self) -> None:
+        """Start or resume the simulation."""
+        self.physics_manager.play()
+        for viz in self._visualizers:
+            viz.play()
+        self._is_playing = True
+        self._is_stopped = False
+
+    def pause(self) -> None:
+        """Pause the simulation (can be resumed with play)."""
+        self.physics_manager.pause()
+        for viz in self._visualizers:
+            viz.pause()
+        self._is_playing = False
+
+    def stop(self) -> None:
+        """Stop the simulation completely."""
+        self.physics_manager.stop()
+        for viz in self._visualizers:
+            viz.stop()
+        self._is_playing = False
+        self._is_stopped = True
+
+    def is_playing(self) -> bool:
+        """Returns True if simulation is playing (not paused or stopped)."""
+        return self._is_playing
+
+    def is_stopped(self) -> bool:
+        """Returns True if simulation is stopped (not just paused)."""
+        return self._is_stopped
+
+    def set_setting(self, name: str, value: Any) -> None:
+        """Set a setting value."""
+        self._settings_helper.set(name, value)
+
+    def get_setting(self, name: str) -> Any:
+        """Get a setting value."""
+        return self._settings_helper.get(name)
+
+    # ------------------------------------------------------------------
+    # Service locator
+    # ------------------------------------------------------------------
+
+    @property
+    def services(self) -> ServiceLocator:
+        """Typed service registry for backend-specific singletons.
+
+        Usage::
+
+            sim_context.services[FabricStageCache] = cache
+            cache = sim_context.services[FabricStageCache]
+            del sim_context.services[FabricStageCache]  # closes and removes
+        """
+        return self._services
 
     @classmethod
-    def clear_instance(cls):
-        # clear the callback
+    def clear_instance(cls) -> None:
+        """Clean up resources and clear the singleton instance."""
         if cls._instance is not None:
-            if cls._instance._app_control_on_stop_handle is not None:
-                cls._instance._app_control_on_stop_handle.unsubscribe()
-                cls._instance._app_control_on_stop_handle = None
-        # call parent to clear the instance
-        super().clear_instance()
+            # Close physics manager FIRST to detach PhysX from the stage
+            # This must happen before clearing USD prims to avoid PhysX cleanup errors
+            cls._instance.physics_manager.close()
 
-    """
-    Helper Functions
-    """
+            # Close all visualizers
+            for viz in cls._instance._visualizers:
+                viz.close()
+            cls._instance._visualizers.clear()
 
-    def _set_additional_physx_params(self):
-        """Sets additional PhysX parameters that are not directly supported by the parent class."""
-        # obtain the physics scene api
-        physics_scene: UsdPhysics.Scene = self._physics_context._physics_scene
-        physx_scene_api: PhysxSchema.PhysxSceneAPI = self._physics_context._physx_scene_api
-        # assert that scene api is not None
-        if physx_scene_api is None:
-            raise RuntimeError("Physics scene API is None! Please create the scene first.")
-        # set parameters not directly supported by the constructor
-        # -- Continuous Collision Detection (CCD)
-        # ref: https://nvidia-omniverse.github.io/PhysX/physx/5.4.1/docs/AdvancedCollisionDetection.html?highlight=ccd#continuous-collision-detection
-        self._physics_context.enable_ccd(self.cfg.physx.enable_ccd)
-        # -- GPU collision stack size
-        physx_scene_api.CreateGpuCollisionStackSizeAttr(self.cfg.physx.gpu_collision_stack_size)
-        # -- Improved determinism by PhysX
-        physx_scene_api.CreateEnableEnhancedDeterminismAttr(self.cfg.physx.enable_enhanced_determinism)
+            # Close and drop all registered singleton services
+            service_errors: list[Exception] = []
+            cls._instance._services.close_all(caught_exceptions=service_errors)
 
-        # -- Gravity
-        # note: Isaac sim only takes the "up-axis" as the gravity direction. But physics allows any direction so we
-        #  need to convert the gravity vector to a direction and magnitude pair explicitly.
-        gravity = np.asarray(self.cfg.gravity)
-        gravity_magnitude = np.linalg.norm(gravity)
+            # Tear down the stage. We skip clear_stage() (prim-by-prim deletion) since
+            # close_stage() + app shutdown destroy the entire stage at once.
+            stage_utils.close_stage()
 
-        # Avoid division by zero
-        if gravity_magnitude != 0.0:
-            gravity_direction = gravity / gravity_magnitude
-        else:
-            gravity_direction = gravity
+            # Discard cached name-resolution data from destroyed assets
+            clear_resolve_matching_names_cache()
 
-        physics_scene.CreateGravityDirectionAttr(Gf.Vec3f(*gravity_direction))
-        physics_scene.CreateGravityMagnitudeAttr(gravity_magnitude)
+            # Clear instance
+            cls._instance = None
 
-        # position iteration count
-        physx_scene_api.CreateMinPositionIterationCountAttr(self.cfg.physx.min_position_iteration_count)
-        physx_scene_api.CreateMaxPositionIterationCountAttr(self.cfg.physx.max_position_iteration_count)
-        # velocity iteration count
-        physx_scene_api.CreateMinVelocityIterationCountAttr(self.cfg.physx.min_velocity_iteration_count)
-        physx_scene_api.CreateMaxVelocityIterationCountAttr(self.cfg.physx.max_velocity_iteration_count)
+            gc.collect()
+            logger.info("SimulationContext cleared")
 
-        # create the default physics material
-        # this material is used when no material is specified for a primitive
-        # check: https://docs.omniverse.nvidia.com/extensions/latest/ext_physics/simulation-control/physics-settings.html#physics-materials
-        material_path = f"{self.cfg.physics_prim_path}/defaultMaterial"
-        self.cfg.physics_material.func(material_path, self.cfg.physics_material)
-        # bind the physics material to the scene
-        bind_physics_material(self.cfg.physics_prim_path, material_path)
+            if service_errors:
+                msg = f"SimulationContext.clear_instance(): {len(service_errors)} service(s) failed to close"
+                # TODO: Use ExceptionGroup when ruff target-version is bumped to py311+
+                raise RuntimeError(msg) from service_errors[0]
 
-    def _load_fabric_interface(self):
-        """Loads the fabric interface if enabled."""
-        if self.cfg.use_fabric:
-            from omni.physxfabric import get_physx_fabric_interface
+    @classmethod
+    def clear_stage(cls) -> None:
+        """Clear the current USD stage (preserving /World and PhysicsScene).
 
-            # acquire fabric interface
-            self._fabric_iface = get_physx_fabric_interface()
-            if hasattr(self._fabric_iface, "force_update"):
-                # The update method in the fabric interface only performs an update if a physics step has occurred.
-                # However, for rendering, we need to force an update since any element of the scene might have been
-                # modified in a reset (which occurs after the physics step) and we want the renderer to be aware of
-                # these changes.
-                self._update_fabric = self._fabric_iface.force_update
-            else:
-                # Needed for backward compatibility with older Isaac Sim versions
-                self._update_fabric = self._fabric_iface.update
-
-    """
-    Callbacks.
-    """
-
-    def _app_control_on_stop_handle_fn(self, event: carb.events.IEvent):
-        """Callback to deal with the app when the simulation is stopped.
-
-        Once the simulation is stopped, the physics handles go invalid. After that, it is not possible to
-        resume the simulation from the last state. This leaves the app in an inconsistent state, where
-        two possible actions can be taken:
-
-        1. **Keep the app rendering**: In this case, the simulation is kept running and the app is not shutdown.
-           However, the physics is not updated and the script cannot be resumed from the last state. The
-           user has to manually close the app to stop the simulation.
-        2. **Shutdown the app**: This is the default behavior. In this case, the app is shutdown and
-           the simulation is stopped.
-
-        Note:
-            This callback is used only when running the simulation in a standalone python script. In an extension,
-            it is expected that the user handles the extension shutdown.
+        Uses a predicate that preserves /World and PhysicsScene while also
+        respecting the default deletability checks (ancestral prims, etc.).
         """
-        if not self._disable_app_control_on_stop_handle:
-            while not omni.timeline.get_timeline_interface().is_playing():
-                self.render()
-        return
+        if cls._instance is None:
+            return
+
+        def _predicate(prim: Usd.Prim) -> bool:
+            path = prim.GetPath().pathString
+            if path == "/World":
+                return False
+            if prim.GetTypeName() == "PhysicsScene":
+                return False
+            return True
+
+        sim_utils.clear_stage(predicate=_predicate)
 
 
 @contextmanager
@@ -754,89 +964,59 @@ def build_simulation_context(
     add_ground_plane: bool = False,
     add_lighting: bool = False,
     auto_add_lighting: bool = False,
+    visualizers: list[str] | None = None,
 ) -> Iterator[SimulationContext]:
     """Context manager to build a simulation context with the provided settings.
 
-    This function facilitates the creation of a simulation context and provides flexibility in configuring various
-    aspects of the simulation, such as time step, gravity, device, and scene elements like ground plane and
-    lighting.
-
-    If :attr:`sim_cfg` is None, then an instance of :class:`SimulationCfg` is created with default settings, with parameters
-    overwritten based on arguments to the function.
-
-    An example usage of the context manager function:
-
-    ..  code-block:: python
-
-        with build_simulation_context() as sim:
-             # Design the scene
-
-             # Play the simulation
-             sim.reset()
-             while sim.is_playing():
-                 sim.step()
-
     Args:
         create_new_stage: Whether to create a new stage. Defaults to True.
-        gravity_enabled: Whether to enable gravity in the simulation. Defaults to True.
+        gravity_enabled: Whether to enable gravity. Defaults to True.
         device: Device to run the simulation on. Defaults to "cuda:0".
-        dt: Time step for the simulation: Defaults to 0.01.
-        sim_cfg: :class:`isaaclab.sim.SimulationCfg` to use for the simulation. Defaults to None.
-        add_ground_plane: Whether to add a ground plane to the simulation. Defaults to False.
-        add_lighting: Whether to add a dome light to the simulation. Defaults to False.
-        auto_add_lighting: Whether to automatically add a dome light to the simulation if the simulation has a GUI.
-            Defaults to False. This is useful for debugging tests in the GUI.
+        dt: Time step for the simulation. Defaults to 0.01.
+        sim_cfg: SimulationCfg to use. Defaults to None.
+        add_ground_plane: Whether to add a ground plane. Defaults to False.
+        add_lighting: Whether to add a dome light. Defaults to False.
+        auto_add_lighting: Whether to auto-add lighting if GUI present. Defaults to False.
+        visualizers: List of visualizer backend keys to enable (e.g. ``["kit", "newton", "rerun"]``).
+            Valid types: ``"kit"``, ``"newton"``, ``"rerun"``, ``"viser"``.
+            When provided, sets the ``/isaaclab/visualizer/types`` setting so the
+            existing visualizer resolution machinery picks them up. Defaults to None.
 
     Yields:
         The simulation context to use for the simulation.
-
     """
+    sim: SimulationContext | None = None
     try:
         if create_new_stage:
-            stage_utils.create_new_stage()
+            # ``create_new_stage`` is shadowed here by the bool parameter, so call via the namespace.
+            sim_utils.create_new_stage()
 
         if sim_cfg is None:
-            # Construct one and overwrite the dt, gravity, and device
-            sim_cfg = SimulationCfg(dt=dt)
+            gravity = (0.0, 0.0, -9.81) if gravity_enabled else (0.0, 0.0, 0.0)
+            sim_cfg = SimulationCfg(device=device, dt=dt, gravity=gravity)
 
-            # Set up gravity
-            if gravity_enabled:
-                sim_cfg.gravity = (0.0, 0.0, -9.81)
-            else:
-                sim_cfg.gravity = (0.0, 0.0, 0.0)
-
-            # Set device
-            sim_cfg.device = device
-
-        # Construct simulation context
         sim = SimulationContext(sim_cfg)
 
+        if visualizers:
+            sim.set_setting("/isaaclab/visualizer/types", " ".join(visualizers))
+
         if add_ground_plane:
-            # Ground-plane
             cfg = GroundPlaneCfg()
             cfg.func("/World/defaultGroundPlane", cfg)
 
-        if add_lighting or (auto_add_lighting and sim.has_gui()):
-            # Lighting
+        if add_lighting or (auto_add_lighting and (sim.get_setting("/isaaclab/has_gui") or visualizers)):
             cfg = DomeLightCfg(
-                color=(0.1, 0.1, 0.1),
-                enable_color_temperature=True,
-                color_temperature=5500,
-                intensity=10000,
+                color=(0.1, 0.1, 0.1), enable_color_temperature=True, color_temperature=5500, intensity=10000
             )
-            # Dome light named specifically to avoid conflicts
             cfg.func(prim_path="/World/defaultDomeLight", cfg=cfg, translation=(0.0, 0.0, 10.0))
 
         yield sim
 
     except Exception:
-        omni.log.error(traceback.format_exc())
+        logger.error(traceback.format_exc())
         raise
     finally:
-        if not sim.has_gui():
-            # Stop simulation only if we aren't rendering otherwise the app will hang indefinitely
-            sim.stop()
-
-        # Clear the stage
-        sim.clear_all_callbacks()
-        sim.clear_instance()
+        if sim is not None:
+            if not sim.get_setting("/isaaclab/has_gui"):
+                sim.stop()
+            sim.clear_instance()

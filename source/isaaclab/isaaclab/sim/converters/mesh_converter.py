@@ -1,21 +1,24 @@
-# Copyright (c) 2022-2026, The Isaac Lab Project Developers.
+# Copyright (c) 2022-2026, The Isaac Lab Project Developers (https://github.com/isaac-sim/IsaacLab/blob/main/CONTRIBUTORS.md).
 # All rights reserved.
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
 import asyncio
+import logging
 import os
 
 import omni
 import omni.kit.commands
-import omni.usd
-from isaacsim.core.utils.extensions import enable_extension
+from isaacsim.core.experimental.utils.app import enable_extension
 from pxr import Gf, Tf, Usd, UsdGeom, UsdPhysics, UsdUtils
 
 from isaaclab.sim.converters.asset_converter_base import AssetConverterBase
 from isaaclab.sim.converters.mesh_converter_cfg import MeshConverterCfg
 from isaaclab.sim.schemas import schemas
-from isaaclab.sim.utils import export_prim_to_file
+from isaaclab.sim.utils import delete_prim, export_prim_to_file
+
+# import logger
+logger = logging.getLogger(__name__)
 
 
 class MeshConverter(AssetConverterBase):
@@ -29,7 +32,7 @@ class MeshConverter(AssetConverterBase):
     instancing and physics work. The rigid body component must be added to each instance and not the
     referenced asset (i.e. the prototype prim itself). This is because the rigid body component defines
     properties that are specific to each instance and cannot be shared under the referenced asset. For
-    more information, please check the `documentation <https://docs.omniverse.nvidia.com/extensions/latest/ext_physics/rigid-bodies.html#instancing-rigid-bodies>`_.
+    more information, please check the `documentation <https://docs.isaacsim.omniverse.nvidia.com/latest/physics/simulation_fundamentals.html#rigid-body>`_.
 
     Due to the above, we follow the following structure:
 
@@ -87,7 +90,7 @@ class MeshConverter(AssetConverterBase):
             # Correct the name to a valid identifier and update the basename
             mesh_file_basename_original = mesh_file_basename
             mesh_file_basename = Tf.MakeValidIdentifier(mesh_file_basename)
-            omni.log.warn(
+            logger.warning(
                 f"Input file name '{mesh_file_basename_original}' is an invalid identifier for the mesh prim path."
                 f" Renaming it to '{mesh_file_basename}' for the conversion."
             )
@@ -122,13 +125,14 @@ class MeshConverter(AssetConverterBase):
             if child_mesh_prim.GetTypeName() == "Mesh":
                 # Apply collider properties to mesh
                 if cfg.collision_props is not None:
-                    # -- Collision approximation to mesh
-                    # TODO: Move this to a new Schema: https://github.com/isaac-orbit/IsaacLab/issues/163
-                    mesh_collision_api = UsdPhysics.MeshCollisionAPI.Apply(child_mesh_prim)
-                    mesh_collision_api.GetApproximationAttr().Set(cfg.collision_approximation)
                     # -- Collider properties such as offset, scale, etc.
                     schemas.define_collision_properties(
                         prim_path=child_mesh_prim.GetPath(), cfg=cfg.collision_props, stage=stage
+                    )
+                # Add collision mesh
+                if cfg.mesh_collision_props is not None:
+                    schemas.define_mesh_collision_properties(
+                        prim_path=child_mesh_prim.GetPath(), cfg=cfg.mesh_collision_props, stage=stage
                     )
         # Delete the old Xform and make the new Xform the default prim
         stage.SetDefaultPrim(xform_prim)
@@ -153,7 +157,7 @@ class MeshConverter(AssetConverterBase):
         translate_op.Set(Gf.Vec3d(*cfg.translation))
         # rotation
         orient_op = geom_xform.AddOrientOp(UsdGeom.XformOp.PrecisionDouble)
-        orient_op.Set(Gf.Quatd(*cfg.rotation))
+        orient_op.Set(Gf.Quatd(cfg.rotation[3], cfg.rotation[0], cfg.rotation[1], cfg.rotation[2]))
         # scale
         scale_op = geom_xform.AddScaleOp(UsdGeom.XformOp.PrecisionDouble)
         scale_op.Set(Gf.Vec3d(*cfg.scale))
@@ -169,7 +173,7 @@ class MeshConverter(AssetConverterBase):
             )
             # Delete the original prim that will now be a reference
             geom_prim_path = geom_prim.GetPath().pathString
-            omni.kit.commands.execute("DeletePrims", paths=[geom_prim_path], stage=stage)
+            delete_prim(geom_prim_path, stage=stage)
             # Update references to exported Xform and make it instanceable
             geom_undef_prim = stage.DefinePrim(geom_prim_path)
             geom_undef_prim.GetReferences().AddReference(self.usd_instanceable_meshes_path, primPath=geom_prim_path)
@@ -216,7 +220,6 @@ class MeshConverter(AssetConverterBase):
         enable_extension("omni.kit.asset_converter")
 
         import omni.kit.asset_converter
-        import omni.usd
 
         # Create converter context
         converter_context = omni.kit.asset_converter.AssetConverterContext()
@@ -229,7 +232,7 @@ class MeshConverter(AssetConverterBase):
         # Merge all meshes into one
         converter_context.merge_all_meshes = True
         # Sets world units to meters, this will also scale asset if it's centimeters model.
-        # This does not work right now :(, so we need to scale the mesh manually
+        # This does not work right now :( so we need to scale the mesh manually
         converter_context.use_meter_as_world_unit = True
         converter_context.baking_scales = True
         # Uses double precision for all transform ops.

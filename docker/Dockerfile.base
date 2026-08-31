@@ -1,10 +1,10 @@
-# Copyright (c) 2022-2025, The Isaac Lab Project Developers.
+# Copyright (c) 2022-2025, The Isaac Lab Project Developers (https://github.com/isaac-sim/IsaacLab/blob/main/CONTRIBUTORS.md).
 # All rights reserved.
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
-# Nvidia Dockerfiles: https://github.com/NVIDIA-Omniverse/IsaacSim-dockerfiles
-# Please check above link for license information.
+# Isaac Sim base container: https://catalog.ngc.nvidia.com/orgs/nvidia/containers/isaac-sim
+# Please check the NGC container page for license information.
 
 # Base image
 ARG ISAACSIM_BASE_IMAGE_ARG
@@ -16,7 +16,7 @@ ENV ISAACSIM_VERSION=${ISAACSIM_VERSION_ARG}
 SHELL ["/bin/bash", "-c"]
 
 # Adds labels to the Dockerfile
-LABEL version="1.1"
+LABEL version="2.1.1"
 LABEL description="Dockerfile for building and running the Isaac Lab framework inside Isaac Sim container image."
 
 # Arguments
@@ -26,29 +26,49 @@ ENV ISAACSIM_ROOT_PATH=${ISAACSIM_ROOT_PATH_ARG}
 # Path to the Isaac Lab directory
 ARG ISAACLAB_PATH_ARG
 ENV ISAACLAB_PATH=${ISAACLAB_PATH_ARG}
-# Home dir of docker user, typically '/root'
+# Home dir of the runtime docker user, typically '/root'
 ARG DOCKER_USER_HOME_ARG
 ENV DOCKER_USER_HOME=${DOCKER_USER_HOME_ARG}
+ENV HOME=${DOCKER_USER_HOME}
 
 # Set environment variables
 ENV LANG=C.UTF-8
 ENV DEBIAN_FRONTEND=noninteractive
 
+# Base image may end with a non-root user; switch to root for system-level
+# setup and package installation.
 USER root
 
-# Install dependencies and remove cache
-RUN --mount=type=cache,target=/var/cache/apt \
-    apt-get update && apt-get install -y --no-install-recommends \
+# Install dependencies
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
     build-essential \
+    libglib2.0-0 \
+    ncurses-term \
     cmake \
     git \
-    libglib2.0-0 \
-    ncurses-term && \
-    apt -y autoremove && apt clean autoclean && \
-    rm -rf /var/lib/apt/lists/*
+    wget
 
-# Copy the Isaac Lab directory (files to exclude are defined in .dockerignore)
-COPY ../ ${ISAACLAB_PATH}
+# arm64-only build deps:
+# - imgui-bundle has no prebuilt arm64 wheel; needs GL/X11 dev headers.
+RUN if [ "$(dpkg --print-architecture)" = "arm64" ]; then \
+        apt-get update && \
+        apt-get install -y --no-install-recommends \
+        libgl1-mesa-dev libopengl-dev libglx-dev \
+        libx11-dev libxcursor-dev libxi-dev libxinerama-dev libxrandr-dev; \
+    fi
+
+# copy files necessary for installing Isaac Lab and its dependencies
+# this way we minimize the chance of cache invalidation on file edits
+COPY ../isaaclab.* ../environment.yml ../pyproject.toml ${ISAACLAB_PATH}/
+COPY ../tools/ ${ISAACLAB_PATH}/tools/
+COPY ../source/ ${ISAACLAB_PATH}/source/
+
+# Fix the line endings for the shell scripts (Windows git may add \r)
+RUN find ${ISAACLAB_PATH} -type f -name "*.sh" -exec sed -i 's/\r$//' {} +
+
+# Ensure isaaclab.sh has execute permissions
+RUN chmod +x ${ISAACLAB_PATH}/isaaclab.sh
 
 # Set up a symbolic link between the installed Isaac Sim root folder and _isaac_sim in the Isaac Lab directory
 RUN ln -sf ${ISAACSIM_ROOT_PATH} ${ISAACLAB_PATH}/_isaac_sim
@@ -56,10 +76,9 @@ RUN ln -sf ${ISAACSIM_ROOT_PATH} ${ISAACLAB_PATH}/_isaac_sim
 # Install toml dependency
 RUN ${ISAACLAB_PATH}/isaaclab.sh -p -m pip install toml
 
-# Install apt dependencies for extensions that declare them in their extension.toml
-RUN --mount=type=cache,target=/var/cache/apt \
-    ${ISAACLAB_PATH}/isaaclab.sh -p ${ISAACLAB_PATH}/tools/install_deps.py apt ${ISAACLAB_PATH}/source && \
-    apt -y autoremove && apt clean autoclean && \
+# Install apt dependencies for extensions that declare them in their extension.toml,
+RUN ${ISAACLAB_PATH}/isaaclab.sh -p ${ISAACLAB_PATH}/tools/install_deps.py apt ${ISAACLAB_PATH}/source && \
+    apt-get -y autoremove && apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
 # for singularity usage, have to create the directories that will binded
@@ -82,8 +101,6 @@ RUN touch /bin/nvidia-smi && \
     mkdir -p /var/run/nvidia-persistenced && \
     touch /var/run/nvidia-persistenced/socket
 
-# installing Isaac Lab dependencies
-# use pip caching to avoid reinstalling large packages
 RUN --mount=type=cache,target=${DOCKER_USER_HOME}/.cache/pip \
     ${ISAACLAB_PATH}/isaaclab.sh --install
 
@@ -91,14 +108,59 @@ RUN --mount=type=cache,target=${DOCKER_USER_HOME}/.cache/pip \
 RUN ${ISAACLAB_PATH}/isaaclab.sh -p -m pip uninstall -y quadprog
 
 # aliasing isaaclab.sh and python for convenience
-RUN echo "export ISAACLAB_PATH=${ISAACLAB_PATH}" >> ${HOME}/.bashrc && \
-    echo "alias isaaclab=${ISAACLAB_PATH}/isaaclab.sh" >> ${HOME}/.bashrc && \
-    echo "alias python=${ISAACLAB_PATH}/_isaac_sim/python.sh" >> ${HOME}/.bashrc && \
-    echo "alias python3=${ISAACLAB_PATH}/_isaac_sim/python.sh" >> ${HOME}/.bashrc && \
-    echo "alias pip='${ISAACLAB_PATH}/_isaac_sim/python.sh -m pip'" >> ${HOME}/.bashrc && \
-    echo "alias pip3='${ISAACLAB_PATH}/_isaac_sim/python.sh -m pip'" >> ${HOME}/.bashrc && \
-    echo "alias tensorboard='${ISAACLAB_PATH}/_isaac_sim/python.sh ${ISAACLAB_PATH}/_isaac_sim/tensorboard'" >> ${HOME}/.bashrc && \
-    echo "export TZ=$(date +%Z)" >> ${HOME}/.bashrc
+RUN echo "export ISAACLAB_PATH=${ISAACLAB_PATH}" >> ${DOCKER_USER_HOME}/.bashrc && \
+    echo "alias isaaclab=${ISAACLAB_PATH}/isaaclab.sh" >> ${DOCKER_USER_HOME}/.bashrc && \
+    echo "alias python=${ISAACLAB_PATH}/_isaac_sim/python.sh" >> ${DOCKER_USER_HOME}/.bashrc && \
+    echo "alias python3=${ISAACLAB_PATH}/_isaac_sim/python.sh" >> ${DOCKER_USER_HOME}/.bashrc && \
+    echo "alias pip='${ISAACLAB_PATH}/_isaac_sim/python.sh -m pip'" >> ${DOCKER_USER_HOME}/.bashrc && \
+    echo "alias pip3='${ISAACLAB_PATH}/_isaac_sim/python.sh -m pip'" >> ${DOCKER_USER_HOME}/.bashrc && \
+    echo "alias tensorboard='${ISAACLAB_PATH}/_isaac_sim/python.sh ${ISAACLAB_PATH}/_isaac_sim/tensorboard'" >> ${DOCKER_USER_HOME}/.bashrc && \
+    echo "export TZ=$(date +%Z)" >> ${DOCKER_USER_HOME}/.bashrc && \
+    echo "shopt -s histappend" >> ${DOCKER_USER_HOME}/.bashrc && \
+    echo "PROMPT_COMMAND='history -a'" >> ${DOCKER_USER_HOME}/.bashrc
+
+# Create the non-root runtime user after root-only image setup is complete.
+# The uid/gid 1000 match GitHub runner bind mounts used by Docker tests.
+# --non-unique is required because some base image revisions already carry
+# another user or group at uid/gid 1000.
+RUN groupadd --non-unique --gid 1000 isaaclab \
+ && useradd --non-unique --uid 1000 --gid 1000 -M -l -s /bin/bash -d ${DOCKER_USER_HOME} isaaclab
+
+RUN chown -R isaaclab:isaaclab \
+        ${ISAACLAB_PATH} \
+        ${DOCKER_USER_HOME}
+
+# Open up traversal of the Isaac Sim root and runtime home for non-root users.
+# Inner Isaac Sim files keep their original permissions, so avoid chowning the
+# full install. Keep the runtime home closed to unrelated users.
+RUN chmod 755 \
+        ${ISAACSIM_ROOT_PATH} \
+ && chmod 750 \
+        ${DOCKER_USER_HOME}
+
+# copy the rest of the files
+COPY --chown=isaaclab:isaaclab ../ ${ISAACLAB_PATH}/
+
+# Pre-create every docker-compose named-volume mount point and hand it to the
+# non-root runtime user. docker-compose.yaml is the single source of truth for
+# the list; docker/utils/volume_mounts.py parses it so the paths are not
+# duplicated here. A fresh named volume inherits ownership from the image
+# directory at its mount path; if that directory is missing or root-owned, the
+# volume comes up root-owned and the isaaclab user cannot write it (e.g.
+# PermissionError creating logs/, or omni.datastore lock failures under
+# kit/cache). set -o pipefail makes a parse failure abort the build:
+# volume_mounts.py exits non-zero on an empty/unresolved list and grep exits
+# non-zero if no paths are produced, so the build fails here rather than
+# silently shipping an unprepared mount point.
+RUN set -o pipefail \
+ && export DOCKER_ISAACSIM_ROOT_PATH="${ISAACSIM_ROOT_PATH}" \
+           DOCKER_ISAACLAB_PATH="${ISAACLAB_PATH}" \
+           DOCKER_USER_HOME="${DOCKER_USER_HOME}" \
+ && dirs="$(${ISAACLAB_PATH}/isaaclab.sh -p ${ISAACLAB_PATH}/docker/utils/volume_mounts.py | grep '^/')" \
+ && mkdir -p ${dirs} \
+ && chown -R isaaclab:isaaclab ${dirs}
+
+USER isaaclab
 
 # make working directory as the Isaac Lab directory
 # this is the default directory when the container is run

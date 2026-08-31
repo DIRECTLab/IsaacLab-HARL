@@ -1,17 +1,21 @@
-# Copyright (c) 2022-2026, The Isaac Lab Project Developers.
+# Copyright (c) 2022-2026, The Isaac Lab Project Developers (https://github.com/isaac-sim/IsaacLab/blob/main/CONTRIBUTORS.md).
 # All rights reserved.
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
 """Functions specific to the in-hand dexterous manipulation environments."""
 
-import torch
+from __future__ import annotations
+
 from typing import TYPE_CHECKING
 
-from isaaclab.envs import ManagerBasedRLEnv
+import torch
+
 from isaaclab.managers import SceneEntityCfg
 
 if TYPE_CHECKING:
+    from isaaclab.envs import ManagerBasedRLEnv
+
     from .commands import InHandReOrientationCommand
 
 
@@ -50,10 +54,10 @@ def object_away_from_goal(
     asset = env.scene[object_cfg.name]
 
     # object pos
-    asset_pos_e = asset.data.root_pos_w - env.scene.env_origins
+    asset_pos_e = asset.data.root_pos_w.torch - env.scene.env_origins
     goal_pos_e = command_term.command[:, :3]
 
-    return torch.norm(asset_pos_e - goal_pos_e, p=2, dim=1) > threshold
+    return torch.linalg.norm(asset_pos_e - goal_pos_e, ord=2, dim=1) > threshold
 
 
 def object_away_from_robot(
@@ -78,6 +82,6 @@ def object_away_from_robot(
     object = env.scene[object_cfg.name]
 
     # compute distance
-    dist = torch.norm(robot.data.root_pos_w - object.data.root_pos_w, dim=1)
+    dist = torch.linalg.norm(robot.data.root_pos_w.torch - object.data.root_pos_w.torch, dim=1)
 
     return dist > threshold

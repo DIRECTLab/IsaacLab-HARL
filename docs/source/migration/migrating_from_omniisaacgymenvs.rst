@@ -295,8 +295,8 @@ including file path, simulation parameters, actuator properties, and initial sta
        actuators={
            "cart_actuator": ImplicitActuatorCfg(
                joint_names_expr=["slider_to_cart"],
-               effort_limit=400.0,
-               velocity_limit=100.0,
+               effort_limit_sim=400.0,
+               velocity_limit_sim=100.0,
                stiffness=0.0,
                damping=10.0,
            ),
@@ -983,7 +983,7 @@ To launch a training in Isaac Lab, use the command:
 
 .. code-block:: bash
 
-   python scripts/reinforcement_learning/rl_games/train.py --task=Isaac-Cartpole-Direct-v0 --headless
+   ./isaaclab.sh train --rl_library rl_games --task=Isaac-Cartpole-Direct-v0
 
 Launching Inferencing
 ~~~~~~~~~~~~~~~~~~~~~
@@ -992,7 +992,7 @@ To launch inferencing in Isaac Lab, use the command:
 
 .. code-block:: bash
 
-   python scripts/reinforcement_learning/rl_games/play.py --task=Isaac-Cartpole-Direct-v0 --num_envs=25 --checkpoint=<path/to/checkpoint>
+   ./isaaclab.sh play --rl_library rl_games --task=Isaac-Cartpole-Direct-v0 --num_envs=25 --checkpoint=<path/to/checkpoint>
 
 
 .. _`OmniIsaacGymEnvs`: https://github.com/isaac-sim/OmniIsaacGymEnvs

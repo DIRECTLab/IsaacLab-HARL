@@ -10,3 +10,8 @@
 *.pt filter=lfs diff=lfs merge=lfs -text
 *.jit filter=lfs diff=lfs merge=lfs -text
 *.hdf5 filter=lfs diff=lfs merge=lfs -text
+
+source/isaaclab_tasks/test/golden_images/**/*.png filter=lfs diff=lfs merge=lfs -text
+
+*.bat text eol=crlf
+*.sh text eol=lf

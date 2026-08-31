@@ -1,4 +1,4 @@
-# Copyright (c) 2022-2026, The Isaac Lab Project Developers.
+# Copyright (c) 2022-2026, The Isaac Lab Project Developers (https://github.com/isaac-sim/IsaacLab/blob/main/CONTRIBUTORS.md).
 # All rights reserved.
 #
 # SPDX-License-Identifier: BSD-3-Clause
@@ -7,11 +7,14 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import MISSING
+from typing import TYPE_CHECKING
 
-from pxr import Usd
+from isaaclab.utils.configclass import configclass
 
-from isaaclab.sim import schemas
-from isaaclab.utils import configclass
+if TYPE_CHECKING:
+    from pxr import Usd
+
+    from isaaclab.sim import schemas
 
 
 @configclass
@@ -66,6 +69,9 @@ class SpawnerCfg:
     the source prim, i.e. all USD changes to the source prim will be reflected in the cloned prims.
     """
 
+    spawn_path: str | None = None
+    """Path where the prototype is spawned. Defaults to None."""
+
 
 @configclass
 class RigidObjectSpawnerCfg(SpawnerCfg):
@@ -79,10 +85,10 @@ class RigidObjectSpawnerCfg(SpawnerCfg):
     mass_props: schemas.MassPropertiesCfg | None = None
     """Mass properties."""
 
-    rigid_props: schemas.RigidBodyPropertiesCfg | None = None
+    rigid_props: schemas.RigidBodyBaseCfg | None = None
     """Rigid body properties.
 
-    For making a rigid object static, set the :attr:`schemas.RigidBodyPropertiesCfg.kinematic_enabled`
+    For making a rigid object static, set the :attr:`schemas.RigidBodyBaseCfg.kinematic_enabled`
     as True. This will make the object static and will not be affected by gravity or other forces.
     """
 
@@ -114,5 +120,5 @@ class DeformableObjectSpawnerCfg(SpawnerCfg):
     mass_props: schemas.MassPropertiesCfg | None = None
     """Mass properties."""
 
-    deformable_props: schemas.DeformableBodyPropertiesCfg | None = None
+    deformable_props: schemas.DeformableBodyPropertiesBaseCfg | None = None
     """Deformable body properties."""

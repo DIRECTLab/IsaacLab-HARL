@@ -1,162 +1,170 @@
-Installing Isaac Lab through Pip
-================================
+Installation using Isaac Lab Pip Packages
+=========================================
 
 From Isaac Lab 2.0, pip packages are provided to install both Isaac Sim and Isaac Lab extensions from pip.
 Note that this installation process is only recommended for advanced users working on additional extension projects
-that are built on top of Isaac Lab. Isaac Lab pip packages **do not** include any standalone python scripts for
+that are built on top of Isaac Lab. Isaac Lab pip packages **does not** include any standalone python scripts for
 training, inferencing, or running standalone workflows such as demos and examples. Therefore, users are required
-to define your own runner scripts when installing Isaac Lab from pip.
+to define their own runner scripts when installing Isaac Lab from pip.
 
-To learn about how to set up your own project on top of Isaac Lab, see :ref:`template-generator`.
+To learn about how to set up your own project on top of Isaac Lab, please see :ref:`template-generator`.
 
 .. note::
 
-   If you use Conda, we recommend using `Miniconda <https://docs.anaconda.com/miniconda/miniconda-other-installer-links/>`_.
+   Currently, we only provide pip packages for every major release of Isaac Lab.
+   For example, we provide the pip package for release 2.1.0 and 2.2.0, but not 2.1.1.
+   In the future, we will provide pip packages for every minor release of Isaac Lab.
 
--  To use the pip installation approach for Isaac Lab, we recommend first creating a virtual environment.
-   Ensure that the python version of the virtual environment is **Python 3.10**.
+.. include:: include/pip_python_virtual_env.rst
 
-   .. tab-set::
+Installing Isaac Lab
+~~~~~~~~~~~~~~~~~~~~
 
-      .. tab-item:: conda environment
+The ``isaaclab`` pip wheel bundles all Isaac Lab extensions. Common optional
+pip extras include:
 
-         .. code-block:: bash
+.. list-table::
+   :header-rows: 1
+   :widths: 18 52
 
-            conda create -n env_isaaclab python=3.10
-            conda activate env_isaaclab
+   * - Extra
+     - What it installs
+   * - ``isaacsim``
+     - Isaac Sim (``isaacsim[all,extscache]==6.0.1.0``) from `pypi.nvidia.com <https://pypi.nvidia.com>`_
+   * - ``all``
+     - RL frameworks (SB3, SKRL, RSL-RL). Combine with ``isaacsim`` for a full install.
 
-      .. tab-item:: venv environment
+Install with ``isaaclab[isaacsim,all]`` for the full workflow.
 
-         .. tab-set::
-            :sync-group: os
+.. tab-set::
 
-            .. tab-item:: :icon:`fa-brands fa-linux` Linux
-               :sync: linux
+   .. tab-item:: uv
 
-               .. code-block:: bash
+      .. code-block:: bash
 
-                  # create a virtual environment named env_isaaclab with python3.10
-                  python3.10 -m venv env_isaaclab
-                  # activate the virtual environment
-                  source env_isaaclab/bin/activate
+         uv pip install "isaaclab[isaacsim,all]" --extra-index-url https://pypi.nvidia.com --index-strategy unsafe-best-match --prerelease=allow
 
-            .. tab-item:: :icon:`fa-brands fa-windows` Windows
-               :sync: windows
+   .. tab-item:: pip
 
-               .. code-block:: batch
+      .. code-block:: bash
 
-                  # create a virtual environment named env_isaaclab with python3.10
-                  python3.10 -m venv env_isaaclab
-                  # activate the virtual environment
-                  env_isaaclab\Scripts\activate
+         pip install "isaaclab[isaacsim,all]" --extra-index-url https://pypi.nvidia.com --pre
 
+.. note::
 
--  Next, install a CUDA-enabled PyTorch 2.5.1 build based on the CUDA version available on your system. This step is optional for Linux, but required for Windows to ensure a CUDA-compatible version of PyTorch is installed.
+   ``rl_games`` is not included in the Isaac Lab pip wheel extras. If your workflow requires
+   ``rl_games``, install it manually from the Isaac Lab-compatible branch:
 
-   .. tab-set::
+   .. code-block:: bash
 
-      .. tab-item:: CUDA 11
+      pip install "rl-games @ git+https://github.com/isaac-sim/rl_games.git@python3.11" gym standard-distutils
 
-         .. code-block:: bash
+Installing dependencies
+~~~~~~~~~~~~~~~~~~~~~~~
 
-            pip install torch==2.5.1 torchvision==0.20.1 --index-url https://download.pytorch.org/whl/cu118
-
-      .. tab-item:: CUDA 12
-
-         .. code-block:: bash
-
-            pip install torch==2.5.1 torchvision==0.20.1 --index-url https://download.pytorch.org/whl/cu121
-
-
--  Before installing Isaac Lab, ensure the latest pip version is installed. To update pip, run
+-  Install a CUDA-enabled PyTorch 2.10.0 build that matches your system architecture:
 
    .. tab-set::
-      :sync-group: os
+      :sync-group: pip-platform
 
-      .. tab-item:: :icon:`fa-brands fa-linux` Linux
-         :sync: linux
+      .. tab-item:: :icon:`fa-brands fa-linux` Linux (x86_64)
+         :sync: linux-x86_64
 
          .. code-block:: bash
 
-            pip install --upgrade pip
+            pip install -U torch==2.10.0 torchvision==0.25.0 --index-url https://download.pytorch.org/whl/cu128
 
-      .. tab-item:: :icon:`fa-brands fa-windows` Windows
-         :sync: windows
+      .. tab-item:: :icon:`fa-brands fa-windows` Windows (x86_64)
+         :sync: windows-x86_64
 
-         .. code-block:: batch
+         .. code-block:: bash
 
-            python -m pip install --upgrade pip
+            pip install -U torch==2.10.0 torchvision==0.25.0 --index-url https://download.pytorch.org/whl/cu128
 
--  Then, install the Isaac Lab packages, this will also install Isaac Sim.
+      .. tab-item:: :icon:`fa-brands fa-linux` Linux (aarch64)
+         :sync: linux-aarch64
 
-   .. code-block:: none
+         .. code-block:: bash
 
-      pip install isaaclab[isaacsim,all]==2.1.0 --extra-index-url https://pypi.nvidia.com
+            pip install -U torch==2.10.0 torchvision==0.25.0 --index-url https://download.pytorch.org/whl/cu130
 
+         .. note::
 
-.. attention::
+            On aarch64 (e.g., DGX Spark), ``imgui-bundle`` and ``quadprog`` must be compiled from source because no
+            pre-built wheel is available. Install the required Python, OpenGL, and X11 development packages
+            **before** installing Isaac Lab:
 
-   For 50 series GPUs, please use the latest PyTorch nightly build instead of PyTorch 2.5.1, which comes with Isaac Sim:
+            .. code-block:: bash
 
-   .. code:: bash
+               sudo apt install python3.12-dev libgl1-mesa-dev libx11-dev libxcursor-dev libxi-dev libxinerama-dev libxrandr-dev
 
-      pip install --upgrade --pre torch torchvision --index-url https://download.pytorch.org/whl/nightly/cu128
+         .. note::
 
+            After installing Isaac Lab on aarch64, you may encounter warnings such as:
 
-Verifying the Isaac Sim installation
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+            .. code-block:: none
 
--  Make sure that your virtual environment is activated (if applicable)
+               ERROR: ld.so: object '...torch.libs/libgomp-XXXX.so.1.0.0' cannot be preloaded: ignored.
 
+            This occurs when both the system and PyTorch ``libgomp`` (GNU OpenMP) libraries are preloaded.
+            Isaac Sim expects the **system** OpenMP runtime, while PyTorch sometimes bundles its own.
 
--  Check that the simulator runs as expected:
+            To fix this, unset any existing ``LD_PRELOAD`` and set it to use the system library only:
 
-   .. code:: bash
+            .. code-block:: bash
 
-      # note: you can pass the argument "--help" to see all arguments possible.
-      isaacsim
+               unset LD_PRELOAD
+               export LD_PRELOAD=/lib/aarch64-linux-gnu/libgomp.so.1
 
--  It's also possible to run with a specific experience file, run:
+            This ensures the correct ``libgomp`` library is preloaded for both Isaac Sim and Isaac Lab,
+            removing the preload warnings during runtime.
 
-   .. code:: bash
+         .. note::
 
-      # experience files can be absolute path, or relative path searched in isaacsim/apps or omni/apps
-      isaacsim isaacsim.exp.full.kit
+            On aarch64, you may encounter the following error when importing ``omni.client`` or ``torch``:
 
+            .. code-block:: none
 
-.. attention::
+               ImportError: .../libcarb.so: cannot allocate memory in static TLS block
 
-   When running Isaac Sim for the first time, all dependent extensions will be pulled from the registry.
-   This process can take upwards of 10 minutes and is required on the first run of each experience file.
-   Once the extensions are pulled, consecutive runs using the same experience file will use the cached extensions.
+            This happens because ``libcarb.so`` uses the *initial-exec* TLS model, and
+            the dynamic linker's fixed-size TLS surplus is exhausted by the time it is loaded.
+            To fix this, preload ``libcarb.so`` before launching Python:
 
-.. attention::
+            .. code-block:: bash
 
-   The first run will prompt users to accept the Nvidia Omniverse License Agreement.
-   To accept the EULA, reply ``Yes`` when prompted with the below message:
+               export LD_PRELOAD=$(python -c "import sys,os;[print(os.path.join(p,'omni','client','libcarb.so')) for p in sys.path if os.path.isfile(os.path.join(p,'omni','client','libcarb.so'))]" 2>/dev/null | head -1)${LD_PRELOAD:+:$LD_PRELOAD}
 
-   .. code:: bash
+            When using ``./isaaclab.sh -p``, this is handled automatically.
+            When using a conda environment,
+            the preload is set up via the conda activation hook.
 
-      By installing or using Isaac Sim, I agree to the terms of NVIDIA OMNIVERSE LICENSE AGREEMENT (EULA)
-      in https://docs.isaacsim.omniverse.nvidia.com/latest/common/NVIDIA_Omniverse_License_Agreement.html
-
-      Do you accept the EULA? (Yes/No): Yes
-
-
-If the simulator does not run or crashes while following the above
-instructions, it means that something is incorrectly configured. To
-debug and troubleshoot, please check Isaac Sim
-`documentation <https://docs.omniverse.nvidia.com/dev-guide/latest/linux-troubleshooting.html>`__
-and the
-`forums <https://docs.isaacsim.omniverse.nvidia.com//latest/isaac_sim_forums.html>`__.
-
+.. include:: include/pip_verify_isaacsim.rst
 
 Running Isaac Lab Scripts
 ~~~~~~~~~~~~~~~~~~~~~~~~~
 
-By following the above scripts, your python environment should now have access to all of the Isaac Lab extensions.
+By following the above scripts, your Python environment should now have access to all of the Isaac Lab extensions.
 To run a user-defined script for Isaac Lab, simply run
 
 .. code:: bash
 
     python my_awesome_script.py
+
+Generating VS Code Settings
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Due to the structure resulting from the installation, VS Code IntelliSense (code completion, parameter info
+and member lists, etc.) will not work by default. To set it up (define the search paths for import resolution,
+the path to the default Python interpreter, and other settings), for a given workspace folder,
+run the following command:
+
+.. code-block:: bash
+
+   python -m isaaclab --generate-vscode-settings
+
+
+.. warning::
+
+   The command will generate a ``.vscode/settings.json`` file in the workspace folder.
+   If the file already exists, it will be overwritten (a confirmation prompt will be shown first).

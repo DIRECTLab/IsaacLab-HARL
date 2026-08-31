@@ -40,9 +40,9 @@ Once the container is up and running, we can enter it from our terminal.
    python docker/container.py enter
 
 
-On entering the Isaac Lab container, we are in the terminal as the superuser, ``root``. This environment contains a copy of the
+On entering the Isaac Lab container, we are in the terminal as a non-root user. This environment contains a copy of the
 Isaac Lab repository, but also has access to the directories and libraries of Isaac Sim. We can run experiments from this environment
-using a few convenient aliases that have been put into the ``root`` **.bashrc**. For instance, we have made the **isaaclab.sh** script
+using a few convenient aliases that have been put into the runtime user's **.bashrc**. For instance, we have made the **isaaclab.sh** script
 usable from anywhere by typing its alias ``isaaclab``.
 
 Additionally in the container, we have `bind mounted`_ the ``IsaacLab/source`` directory from the
@@ -92,11 +92,11 @@ The output will be a file, ``log.txt``, with the ``sim_time`` written on a newli
 Executing the Script
 ~~~~~~~~~~~~~~~~~~~~
 
-We will execute the script to produce a log, adding a ``--headless`` flag to our execution to prevent a GUI:
+We will execute the script to produce a log:
 
 .. code-block:: bash
 
-  isaaclab -p scripts/tutorials/00_sim/log_time.py --headless
+  isaaclab -p scripts/tutorials/00_sim/log_time.py
 
 
 Now ``log.txt`` will have been produced at ``/workspace/isaaclab/logs/docker_tutorial``. If we exit the container

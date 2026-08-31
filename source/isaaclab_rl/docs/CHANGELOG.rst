@@ -1,6 +1,259 @@
 Changelog
 ---------
 
+0.5.7 (2026-07-14)
+~~~~~~~~~~~~~~~~~~
+
+Fixed
+^^^^^
+
+* Fixed standalone ``isaaclab_rl`` installs downgrading ``pillow`` below the
+  version prebundled by Isaac Sim: ``moviepy`` 2.x caps ``pillow<12.0``, and
+  on aarch64 the forced downgrade deleted the prebundled copy that
+  ``omni.kit.pip_archive`` shares via per-file symlinks, breaking extension
+  startup. Added a ``pillow>=12.1.1`` floor so pip resolves ``moviepy`` 1.0.3
+  instead of touching pillow.
+* Fixed ``--video`` recording crashing on prerelease-allowing installs by
+  bounding ``moviepy`` to ``>=1.0.3,<2.0.0.dev0``: once the pillow floor
+  excludes stable ``moviepy`` 2.x, such resolvers otherwise fall through to
+  the broken ``2.0.0.dev2`` build whose ``write_videofile`` drops the clip
+  fps.
+
+
+0.5.6 (2026-07-11)
+~~~~~~~~~~~~~~~~~~
+
+Fixed
+^^^^^
+
+* Fixed docker installs deleting ``packaging`` from Isaac Sim's
+  ``omni.isaac.core_archive`` prebundle by removing the ``packaging<24`` bound
+  (no consumer requires it). The deletion dangled the symlink farm that
+  ``omni.services.pip_archive`` shares with it and broke 13 extensions at
+  startup.
+
+
+0.5.5 (2026-06-26)
+~~~~~~~~~~~~~~~~~~
+
+Changed
+^^^^^^^
+
+* Bumped the ``h5py`` requirement from a pinned ``==3.15.1`` to ``>=3.16.0``.
+
+
+0.5.4 (2026-06-10)
+~~~~~~~~~~~~~~~~~~
+
+Fixed
+^^^^^
+
+* Fixed :func:`~isaaclab_rl.skrl.SkrlVecEnvWrapper` failing to import the JAX wrapper on recent JAX
+  versions by preloading the ``jax.experimental.multihost_utils`` submodule that skrl's distributed
+  models reference without importing.
+* Fixed LEAPP export of RSL-RL recurrent policies to preserve actor hidden
+  state across supported RSL-RL policy APIs.
+
+
+0.5.3 (2026-06-02)
+~~~~~~~~~~~~~~~~~~
+
+Changed
+^^^^^^^
+
+* Changed the ``skrl`` optional dependency floor to ``2.1.0`` for
+  compatibility with ``warp-lang`` 1.13.
+
+
+0.5.2 (2026-05-08)
+~~~~~~~~~~~~~~~~~~
+
+Added
+^^^^^
+
+* Added RSL-RL LEAPP export scripts and integration tests for exporting trained
+  policies with semantic input, output, and state annotations.
+
+
+0.5.1 (2026-04-21)
+~~~~~~~~~~~~~~~~~~
+
+Changed
+^^^^^^^
+
+* Locked h5py dependency to last stable version 3.15.1 to prevent package import errors on Windows with version 3.16.0.
+* Updated skrl wrapper to support the new version of skrl 2.0.
+
+
+0.5.0 (2026-3-04)
+~~~~~~~~~~~~~~~~~~
+
+Added
+^^^^^
+* Added function to handle deprecated RSL-RL configurations and automatically convert them to the new format compatible
+  with RSL-RL 4.0 and 5.0.
+* Added new configuration classes "MLPModelCfg", "RNNModelCfg", and "CNNModelCfg", and "DistributionCfg" for the new
+  versions of RSL-RL.
+* Added "check_for_nan" and "share_cnn_encoders" parameters to the configuration classes for RSL-RL 5.0.
+* Added recurrent configurations for the "Isaac-Velocity-Flat-Anymal-D-v0" task for RSL-RL. to run RSL-RL CI.
+
+Changed
+^^^^^^^
+* Adapted RSL-RL's train.py and play.py scripts to work with both old and the new versions of RSL-RL.
+
+Deprecated
+^^^^^^^^^^
+* Deprecated old configuration classes "RslRlDistillationStudentTeacherCfg",
+  "RslRlDistillationStudentTeacherRecurrentCfg", "RslRlPpoActorCriticCfg", and "RslRlPpoActorCriticRecurrentCfg" in
+  favor of the new "MLPModelCfg", "RNNModelCfg", and "CNNModelCfg" configuration classes for RSL-RL 4.0.
+* Deprecated old parameters "stochastic", "init_noise_std", "noise_std_type", amd "state_dependent_std" in favor of the
+  new "DistributionCfg" configuration class for RSL-RL 5.0.
+
+
+0.4.7 (2025-12-29)
+~~~~~~~~~~~~~~~~~~
+
+Changed
+^^^^^^^
+
+* Added :mod:`isaaclab_rl.utils.pretrained_checkpoint` sub-module to handle various pre-trained checkpoint tasks.
+  This module was previously located in the :mod:`isaaclab.utils` module.
+
+
+0.4.6 (2025-11-10)
+~~~~~~~~~~~~~~~~~~
+
+Changed
+^^^^^^^
+
+* Added support for decoupling RL device from simulation device in for RL games wrapper.
+  This allows users to run simulation on one device (e.g., CPU) while running RL training/inference on another device.
+
+
+0.4.5 (2025-12-01)
+~~~~~~~~~~~~~~~~~~
+
+Added
+^^^^^
+
+* Added state_dependent_std rsl_rl param to RSL-RL wrapper.
+
+
+0.4.4 (2025-10-15)
+~~~~~~~~~~~~~~~~~~
+
+Fixed
+^^^^^
+
+* Added onnxscript package to isaaclab_rl setup.py to fix onnxscript package missing issue in aarch64 platform.
+
+
+0.4.3 (2025-10-15)
+~~~~~~~~~~~~~~~~~~
+
+Fixed
+^^^^^
+
+* Isaac-Ant-v0's sb3_ppo_cfg default value, so it trains under reasonable amount of time.
+
+
+0.4.2 (2025-10-14)
+~~~~~~~~~~~~~~~~~~
+
+Fixed
+^^^^^
+
+* Updated opset version from 11 to 18 in RSL-RL OnnxPolicyExporter to avoid onnex downcast issue seen in aarch64.
+
+
+0.4.1 (2025-09-09)
+~~~~~~~~~~~~~~~~~~
+
+Fixed
+^^^^^
+
+* Made PBT a bit nicer by
+* 1. added resume logic to allow wandb to continue on the same run_id
+* 2. corrected broadcasting order in distributed setup
+* 3. made score query general by using dotted keys to access dictionary of arbitrary depth
+
+
+0.4.0 (2025-09-09)
+~~~~~~~~~~~~~~~~~~
+
+Added
+^^^^^
+
+* Introduced PBT to rl-games.
+
+
+0.3.0 (2025-09-03)
+~~~~~~~~~~~~~~~~~~
+
+Fixed
+^^^^^
+
+* Enhanced rl-games wrapper to allow dict observation.
+
+
+0.2.4 (2025-08-07)
+~~~~~~~~~~~~~~~~~~
+
+Fixed
+^^^^^
+
+* Disallowed string values in ``sb3_ppo_cfg.yaml`` from being passed to ``eval()`` in
+  :meth:`~isaaclab_rl.sb3.process_sb3_cfg`. This change prevents accidental or malicious
+  code execution when loading configuration files, improving overall security and reliability.
+
+
+0.2.3 (2025-06-29)
+~~~~~~~~~~~~~~~~~~
+
+Added
+^^^^^
+
+* Support SB3 VecEnv wrapper to configure with composite observation spaces properly so that the cnn creation pipelines
+  natively supported by sb3 can be automatically triggered
+
+
+0.2.2 (2025-06-30)
+~~~~~~~~~~~~~~~~~~
+
+Fixed
+^^^^^
+
+* Call :meth:`eval` during :meth:`forward`` RSL-RL OnnxPolicyExporter
+
+
+0.2.1 (2025-06-26)
+~~~~~~~~~~~~~~~~~~
+
+Fixed
+^^^^^
+
+* Relaxed upper range pin for protobuf python dependency for more permissive installation.
+
+
+0.2.0 (2025-04-24)
+~~~~~~~~~~~~~~~~~~
+
+Changed
+^^^^^^^
+
+* Switched to a 3.11 compatible branch for rl-games as Isaac Sim 5.0 is now using Python 3.11.
+
+
+0.1.5 (2025-04-11)
+~~~~~~~~~~~~~~~~~~
+
+Changed
+^^^^^^^
+
+* Optimized Stable-Baselines3 wrapper ``Sb3VecEnvWrapper`` (now 4x faster) by using Numpy buffers and only logging episode and truncation information by default.
+* Upgraded minimum SB3 version to 2.6.0 and added optional dependencies for progress bar
+
+
 0.1.4 (2025-04-10)
 ~~~~~~~~~~~~~~~~~~
 

@@ -1,4 +1,4 @@
-﻿isaaclab.sim
+isaaclab.sim
 ============
 
 .. automodule:: isaaclab.sim
@@ -18,7 +18,6 @@
 
     SimulationContext
     SimulationCfg
-    PhysxCfg
     RenderCfg
 
   .. rubric:: Functions
@@ -42,11 +41,6 @@ Simulation Configuration
   :show-inheritance:
   :exclude-members: __init__
 
-.. autoclass:: PhysxCfg
-  :members:
-  :show-inheritance:
-  :exclude-members: __init__
-
 .. autoclass:: RenderCfg
   :members:
   :show-inheritance:
@@ -56,10 +50,3 @@ Simulation Context Builder
 --------------------------
 
 .. automethod:: simulation_context.build_simulation_context
-
-Utilities
----------
-
-.. automodule:: isaaclab.sim.utils
-  :members:
-  :show-inheritance:

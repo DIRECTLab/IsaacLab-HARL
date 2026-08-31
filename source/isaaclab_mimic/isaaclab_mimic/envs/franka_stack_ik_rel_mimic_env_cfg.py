@@ -1,10 +1,10 @@
-# Copyright (c) 2024-2026, The Isaac Lab Project Developers.
+# Copyright (c) 2024-2026, The Isaac Lab Project Developers (https://github.com/isaac-sim/IsaacLab/blob/main/CONTRIBUTORS.md).
 # All rights reserved.
 #
 # SPDX-License-Identifier: Apache-2.0
 
 from isaaclab.envs.mimic_env_cfg import MimicEnvCfg, SubTaskConfig
-from isaaclab.utils import configclass
+from isaaclab.utils.configclass import configclass
 
 from isaaclab_tasks.manager_based.manipulation.stack.config.franka.stack_ik_rel_env_cfg import FrankaCubeStackEnvCfg
 
@@ -25,7 +25,7 @@ class FrankaCubeStackIKRelMimicEnvCfg(FrankaCubeStackEnvCfg, MimicEnvCfg):
         # Override the existing values
         self.datagen_config.name = "demo_src_stack_isaac_lab_task_D0"
         self.datagen_config.generation_guarantee = True
-        self.datagen_config.generation_keep_failed = True
+        self.datagen_config.generation_keep_failed = False
         self.datagen_config.generation_num_trials = 10
         self.datagen_config.generation_select_src_per_subtask = True
         self.datagen_config.generation_transform_first_robot_pose = False

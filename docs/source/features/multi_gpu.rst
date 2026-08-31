@@ -16,19 +16,57 @@ other workflows.
 Multi-GPU Training
 ------------------
 
-For complex reinforcement learning environments, it may be desirable to scale up training across multiple GPUs.
-This is possible in Isaac Lab through the use of the
-`PyTorch distributed <https://pytorch.org/docs/stable/distributed.html>`_ framework or the
-`JAX distributed <https://jax.readthedocs.io/en/latest/jax.distributed.html>`_ module respectively.
+Isaac Lab supports the following multi-GPU training frameworks:
 
-In PyTorch, the :meth:`torch.distributed` API is used to launch multiple processes of training, where the number of
-processes must be equal to or less than the number of GPUs available. Each process runs on
-a dedicated GPU and launches its own instance of Isaac Sim and the Isaac Lab environment.
-Each process collects its own rollouts during the training process and has its own copy of the policy
-network. During training, gradients are aggregated across the processes and broadcasted back to the process
-at the end of the epoch.
+* `Torchrun <https://docs.pytorch.org/docs/stable/elastic/run.html>`_ through `PyTorch distributed <https://pytorch.org/docs/stable/distributed.html>`_
+* `JAX distributed <https://jax.readthedocs.io/en/latest/jax.distributed.html>`_
 
-In JAX, since the ML framework doesn't automatically start multiple processes from a single program invocation,
+Pytorch Torchrun Implementation
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+We are using `Pytorch Torchrun <https://docs.pytorch.org/docs/stable/elastic/run.html>`_ to manage multi-GPU
+training. Torchrun manages the distributed training by:
+
+* **Process Management**: Launching one process per GPU, where each process is assigned to a specific GPU.
+* **Script Execution**: Running the same training script (e.g., RL Games trainer) on each process.
+* **Environment Instances**: Each process creates its own instance of the Isaac Lab environment.
+* **Gradient Synchronization**: Aggregating gradients across all processes and broadcasting the synchronized
+  gradients back to each process after each training step.
+
+.. tip::
+    Check out this `3 minute youtube video from PyTorch <https://www.youtube.com/watch?v=Cvdhwx-OBBo&list=PL_lsbAsL_o2CSuhUhJIiW0IkdT5C2wGWj&index=2>`_
+    to understand how Torchrun works.
+
+The key components in this setup are:
+
+* **Torchrun**: Handles process spawning, communication, and gradient synchronization.
+* **RL Library**: The reinforcement learning library that runs the actual training algorithm.
+* **Isaac Lab**: Provides the simulation environment that each process instantiates independently.
+
+Under the hood, Torchrun uses the `DistributedDataParallel <https://docs.pytorch.org/docs/2.7/notes/ddp.html#internal-design>`_
+module to manage the distributed training. When training with multiple GPUs using Torchrun, the following happens:
+
+* Each GPU runs an independent process
+* Each process executes the full training script
+* Each process maintains its own:
+
+  * Isaac Lab environment instance (with *n* parallel environments)
+  * Policy network copy
+  * Experience buffer for rollout collection
+
+* All processes synchronize only for gradient updates
+
+For a deeper dive into how Torchrun works, checkout
+`PyTorch Docs: DistributedDataParallel - Internal Design <https://pytorch.org/docs/stable/notes/ddp.html#internal-design>`_.
+
+Jax Implementation
+^^^^^^^^^^^^^^^^^^
+
+.. tip::
+    JAX is only supported with the skrl library.
+
+With JAX, we are using `skrl.utils.distributed.jax <https://skrl.readthedocs.io/en/latest/api/utils/distributed.html>`_
+Since the ML framework doesn't automatically start multiple processes from a single program invocation,
 the skrl library provides a module to start them.
 
 .. image:: ../_static/multi-gpu-rl/a3c-light.svg
@@ -45,6 +83,9 @@ the skrl library provides a module to start them.
 
 |
 
+Running Multi-GPU Training
+^^^^^^^^^^^^^^^^^^^^^^^^^^
+
 To train with multiple GPUs, use the following command, where ``--nproc_per_node`` represents the number of available GPUs:
 
 .. tab-set::
@@ -55,14 +96,14 @@ To train with multiple GPUs, use the following command, where ``--nproc_per_node
 
         .. code-block:: shell
 
-            python -m torch.distributed.run --nnodes=1 --nproc_per_node=2 scripts/reinforcement_learning/rl_games/train.py --task=Isaac-Cartpole-v0 --headless --distributed
+            python -m torch.distributed.run --nnodes=1 --nproc_per_node=2 scripts/reinforcement_learning/train.py --rl_library rl_games --task=Isaac-Cartpole-v0 --distributed
 
     .. tab-item:: rsl_rl
         :sync: rsl_rl
 
         .. code-block:: shell
 
-            python -m torch.distributed.run --nnodes=1 --nproc_per_node=2 scripts/reinforcement_learning/rsl_rl/train.py --task=Isaac-Cartpole-v0 --headless --distributed
+            python -m torch.distributed.run --nnodes=1 --nproc_per_node=2 scripts/reinforcement_learning/train.py --rl_library rsl_rl --task=Isaac-Cartpole-v0 --distributed
 
     .. tab-item:: skrl
         :sync: skrl
@@ -74,14 +115,55 @@ To train with multiple GPUs, use the following command, where ``--nproc_per_node
 
                 .. code-block:: shell
 
-                    python -m torch.distributed.run --nnodes=1 --nproc_per_node=2 scripts/reinforcement_learning/skrl/train.py --task=Isaac-Cartpole-v0 --headless --distributed
+                    python -m torch.distributed.run --nnodes=1 --nproc_per_node=2 scripts/reinforcement_learning/train.py --rl_library skrl --task=Isaac-Cartpole-v0 --distributed
 
             .. tab-item:: JAX
                 :sync: jax
 
                 .. code-block:: shell
 
-                    python -m skrl.utils.distributed.jax --nnodes=1 --nproc_per_node=2 scripts/reinforcement_learning/skrl/train.py --task=Isaac-Cartpole-v0 --headless --distributed --ml_framework jax
+                    python -m skrl.utils.distributed.jax --nnodes=1 --nproc_per_node=2 scripts/reinforcement_learning/train.py --rl_library skrl --task=Isaac-Cartpole-v0 --distributed --ml_framework jax
+
+.. _multi-gpu-nccl-troubleshooting:
+
+Troubleshooting NCCL Errors
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+On some Linux multi-GPU systems, distributed training may fail with
+``CUDA error: an illegal memory access was encountered`` reported by ``ProcessGroupNCCL``
+during or shortly after communicator initialization.
+
+If this occurs, try disabling the NCCL shared-memory transport before launching training:
+
+.. code-block:: shell
+
+    export NCCL_SHM_DISABLE=1
+
+If the issue persists, additional NCCL fallbacks that may help are:
+
+.. code-block:: shell
+
+    export NCCL_IB_DISABLE=1
+    export NCCL_ALGO=Ring
+
+Separately, restricting training to a subset of a node's GPUs with ``CUDA_VISIBLE_DEVICES``
+(for example, ``CUDA_VISIBLE_DEVICES=0,1`` on a larger machine) can cause training to hang during
+communicator initialization or on the first collective, with no error reported. On affected
+systems, disabling NCCL's peer-to-peer (P2P) transport resolves the hang:
+
+.. code-block:: shell
+
+    export NCCL_P2P_DISABLE=1
+
+Then relaunch the distributed training command as usual.
+
+.. note::
+
+    These variables are NCCL-level workarounds intended for affected systems. They are not
+    required on all machines, and may change communication behavior or performance depending
+    on the hardware topology. In particular, ``NCCL_P2P_DISABLE=1`` routes inter-GPU traffic
+    through host/shared memory instead of a direct P2P link, which can reduce communication
+    bandwidth, so only set it when you observe a hang while restricting visible devices.
 
 Multi-Node Training
 -------------------
@@ -100,14 +182,14 @@ For the master node, use the following command, where ``--nproc_per_node`` repre
 
         .. code-block:: shell
 
-            python -m torch.distributed.run --nproc_per_node=2 --nnodes=2 --node_rank=0 --rdzv_id=123 --rdzv_backend=c10d --rdzv_endpoint=localhost:5555 scripts/reinforcement_learning/rl_games/train.py --task=Isaac-Cartpole-v0 --headless --distributed
+            python -m torch.distributed.run --nproc_per_node=2 --nnodes=2 --node_rank=0 --master_addr=<ip_of_master> --master_port=5555 scripts/reinforcement_learning/train.py --rl_library rl_games --task=Isaac-Cartpole-v0 --distributed
 
     .. tab-item:: rsl_rl
         :sync: rsl_rl
 
         .. code-block:: shell
 
-            python -m torch.distributed.run --nproc_per_node=2 --nnodes=2 --node_rank=0 --rdzv_id=123 --rdzv_backend=c10d --rdzv_endpoint=localhost:5555 scripts/reinforcement_learning/rsl_rl/train.py --task=Isaac-Cartpole-v0 --headless --distributed
+            python -m torch.distributed.run --nproc_per_node=2 --nnodes=2 --node_rank=0 --master_addr=<ip_of_master> --master_port=5555 scripts/reinforcement_learning/train.py --rl_library rsl_rl --task=Isaac-Cartpole-v0 --distributed
 
     .. tab-item:: skrl
         :sync: skrl
@@ -119,14 +201,14 @@ For the master node, use the following command, where ``--nproc_per_node`` repre
 
                 .. code-block:: shell
 
-                    python -m torch.distributed.run --nproc_per_node=2 --nnodes=2 --node_rank=0 --rdzv_id=123 --rdzv_backend=c10d --rdzv_endpoint=localhost:5555 scripts/reinforcement_learning/skrl/train.py --task=Isaac-Cartpole-v0 --headless --distributed
+                    python -m torch.distributed.run --nproc_per_node=2 --nnodes=2 --node_rank=0 --master_addr=<ip_of_master> --master_port=5555 scripts/reinforcement_learning/train.py --rl_library skrl --task=Isaac-Cartpole-v0 --distributed
 
             .. tab-item:: JAX
                 :sync: jax
 
                 .. code-block:: shell
 
-                    python -m skrl.utils.distributed.jax --nproc_per_node=2 --nnodes=2 --node_rank=0 --coordinator_address=ip_of_master_machine:5555 scripts/reinforcement_learning/skrl/train.py --task=Isaac-Cartpole-v0 --headless --distributed --ml_framework jax
+                    python -m skrl.utils.distributed.jax --nproc_per_node=2 --nnodes=2 --node_rank=0 --coordinator_address=ip_of_master_machine:5555 scripts/reinforcement_learning/train.py --rl_library skrl --task=Isaac-Cartpole-v0 --distributed --ml_framework jax
 
 Note that the port (``5555``) can be replaced with any other available port.
 
@@ -140,14 +222,14 @@ For non-master nodes, use the following command, replacing ``--node_rank`` with 
 
         .. code-block:: shell
 
-            python -m torch.distributed.run --nproc_per_node=2 --nnodes=2 --node_rank=1 --rdzv_id=123 --rdzv_backend=c10d --rdzv_endpoint=ip_of_master_machine:5555 scripts/reinforcement_learning/rl_games/train.py --task=Isaac-Cartpole-v0 --headless --distributed
+            python -m torch.distributed.run --nproc_per_node=2 --nnodes=2 --node_rank=1 --master_addr=<ip_of_master> --master_port=5555 scripts/reinforcement_learning/train.py --rl_library rl_games --task=Isaac-Cartpole-v0 --distributed
 
     .. tab-item:: rsl_rl
         :sync: rsl_rl
 
         .. code-block:: shell
 
-            python -m torch.distributed.run --nproc_per_node=2 --nnodes=2 --node_rank=1 --rdzv_id=123 --rdzv_backend=c10d --rdzv_endpoint=ip_of_master_machine:5555 scripts/reinforcement_learning/rsl_rl/train.py --task=Isaac-Cartpole-v0 --headless --distributed
+            python -m torch.distributed.run --nproc_per_node=2 --nnodes=2 --node_rank=1 --master_addr=<ip_of_master> --master_port=5555 scripts/reinforcement_learning/train.py --rl_library rsl_rl --task=Isaac-Cartpole-v0 --distributed
 
     .. tab-item:: skrl
         :sync: skrl
@@ -159,14 +241,14 @@ For non-master nodes, use the following command, replacing ``--node_rank`` with 
 
                 .. code-block:: shell
 
-                    python -m torch.distributed.run --nproc_per_node=2 --nnodes=2 --node_rank=1 --rdzv_id=123 --rdzv_backend=c10d --rdzv_endpoint=ip_of_master_machine:5555 scripts/reinforcement_learning/skrl/train.py --task=Isaac-Cartpole-v0 --headless --distributed
+                    python -m torch.distributed.run --nproc_per_node=2 --nnodes=2 --node_rank=1 --master_addr=<ip_of_master> --master_port=5555 scripts/reinforcement_learning/train.py --rl_library skrl --task=Isaac-Cartpole-v0 --distributed
 
             .. tab-item:: JAX
                 :sync: jax
 
                 .. code-block:: shell
 
-                    python -m skrl.utils.distributed.jax --nproc_per_node=2 --nnodes=2 --node_rank=1 --coordinator_address=ip_of_master_machine:5555 scripts/reinforcement_learning/skrl/train.py --task=Isaac-Cartpole-v0 --headless --distributed --ml_framework jax
+                    python -m skrl.utils.distributed.jax --nproc_per_node=2 --nnodes=2 --node_rank=1 --coordinator_address=ip_of_master_machine:5555 scripts/reinforcement_learning/train.py --rl_library skrl --task=Isaac-Cartpole-v0 --distributed --ml_framework jax
 
 For more details on multi-node training with PyTorch, please visit the
 `PyTorch documentation <https://pytorch.org/tutorials/intermediate/ddp_series_multinode.html>`_.

@@ -24,6 +24,7 @@ how to import a new asset into Isaac Lab.
 
     import_new_asset
     write_articulation_cfg
+    robots
 
 Creating a Fixed Asset
 ----------------------
@@ -46,6 +47,17 @@ useful when you want to create diverse environments with different objects.
     :maxdepth: 1
 
     multi_asset_spawning
+
+Cloning Environments
+--------------------
+
+This guide explains how Isaac Lab's template-based cloning system works, including
+cloning strategies, heterogeneous environments, and collision filtering.
+
+.. toctree::
+    :maxdepth: 1
+
+    cloning
 
 Saving Camera Output
 --------------------
@@ -89,6 +101,29 @@ Isaac Lab.
     draw_markers
 
 
+Using Visualizers
+-----------------
+
+This guide demonstrates how to use visualizer-specific views for monitoring and debugging Isaac Lab environments.
+
+.. toctree::
+    :maxdepth: 1
+
+    visualizer_tiled_camera
+
+
+Working with Simulation Data
+----------------------------
+
+This guide explains how to read and write simulation state using the :class:`~isaaclab.utils.warp.ProxyArray`
+dual-access wrapper that all data classes return.
+
+.. toctree::
+    :maxdepth: 1
+
+    proxy_array
+
+
 Interfacing with Environments
 -----------------------------
 
@@ -112,6 +147,19 @@ This guide explains how to record an animation and video in Isaac Lab.
     record_animation
     record_video
 
+
+Dynamically Modifying Environment Parameters With CurriculumTerm
+----------------------------------------------------------------
+
+This guide explains how to dynamically modify environment parameters during training in Isaac Lab.
+It covers the use of curriculum utilities to change environment parameters at runtime.
+
+.. toctree::
+    :maxdepth: 1
+
+    curriculums
+
+
 Mastering Omniverse
 -------------------
 
@@ -124,13 +172,60 @@ additional resources that help you use Omniverse features in Isaac Lab.
     master_omniverse
 
 
-Setting up CloudXR Teleoperation
---------------------------------
+Setting up Isaac Teleop with CloudXR
+------------------------------------
 
-This guide explains how to use CloudXR and Apple Vision Pro for immersive streaming and
-teleoperation in Isaac Lab.
+This guide explains how to install Isaac Teleop, start the CloudXR runtime, and connect XR
+devices for immersive teleoperation in Isaac Lab.
 
 .. toctree::
     :maxdepth: 1
 
     cloudxr_teleoperation
+
+
+Setting up Haply Teleoperation
+------------------------------
+
+This guide explains how to use Haply Inverse3 and VerseGrip devices for robot teleoperation
+with directional force feedback in Isaac Lab.
+
+.. toctree::
+    :maxdepth: 1
+
+    haply_teleoperation
+
+
+Understanding Simulation Performance
+------------------------------------
+
+This guide provides tips on optimizing simulation performance for different simulation use cases.
+Additional resources are also linked to provide relevant performance guides for Isaac Sim and
+Omniverse Physics.
+
+.. toctree::
+    :maxdepth: 1
+
+    simulation_performance
+
+
+Optimize Stage Creation
+-----------------------
+
+This guide explains 2 features that can speed up stage initialization, **fabric cloning** and **stage in memory**.
+
+.. toctree::
+    :maxdepth: 1
+
+    optimize_stage_creation
+
+
+Profiling Isaac Lab with Nsight Systems
+---------------------------------------
+
+This guide explains how to profile Isaac Lab tasks with NVIDIA Nsight Systems for runtime performance analysis.
+
+.. toctree::
+    :maxdepth: 1
+
+    profile_with_nsys

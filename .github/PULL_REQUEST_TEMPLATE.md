@@ -1,9 +1,16 @@
 # Description
 
+> [!IMPORTANT]
+> Confirm the pull request base before submitting. Target `develop` for all
+> contributions. The `release/3.0.0-beta2` branch is a frozen stable landing
+> snapshot and is not used for ongoing maintenance.
+
 <!--
 Thank you for your interest in sending a pull request. Please make sure to check the contribution guidelines.
 
 Link: https://isaac-sim.github.io/IsaacLab/main/source/refs/contributing.html
+
+💡 Please try to keep PRs small and focused. Large PRs are harder to review and merge.
 -->
 
 Please include a summary of the change and which issue is fixed. Please also include relevant motivation and context.
@@ -21,8 +28,12 @@ is demanded by more than one party. -->
 
 - Bug fix (non-breaking change which fixes an issue)
 - New feature (non-breaking change which adds functionality)
-- Breaking change (fix or feature that would cause existing functionality to not work as expected)
-- This change requires a documentation update
+- Breaking change (existing functionality will not work without user modification)
+- Documentation update
+
+## Release backport
+
+- [ ] <!-- backport-active-release --> Backport this pull request to the active release branch after it merges into `develop`
 
 ## Screenshots
 
@@ -40,11 +51,15 @@ To upload images to a PR -- simply drag and drop an image while in edit mode and
 
 ## Checklist
 
+Docker and GPU tests run on demand. Push the commits you want tested, then
+comment `run-ci` on the pull request.
+
+- [ ] I have read and understood the [contribution guidelines](https://isaac-sim.github.io/IsaacLab/main/source/refs/contributing.html)
 - [ ] I have run the [`pre-commit` checks](https://pre-commit.com/) with `./isaaclab.sh --format`
 - [ ] I have made corresponding changes to the documentation
 - [ ] My changes generate no new warnings
 - [ ] I have added tests that prove my fix is effective or that my feature works
-- [ ] I have updated the changelog and the corresponding version in the extension's `config/extension.toml` file
+- [ ] I have added a changelog fragment under `source/<pkg>/changelog.d/` for every touched package (do **not** edit `CHANGELOG.rst` or bump `extension.toml` — CI handles that)
 - [ ] I have added my name to the `CONTRIBUTORS.md` or my name already exists there
 
 <!--

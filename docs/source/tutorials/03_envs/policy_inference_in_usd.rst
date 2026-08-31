@@ -42,7 +42,7 @@ First, we need to train the ``Isaac-Velocity-Rough-H1-v0`` task by running the f
 
 .. code-block:: bash
 
-  ./isaaclab.sh -p scripts/reinforcement_learning/rsl_rl/train.py --task Isaac-Velocity-Rough-H1-v0 --headless
+  ./isaaclab.sh train --rl_library rsl_rl --task Isaac-Velocity-Rough-H1-v0
 
 When the training is finished, we can visualize the result with the following command.
 To stop the simulation, you can either close the window, or press ``Ctrl+C`` in the terminal
@@ -50,7 +50,7 @@ where you started the simulation.
 
 .. code-block:: bash
 
-  ./isaaclab.sh -p scripts/reinforcement_learning/rsl_rl/play.py --task Isaac-Velocity-Rough-H1-v0 --num_envs 64 --checkpoint logs/rsl_rl/h1_rough/EXPERIMENT_NAME/POLICY_FILE.pt
+  ./isaaclab.sh play --rl_library rsl_rl --task Isaac-Velocity-Rough-H1-v0 --num_envs 64 --checkpoint logs/rsl_rl/h1_rough/EXPERIMENT_NAME/POLICY_FILE.pt --viz kit
 
 
 After running the play script, the policy will be exported to jit and onnx files under the experiment logs directory.
@@ -58,11 +58,12 @@ Note that not all learning libraries support exporting the policy to a jit or on
 For libraries that don't currently support this functionality, please refer to the corresponding ``play.py`` script for the library
 to learn about how to initialize the policy.
 
-We can then load the warehouse asset and run inference on the H1 robot using the exported jit policy.
+We can then load the warehouse asset and run inference on the H1 robot using the exported jit policy
+(``policy.pt`` file in the ``exported/`` directory).
 
 .. code-block:: bash
 
-  ./isaaclab.sh -p scripts/tutorials/03_envs/policy_inference_in_usd.py --checkpoint logs/rsl_rl/h1_rough/EXPERIMENT_NAME/exported/policy.pt
+  ./isaaclab.sh -p scripts/tutorials/03_envs/policy_inference_in_usd.py --checkpoint logs/rsl_rl/h1_rough/EXPERIMENT_NAME/exported/policy.pt --viz kit
 
 
 .. figure:: ../../_static/tutorials/tutorial_policy_inference_in_usd.jpg

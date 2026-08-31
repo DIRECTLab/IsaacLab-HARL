@@ -1,4 +1,4 @@
-# Copyright (c) 2022-2026, The Isaac Lab Project Developers.
+# Copyright (c) 2022-2026, The Isaac Lab Project Developers (https://github.com/isaac-sim/IsaacLab/blob/main/CONTRIBUTORS.md).
 # All rights reserved.
 #
 # SPDX-License-Identifier: BSD-3-Clause
@@ -7,8 +7,8 @@
 
 import itertools
 import os
-import toml
 
+import toml
 from setuptools import setup
 
 # Obtain the extension data from the extension.toml file
@@ -20,33 +20,40 @@ EXTENSION_TOML_DATA = toml.load(os.path.join(EXTENSION_PATH, "config", "extensio
 INSTALL_REQUIRES = [
     # generic
     "numpy",
-    "torch==2.5.1",
-    "torchvision>=0.14.1",  # ensure compatibility with torch 1.13.1
-    # 5.26.0 introduced a breaking change, so we restricted it for now.
-    # See issue https://github.com/tensorflow/tensorboard/issues/6808 for details.
-    "protobuf>=3.20.2, < 5.0.0",
+    "torch>=2.10",
+    "torchvision>=0.25.0",  # ensure compatibility with torch 2.10.0
+    "protobuf>=4.25.8,!=5.26.0",
     # configuration management
     "hydra-core",
     # data collection
-    "h5py",
+    "h5py>=3.16.0",
     # basic logger
     "tensorboard",
     # video recording
-    "moviepy",
-    # make sure this is consistent with isaac sim version
-    "pillow==11.0.0",
-    "huggingface_hub==1.2.3",
+    # moviepy bounded to the 1.x line: stable 2.x caps pillow<12 (conflicts with the floor
+    # below), and prerelease-allowing resolvers otherwise fall through to the broken
+    # 2.0.0.dev2 build whose write_videofile crashes video recording.
+    "moviepy>=1.0.3,<2.0.0.dev0",
+    # pillow floor: without it, standalone isaaclab_rl installs let moviepy 2.x (pillow<12 cap)
+    # downgrade pillow and delete Isaac Sim's prebundled copy (nvbugs 6410989).
+    "pillow>=12.1.1",
+    "packaging",
+    "tqdm==4.67.1",  # previous version was causing sys errors
 ]
 
-PYTORCH_INDEX_URL = ["https://download.pytorch.org/whl/cu118"]
+PYTORCH_INDEX_URL = ["https://download.pytorch.org/whl/cu128"]
 
 # Extra dependencies for RL agents
 EXTRAS_REQUIRE = {
-    "sb3": ["stable-baselines3>=2.1"],
-    "skrl": ["skrl>=1.4.2"],
-    "rl-games": ["rl-games==1.6.1", "gym"],  # rl-games still needs gym :(
-    "rsl-rl-lib": ["rsl-rl-lib==2.3.1"],
-    "harl": ["harl@git+https://github.com/DIRECTLab/HARL.git"],
+    "sb3": ["stable-baselines3>=2.6", "tqdm", "rich"],  # tqdm/rich for progress bar
+    "skrl": ["skrl>=2.1.0"],
+    "rl-games": [
+        "aiohttp==3.13.3",
+        "rl-games @ git+https://github.com/isaac-sim/rl_games.git@python3.11",
+        "gym",
+        "standard-distutils",
+    ],  # rl-games still needs gym :(
+    "rsl-rl": ["rsl-rl-lib==5.0.1", "onnxscript>=0.5"],  # linux aarch 64 requires manual onnxscript installation
 }
 # Add the names with hyphens as aliases for convenience
 EXTRAS_REQUIRE["rl_games"] = EXTRAS_REQUIRE["rl-games"]
@@ -65,15 +72,16 @@ setup(
     description=EXTENSION_TOML_DATA["package"]["description"],
     keywords=EXTENSION_TOML_DATA["package"]["keywords"],
     include_package_data=True,
-    python_requires=">=3.10",
+    package_data={"": ["*.pyi"]},
+    python_requires=">=3.12",
     install_requires=INSTALL_REQUIRES,
     dependency_links=PYTORCH_INDEX_URL,
     extras_require=EXTRAS_REQUIRE,
     packages=["isaaclab_rl"],
     classifiers=[
         "Natural Language :: English",
-        "Programming Language :: Python :: 3.10",
-        "Isaac Sim :: 4.5.0",
+        "Programming Language :: Python :: 3.12",
+        "Isaac Sim :: 6.0.0",
     ],
     zip_safe=False,
 )

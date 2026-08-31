@@ -1,4 +1,4 @@
-# Copyright (c) 2022-2026, The Isaac Lab Project Developers.
+# Copyright (c) 2022-2026, The Isaac Lab Project Developers (https://github.com/isaac-sim/IsaacLab/blob/main/CONTRIBUTORS.md).
 # All rights reserved.
 #
 # SPDX-License-Identifier: BSD-3-Clause
@@ -18,7 +18,7 @@ Or, equivalently, by directly calling the skrl library API as follows:
 .. code-block:: python
 
     from skrl.envs.torch.wrappers import wrap_env  # for PyTorch, or...
-    from skrl.envs.jax.wrappers import wrap_env    # for JAX
+    from skrl.envs.jax.wrappers import wrap_env  # for JAX
 
     env = wrap_env(env, wrapper="isaaclab")
 
@@ -27,9 +27,14 @@ Or, equivalently, by directly calling the skrl library API as follows:
 # needed to import for type hinting: Agent | list[Agent]
 from __future__ import annotations
 
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
 
-from isaaclab.envs import DirectMARLEnv, DirectRLEnv, ManagerBasedRLEnv
+if TYPE_CHECKING:
+    from isaaclab.envs import (
+        DirectMARLEnv,
+        DirectRLEnv,
+        ManagerBasedRLEnv,
+    )
 
 """
 Vectorized environment wrapper.
@@ -38,7 +43,7 @@ Vectorized environment wrapper.
 
 def SkrlVecEnvWrapper(
     env: ManagerBasedRLEnv | DirectRLEnv | DirectMARLEnv,
-    ml_framework: Literal["torch", "jax", "jax-numpy"] = "torch",
+    ml_framework: Literal["torch", "jax", "warp"] = "torch",
     wrapper: Literal["auto", "isaaclab", "isaaclab-single-agent", "isaaclab-multi-agent"] = "isaaclab",
 ):
     """Wraps around Isaac Lab environment for skrl.
@@ -62,24 +67,39 @@ def SkrlVecEnvWrapper(
         https://skrl.readthedocs.io/en/latest/api/envs/wrapping.html
     """
     # check that input is valid
-    if (
-        not isinstance(env.unwrapped, ManagerBasedRLEnv)
-        and not isinstance(env.unwrapped, DirectRLEnv)
-        and not isinstance(env.unwrapped, DirectMARLEnv)
-    ):
+    # NOTE: import here (not at module level) to avoid loading heavy env classes before Isaac Sim is initialized.
+    from isaaclab.envs import DirectMARLEnv, DirectRLEnv, ManagerBasedRLEnv
+
+    try:
+        from isaaclab_experimental.envs import DirectRLEnvWarp, ManagerBasedRLEnvWarp
+    except ImportError:
+        DirectRLEnvWarp = None
+        ManagerBasedRLEnvWarp = None
+
+    allowed_types = (ManagerBasedRLEnv, DirectRLEnv, DirectMARLEnv)
+    if DirectRLEnvWarp is not None:
+        allowed_types += (DirectRLEnvWarp,)
+    if ManagerBasedRLEnvWarp is not None:
+        allowed_types += (ManagerBasedRLEnvWarp,)
+
+    if not isinstance(env.unwrapped, allowed_types):
         raise ValueError(
-            "The environment must be inherited from ManagerBasedRLEnv, DirectRLEnv or DirectMARLEnv. Environment type:"
-            f" {type(env)}"
+            "The environment must be inherited from ManagerBasedRLEnv, DirectRLEnv, DirectMARLEnv,"
+            f" DirectRLEnvWarp or ManagerBasedRLEnvWarp. Environment type: {type(env)}"
         )
 
     # import statements according to the ML framework
     if ml_framework.startswith("torch"):
         from skrl.envs.wrappers.torch import wrap_env
     elif ml_framework.startswith("jax"):
+        # preload submodule that skrl's distributed models use without importing (broken on recent JAX)
+        import jax.experimental.multihost_utils  # noqa: F401
         from skrl.envs.wrappers.jax import wrap_env
+    elif ml_framework.startswith("warp"):
+        from skrl.envs.wrappers.warp import wrap_env
     else:
-        ValueError(
-            f"Invalid ML framework for skrl: {ml_framework}. Available options are: 'torch', 'jax' or 'jax-numpy'"
+        raise ValueError(
+            f"Invalid ML framework for skrl: {ml_framework}. Available options are: 'torch', 'jax', 'warp'"
         )
 
     # wrap and return the environment

@@ -1,9 +1,9 @@
-# Copyright (c) 2022-2026, The Isaac Lab Project Developers.
+# Copyright (c) 2022-2026, The Isaac Lab Project Developers (https://github.com/isaac-sim/IsaacLab/blob/main/CONTRIBUTORS.md).
 # All rights reserved.
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
-from isaaclab.utils import configclass
+from isaaclab.utils.configclass import configclass
 
 import isaaclab_tasks.manager_based.manipulation.inhand.inhand_env_cfg as inhand_env_cfg
 
@@ -21,6 +21,8 @@ class AllegroCubeEnvCfg(inhand_env_cfg.InHandObjectEnvCfg):
 
         # switch robot to allegro hand
         self.scene.robot = ALLEGRO_HAND_CFG.replace(prim_path="{ENV_REGEX_NS}/Robot")
+        # enable clone in fabric
+        self.scene.clone_in_fabric = True
 
 
 @configclass

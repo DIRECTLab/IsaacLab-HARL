@@ -47,6 +47,7 @@ class and its derivatives such as :class:`~isaaclab.assets.RigidObject`,
     01_assets/run_rigid_object
     01_assets/run_articulation
     01_assets/run_deformable_object
+    01_assets/run_surface_gripper
 
 Creating a Scene
 ----------------
@@ -78,6 +79,7 @@ different aspects of the framework to create a simulation environment for agent 
     03_envs/create_direct_rl_env
     03_envs/register_rl_env_gym
     03_envs/run_rl_training
+    03_envs/configuring_rl_training
     03_envs/modify_direct_rl_env
     03_envs/policy_inference_in_usd
 
@@ -106,3 +108,14 @@ tutorials show you how to use motion generators to control the robots at the tas
 
     05_controllers/run_diff_ik
     05_controllers/run_osc
+
+Exporting Policies
+------------------
+
+The following tutorial shows how to prepare a Direct workflow policy for export with LEAPP.
+
+.. toctree::
+    :maxdepth: 1
+    :titlesonly:
+
+    06_exporting/exporting_direct_workflow_policies_with_leapp

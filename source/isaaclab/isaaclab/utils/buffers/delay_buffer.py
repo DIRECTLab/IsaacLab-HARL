@@ -1,4 +1,4 @@
-# Copyright (c) 2022-2026, The Isaac Lab Project Developers.
+# Copyright (c) 2022-2026, The Isaac Lab Project Developers (https://github.com/isaac-sim/IsaacLab/blob/main/CONTRIBUTORS.md).
 # All rights reserved.
 #
 # SPDX-License-Identifier: BSD-3-Clause
@@ -6,8 +6,9 @@
 # needed because we concatenate int and torch.Tensor in the type hints
 from __future__ import annotations
 
-import torch
 from collections.abc import Sequence
+
+import torch
 
 from .circular_buffer import CircularBuffer
 
@@ -46,10 +47,10 @@ class DelayBuffer:
         # the buffer size: current data plus the history length
         self._circular_buffer = CircularBuffer(self._history_length + 1, batch_size, device)
 
-        # the minimum and maximum lags across all environments.
+        # the minimum and maximum lags across all batch indices.
         self._min_time_lag = 0
         self._max_time_lag = 0
-        # the lags for each environment.
+        # the lags for each batch index.
         self._time_lags = torch.zeros(batch_size, dtype=torch.int, device=device)
 
     """

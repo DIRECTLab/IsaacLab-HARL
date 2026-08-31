@@ -1,11 +1,13 @@
-# Copyright (c) 2022-2026, The Isaac Lab Project Developers.
+# Copyright (c) 2022-2026, The Isaac Lab Project Developers (https://github.com/isaac-sim/IsaacLab/blob/main/CONTRIBUTORS.md).
 # All rights reserved.
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
+from isaaclab_newton.physics import MJWarpSolverCfg, NewtonCfg
+from isaaclab_physx.physics import PhysxCfg
+
 import isaaclab.sim as sim_utils
-from isaaclab.actuators import ImplicitActuatorCfg
-from isaaclab.assets import ArticulationCfg, AssetBaseCfg
+from isaaclab.assets import AssetBaseCfg
 from isaaclab.envs import ManagerBasedRLEnvCfg
 from isaaclab.managers import EventTermCfg as EventTerm
 from isaaclab.managers import ObservationGroupCfg as ObsGroup
@@ -14,11 +16,33 @@ from isaaclab.managers import RewardTermCfg as RewTerm
 from isaaclab.managers import SceneEntityCfg
 from isaaclab.managers import TerminationTermCfg as DoneTerm
 from isaaclab.scene import InteractiveSceneCfg
+from isaaclab.sensors import JointWrenchSensorCfg
 from isaaclab.terrains import TerrainImporterCfg
-from isaaclab.utils import configclass
-from isaaclab.utils.assets import ISAAC_NUCLEUS_DIR
+from isaaclab.utils.configclass import configclass
 
 import isaaclab_tasks.manager_based.classic.humanoid.mdp as mdp
+from isaaclab_tasks.utils import PresetCfg
+
+from isaaclab_assets.robots.humanoid import HUMANOID_CFG  # isort:skip
+
+
+@configclass
+class HumanoidPhysicsCfg(PresetCfg):
+    default: PhysxCfg = PhysxCfg(bounce_threshold_velocity=0.2)
+    physx: PhysxCfg = PhysxCfg(bounce_threshold_velocity=0.2)
+    newton_mjwarp: NewtonCfg = NewtonCfg(
+        solver_cfg=MJWarpSolverCfg(
+            njmax=80,
+            nconmax=25,
+            cone="pyramidal",
+            update_data_interval=2,
+            integrator="implicitfast",
+            impratio=1,
+        ),
+        num_substeps=2,
+        debug_mode=False,
+    )
+
 
 ##
 # Scene definition
@@ -39,56 +63,10 @@ class MySceneCfg(InteractiveSceneCfg):
     )
 
     # robot
-    robot = ArticulationCfg(
-        prim_path="{ENV_REGEX_NS}/Robot",
-        spawn=sim_utils.UsdFileCfg(
-            usd_path=f"{ISAAC_NUCLEUS_DIR}/Robots/Humanoid/humanoid_instanceable.usd",
-            rigid_props=sim_utils.RigidBodyPropertiesCfg(
-                disable_gravity=None,
-                max_depenetration_velocity=10.0,
-                enable_gyroscopic_forces=True,
-            ),
-            articulation_props=sim_utils.ArticulationRootPropertiesCfg(
-                enabled_self_collisions=True,
-                solver_position_iteration_count=4,
-                solver_velocity_iteration_count=0,
-                sleep_threshold=0.005,
-                stabilization_threshold=0.001,
-            ),
-            copy_from_source=False,
-        ),
-        init_state=ArticulationCfg.InitialStateCfg(
-            pos=(0.0, 0.0, 1.34),
-            joint_pos={".*": 0.0},
-        ),
-        actuators={
-            "body": ImplicitActuatorCfg(
-                joint_names_expr=[".*"],
-                stiffness={
-                    ".*_waist.*": 20.0,
-                    ".*_upper_arm.*": 10.0,
-                    "pelvis": 10.0,
-                    ".*_lower_arm": 2.0,
-                    ".*_thigh:0": 10.0,
-                    ".*_thigh:1": 20.0,
-                    ".*_thigh:2": 10.0,
-                    ".*_shin": 5.0,
-                    ".*_foot.*": 2.0,
-                },
-                damping={
-                    ".*_waist.*": 5.0,
-                    ".*_upper_arm.*": 5.0,
-                    "pelvis": 5.0,
-                    ".*_lower_arm": 1.0,
-                    ".*_thigh:0": 5.0,
-                    ".*_thigh:1": 5.0,
-                    ".*_thigh:2": 5.0,
-                    ".*_shin": 0.1,
-                    ".*_foot.*": 1.0,
-                },
-            ),
-        },
-    )
+    robot = HUMANOID_CFG.replace(prim_path="{ENV_REGEX_NS}/Robot")
+
+    # sensors
+    joint_wrench = JointWrenchSensorCfg(prim_path="{ENV_REGEX_NS}/Robot")
 
     # lights
     light = AssetBaseCfg(
@@ -143,7 +121,7 @@ class ObservationsCfg:
         feet_body_forces = ObsTerm(
             func=mdp.body_incoming_wrench,
             scale=0.01,
-            params={"asset_cfg": SceneEntityCfg("robot", body_names=["left_foot", "right_foot"])},
+            params={"sensor_cfg": SceneEntityCfg("joint_wrench", body_names=["left_foot", "right_foot"])},
         )
         actions = ObsTerm(func=mdp.last_action)
 
@@ -153,6 +131,13 @@ class ObservationsCfg:
 
     # observation groups
     policy: PolicyCfg = PolicyCfg()
+
+
+@configclass
+class HumanoidObservationsCfg(PresetCfg):
+    default: ObservationsCfg = ObservationsCfg()
+    physx: ObservationsCfg = ObservationsCfg()
+    newton_mjwarp: ObservationsCfg = ObservationsCfg()
 
 
 @configclass
@@ -245,9 +230,9 @@ class HumanoidEnvCfg(ManagerBasedRLEnvCfg):
     """Configuration for the MuJoCo-style Humanoid walking environment."""
 
     # Scene settings
-    scene: MySceneCfg = MySceneCfg(num_envs=4096, env_spacing=5.0)
+    scene: MySceneCfg = MySceneCfg(num_envs=4096, env_spacing=5.0, clone_in_fabric=True)
     # Basic settings
-    observations: ObservationsCfg = ObservationsCfg()
+    observations: HumanoidObservationsCfg = HumanoidObservationsCfg()
     actions: ActionsCfg = ActionsCfg()
     # MDP settings
     rewards: RewardsCfg = RewardsCfg()
@@ -262,7 +247,7 @@ class HumanoidEnvCfg(ManagerBasedRLEnvCfg):
         # simulation settings
         self.sim.dt = 1 / 120.0
         self.sim.render_interval = self.decimation
-        self.sim.physx.bounce_threshold_velocity = 0.2
+        self.sim.physics = HumanoidPhysicsCfg()
         # default friction material
         self.sim.physics_material.static_friction = 1.0
         self.sim.physics_material.dynamic_friction = 1.0

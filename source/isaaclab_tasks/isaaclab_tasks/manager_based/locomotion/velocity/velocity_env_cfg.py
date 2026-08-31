@@ -1,10 +1,16 @@
-# Copyright (c) 2022-2026, The Isaac Lab Project Developers.
+# Copyright (c) 2022-2026, The Isaac Lab Project Developers (https://github.com/isaac-sim/IsaacLab/blob/main/CONTRIBUTORS.md).
 # All rights reserved.
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
 import math
 from dataclasses import MISSING
+
+from isaaclab_newton.physics import MJWarpSolverCfg, NewtonCfg, NewtonCollisionPipelineCfg, NewtonShapeCfg
+from isaaclab_newton.sensors import ContactSensorCfg as NewtonContactSensorCfg
+from isaaclab_ovphysx.sensors import ContactSensorCfg as OvPhysXContactSensorCfg
+from isaaclab_physx.physics import PhysxCfg
+from isaaclab_physx.sensors import ContactSensorCfg as PhysXContactSensorCfg
 
 import isaaclab.sim as sim_utils
 from isaaclab.assets import ArticulationCfg, AssetBaseCfg
@@ -17,13 +23,15 @@ from isaaclab.managers import RewardTermCfg as RewTerm
 from isaaclab.managers import SceneEntityCfg
 from isaaclab.managers import TerminationTermCfg as DoneTerm
 from isaaclab.scene import InteractiveSceneCfg
-from isaaclab.sensors import ContactSensorCfg, RayCasterCfg, patterns
+from isaaclab.sensors import RayCasterCfg, patterns
+from isaaclab.sim import SimulationCfg
 from isaaclab.terrains import TerrainImporterCfg
-from isaaclab.utils import configclass
 from isaaclab.utils.assets import ISAAC_NUCLEUS_DIR, ISAACLAB_NUCLEUS_DIR
-from isaaclab.utils.noise import AdditiveUniformNoiseCfg as Unoise
+from isaaclab.utils.configclass import configclass
+from isaaclab.utils.noise import UniformNoiseCfg as Unoise
 
 import isaaclab_tasks.manager_based.locomotion.velocity.mdp as mdp
+from isaaclab_tasks.utils import PresetCfg, preset
 
 ##
 # Pre-defined configs
@@ -32,8 +40,46 @@ from isaaclab.terrains.config.rough import ROUGH_TERRAINS_CFG  # isort: skip
 
 
 ##
+# Physics presets
+##
+
+
+@configclass
+class RoughPhysicsCfg(PresetCfg):
+    """Shared physics preset for all rough-terrain locomotion envs."""
+
+    default = PhysxCfg(gpu_max_rigid_patch_count=10 * 2**15)
+    newton_mjwarp = NewtonCfg(
+        solver_cfg=MJWarpSolverCfg(
+            njmax=200,
+            nconmax=100,
+            cone="pyramidal",
+            impratio=1.0,
+            integrator="implicitfast",
+            use_mujoco_contacts=False,
+        ),
+        collision_cfg=NewtonCollisionPipelineCfg(max_triangle_pairs=2_500_000),
+        num_substeps=1,
+        debug_mode=False,
+        # 1 cm shape margin is the single most important Newton setting for rough
+        # terrain — without it, non-Anymal-D robots fail to learn stable contact
+        # on triangle-mesh terrain. See isaaclab_newton 0.5.22 changelog.
+        default_shape_cfg=NewtonShapeCfg(margin=0.01),
+    )
+    physx = default
+
+
+##
 # Scene definition
 ##
+
+
+@configclass
+class VelocityEnvContactSensorCfg(PresetCfg):
+    default = PhysXContactSensorCfg(prim_path="{ENV_REGEX_NS}/Robot/.*", history_length=3, track_air_time=True)
+    newton_mjwarp = NewtonContactSensorCfg(prim_path="{ENV_REGEX_NS}/Robot/.*", history_length=3, track_air_time=True)
+    physx = default
+    ovphysx = OvPhysXContactSensorCfg(prim_path="{ENV_REGEX_NS}/Robot/.*", history_length=3, track_air_time=True)
 
 
 @configclass
@@ -66,12 +112,12 @@ class MySceneCfg(InteractiveSceneCfg):
     height_scanner = RayCasterCfg(
         prim_path="{ENV_REGEX_NS}/Robot/base",
         offset=RayCasterCfg.OffsetCfg(pos=(0.0, 0.0, 20.0)),
-        attach_yaw_only=True,
+        ray_alignment="yaw",
         pattern_cfg=patterns.GridPatternCfg(resolution=0.1, size=[1.6, 1.0]),
         debug_vis=False,
         mesh_prim_paths=["/World/ground"],
     )
-    contact_forces = ContactSensorCfg(prim_path="{ENV_REGEX_NS}/Robot/.*", history_length=3, track_air_time=True)
+    contact_forces = VelocityEnvContactSensorCfg()
     # lights
     sky_light = AssetBaseCfg(
         prim_path="/World/skyLight",
@@ -147,7 +193,7 @@ class ObservationsCfg:
 
 
 @configclass
-class EventCfg:
+class EventsCfg:
     """Configuration for events."""
 
     # startup
@@ -168,9 +214,25 @@ class EventCfg:
         mode="startup",
         params={
             "asset_cfg": SceneEntityCfg("robot", body_names="base"),
-            "mass_distribution_params": (-5.0, 5.0),
-            "operation": "add",
+            # Multiplicative ±25% log-uniform. Scale-invariant across robot sizes
+            # (no per-robot kg overrides needed) with geometric mean 1.0 and
+            # symmetric inverse perturbation (acceleration symmetric around nominal).
+            "mass_distribution_params": (1 / 1.25, 1.25),
+            "operation": "scale",
+            "distribution": "log_uniform",
         },
+    )
+
+    base_com = preset(
+        default=EventTerm(
+            func=mdp.randomize_rigid_body_com,
+            mode="startup",
+            params={
+                "asset_cfg": SceneEntityCfg("robot", body_names="base"),
+                "com_range": {"x": (-0.05, 0.05), "y": (-0.05, 0.05), "z": (-0.01, 0.01)},
+            },
+        ),
+        newton_mjwarp=None,
     )
 
     # reset
@@ -281,6 +343,8 @@ class CurriculumCfg:
 class LocomotionVelocityRoughEnvCfg(ManagerBasedRLEnvCfg):
     """Configuration for the locomotion velocity-tracking environment."""
 
+    # Simulation settings — shared physics preset (PhysX + MJWarp) for all rough-terrain envs
+    sim: SimulationCfg = SimulationCfg(physics=RoughPhysicsCfg())
     # Scene settings
     scene: MySceneCfg = MySceneCfg(num_envs=4096, env_spacing=2.5)
     # Basic settings
@@ -290,7 +354,7 @@ class LocomotionVelocityRoughEnvCfg(ManagerBasedRLEnvCfg):
     # MDP settings
     rewards: RewardsCfg = RewardsCfg()
     terminations: TerminationsCfg = TerminationsCfg()
-    events: EventCfg = EventCfg()
+    events: EventsCfg = EventsCfg()
     curriculum: CurriculumCfg = CurriculumCfg()
 
     def __post_init__(self):
@@ -302,7 +366,6 @@ class LocomotionVelocityRoughEnvCfg(ManagerBasedRLEnvCfg):
         self.sim.dt = 0.005
         self.sim.render_interval = self.decimation
         self.sim.physics_material = self.scene.terrain.physics_material
-        self.sim.physx.gpu_max_rigid_patch_count = 10 * 2**15
         # update sensor update periods
         # we tick all the sensors based on the smallest update period (physics update period)
         if self.scene.height_scanner is not None:

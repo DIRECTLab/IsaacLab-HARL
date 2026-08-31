@@ -1,13 +1,16 @@
-# Copyright (c) 2022-2026, The Isaac Lab Project Developers.
+# Copyright (c) 2022-2026, The Isaac Lab Project Developers (https://github.com/isaac-sim/IsaacLab/blob/main/CONTRIBUTORS.md).
 # All rights reserved.
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
-import gymnasium as gym
+from __future__ import annotations
+
 import math
+from typing import Any
+
+import gymnasium as gym
 import numpy as np
 import torch
-from typing import Any
 
 from ..common import ActionType, AgentID, EnvStepReturn, ObsType, StateType, VecEnvObs, VecEnvStepReturn
 from ..direct_marl_env import DirectMARLEnv
@@ -17,8 +20,8 @@ from ..direct_rl_env import DirectRLEnv
 def multi_agent_to_single_agent(env: DirectMARLEnv, state_as_observation: bool = False) -> DirectRLEnv:
     """Convert the multi-agent environment instance to a single-agent environment instance.
 
-    The converted environment will be an instance of the single-agent environment interface class (:class:`DirectRLEnv`).
-    As part of the conversion process, the following operations are carried out:
+    The converted environment will be an instance of the single-agent environment interface class
+    (:class:`DirectRLEnv`). As part of the conversion process, the following operations are carried out:
 
     * The observations of all the agents in the original multi-agent environment are concatenated to compose
         the single-agent observation. If the use of the environment state is defined as the observation,
@@ -45,6 +48,7 @@ def multi_agent_to_single_agent(env: DirectMARLEnv, state_as_observation: bool =
     class Env(DirectRLEnv):
         def __init__(self, env: DirectMARLEnv) -> None:
             self.env: DirectMARLEnv = env.unwrapped
+            self._is_closed = False
 
             # check if it is possible to use the multi-agent environment state as single-agent observation
             self._state_as_observation = state_as_observation
@@ -130,7 +134,9 @@ def multi_agent_to_single_agent(env: DirectMARLEnv, state_as_observation: bool =
             return self.env.render(recompute)
 
         def close(self) -> None:
-            self.env.close()
+            if not self._is_closed:
+                self.env.close()
+                self._is_closed = True
 
     return Env(env)
 
@@ -165,6 +171,7 @@ def multi_agent_with_one_agent(env: DirectMARLEnv, state_as_observation: bool = 
     class Env(DirectMARLEnv):
         def __init__(self, env: DirectMARLEnv) -> None:
             self.env: DirectMARLEnv = env.unwrapped
+            self._is_closed = False
 
             # check if it is possible to use the multi-agent environment state as agent observation
             self._state_as_observation = state_as_observation
@@ -269,6 +276,8 @@ def multi_agent_with_one_agent(env: DirectMARLEnv, state_as_observation: bool = 
             self.env.render(recompute)
 
         def close(self) -> None:
-            self.env.close()
+            if not self._is_closed:
+                self.env.close()
+                self._is_closed = True
 
     return Env(env)

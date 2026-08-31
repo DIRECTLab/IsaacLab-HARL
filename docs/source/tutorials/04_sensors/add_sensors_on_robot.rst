@@ -53,7 +53,7 @@ in seconds through the :attr:`sensors.SensorBaseCfg.update_period` attribute.
 Depending on the specified path and the sensor type, the sensors are attached to the prims in the scene.
 They may have an associated prim that is created in the scene or they may be attached to an existing prim.
 For instance, the camera sensor has a corresponding prim that is created in the scene, whereas for the
-contact sensor, the activating the contact reporting is a property on a rigid body prim.
+contact sensor, activating the contact reporting is a property on a rigid body prim.
 
 In the following, we introduce the different sensors we use in this tutorial and how they are configured.
 For more description about them, please check the :mod:`sensors` module.
@@ -93,15 +93,15 @@ Height scanner
 
 The height-scanner is implemented as a virtual sensor using the NVIDIA Warp ray-casting kernels.
 Through the :class:`sensors.RayCasterCfg`, we can specify the pattern of rays to cast and the
-meshes against which to cast the rays. Since they are virtual sensors, there is no corresponding
-prim created in the scene for them. Instead they are attached to a prim in the scene, which is
-used to specify the location of the sensor.
+meshes against which to cast the rays. By default, :attr:`~sensors.RayCasterCfg.spawn` creates
+a plain USD Xform at :attr:`~sensors.RayCasterCfg.prim_path` to serve as the sensor's
+attachment frame, similar to how :class:`sensors.CameraCfg` spawns a Camera prim.
 
-For this tutorial, the ray-cast based height scanner is attached to the base frame of the robot.
+For this tutorial, the ray-cast based height scanner is attached under the base frame of the robot.
 The pattern of rays is specified using the :attr:`~sensors.RayCasterCfg.pattern` attribute. For
 a uniform grid pattern, we specify the pattern using :class:`~sensors.patterns.GridPatternCfg`.
 Since we only care about the height information, we do not need to consider the roll and pitch
-of the robot. Hence, we set the :attr:`~sensors.RayCasterCfg.attach_yaw_only` to true.
+of the robot. Hence, we set the :attr:`~sensors.RayCasterCfg.ray_alignment` to "yaw".
 
 For the height-scanner, you can visualize the points where the rays hit the mesh. This is done
 by setting the :attr:`~sensors.SensorBaseCfg.debug_vis` attribute to true.
@@ -174,7 +174,7 @@ Now that we have gone through the code, let's run the script and see the result:
 
 .. code-block:: bash
 
-   ./isaaclab.sh -p scripts/tutorials/04_sensors/add_sensors_on_robot.py --num_envs 2 --enable_cameras
+   ./isaaclab.sh -p scripts/tutorials/04_sensors/add_sensors_on_robot.py --num_envs 2 --enable_cameras --viz kit
 
 
 This command should open a stage with a ground plane, lights, and two quadrupedal robots.
@@ -198,13 +198,13 @@ following commands:
 .. code-block:: bash
 
    # Frame Transformer
-   ./isaaclab.sh -p scripts/tutorials/04_sensors/run_frame_transformer.py
+   ./isaaclab.sh -p scripts/tutorials/04_sensors/run_frame_transformer.py --viz kit
 
    # Ray Caster
-   ./isaaclab.sh -p scripts/tutorials/04_sensors/run_ray_caster.py
+   ./isaaclab.sh -p scripts/tutorials/04_sensors/run_ray_caster.py --viz kit
 
    # Ray Caster Camera
-   ./isaaclab.sh -p scripts/tutorials/04_sensors/run_ray_caster_camera.py
+   ./isaaclab.sh -p scripts/tutorials/04_sensors/run_ray_caster_camera.py --viz kit
 
    # USD Camera
-   ./isaaclab.sh -p scripts/tutorials/04_sensors/run_usd_camera.py --enable_cameras
+   ./isaaclab.sh -p scripts/tutorials/04_sensors/run_usd_camera.py --enable_cameras --viz kit

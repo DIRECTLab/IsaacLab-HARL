@@ -1,4 +1,4 @@
-# Copyright (c) 2022-2026, The Isaac Lab Project Developers.
+# Copyright (c) 2022-2026, The Isaac Lab Project Developers (https://github.com/isaac-sim/IsaacLab/blob/main/CONTRIBUTORS.md).
 # All rights reserved.
 #
 # SPDX-License-Identifier: BSD-3-Clause
@@ -11,13 +11,14 @@ the termination introduced by the function.
 
 from __future__ import annotations
 
-import torch
 from typing import TYPE_CHECKING
 
-from isaaclab.assets import RigidObject
+import torch
+
 from isaaclab.managers import SceneEntityCfg
 
 if TYPE_CHECKING:
+    from isaaclab.assets import RigidObject
     from isaaclab.envs import ManagerBasedRLEnv
 
 
@@ -30,7 +31,8 @@ def terrain_out_of_bounds(
     to the edge of the terrain is calculated based on the size of the terrain and the distance buffer.
     """
     if env.scene.cfg.terrain.terrain_type == "plane":
-        return False  # we have infinite terrain because it is a plane
+        # we have infinite terrain because it is a plane
+        return torch.zeros(env.num_envs, dtype=torch.bool, device=env.device)
     elif env.scene.cfg.terrain.terrain_type == "generator":
         # obtain the size of the sub-terrains
         terrain_gen_cfg = env.scene.terrain.cfg.terrain_generator
@@ -45,8 +47,8 @@ def terrain_out_of_bounds(
         asset: RigidObject = env.scene[asset_cfg.name]
 
         # check if the agent is out of bounds
-        x_out_of_bounds = torch.abs(asset.data.root_pos_w[:, 0]) > 0.5 * map_width - distance_buffer
-        y_out_of_bounds = torch.abs(asset.data.root_pos_w[:, 1]) > 0.5 * map_height - distance_buffer
+        x_out_of_bounds = torch.abs(asset.data.root_pos_w.torch[:, 0]) > 0.5 * map_width - distance_buffer
+        y_out_of_bounds = torch.abs(asset.data.root_pos_w.torch[:, 1]) > 0.5 * map_height - distance_buffer
         return torch.logical_or(x_out_of_bounds, y_out_of_bounds)
     else:
         raise ValueError("Received unsupported terrain type, must be either 'plane' or 'generator'.")

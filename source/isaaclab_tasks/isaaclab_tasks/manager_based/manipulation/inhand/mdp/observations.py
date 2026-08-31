@@ -1,19 +1,23 @@
-# Copyright (c) 2022-2026, The Isaac Lab Project Developers.
+# Copyright (c) 2022-2026, The Isaac Lab Project Developers (https://github.com/isaac-sim/IsaacLab/blob/main/CONTRIBUTORS.md).
 # All rights reserved.
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
 """Functions specific to the in-hand dexterous manipulation environments."""
 
-import torch
+from __future__ import annotations
+
 from typing import TYPE_CHECKING
 
+import torch
+
 import isaaclab.utils.math as math_utils
-from isaaclab.assets import RigidObject
-from isaaclab.envs import ManagerBasedRLEnv
 from isaaclab.managers import SceneEntityCfg
 
 if TYPE_CHECKING:
+    from isaaclab.assets import RigidObject
+    from isaaclab.envs import ManagerBasedRLEnv
+
     from .commands import InHandReOrientationCommand
 
 
@@ -30,7 +34,7 @@ def goal_quat_diff(
 
     # obtain the orientations
     goal_quat_w = command_term.command[:, 3:7]
-    asset_quat_w = asset.data.root_quat_w
+    asset_quat_w = asset.data.root_quat_w.torch
 
     # compute quaternion difference
     quat = math_utils.quat_mul(asset_quat_w, math_utils.quat_conjugate(goal_quat_w))

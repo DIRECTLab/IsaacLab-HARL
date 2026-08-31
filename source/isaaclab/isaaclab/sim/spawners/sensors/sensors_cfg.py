@@ -1,4 +1,4 @@
-# Copyright (c) 2022-2026, The Isaac Lab Project Developers.
+# Copyright (c) 2022-2026, The Isaac Lab Project Developers (https://github.com/isaac-sim/IsaacLab/blob/main/CONTRIBUTORS.md).
 # All rights reserved.
 #
 # SPDX-License-Identifier: BSD-3-Clause
@@ -8,10 +8,9 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Literal
 
+import isaaclab.utils.sensors as sensor_utils
 from isaaclab.sim.spawners.spawner_cfg import SpawnerCfg
-from isaaclab.utils import configclass
-
-from . import sensors
+from isaaclab.utils.configclass import configclass
 
 
 @configclass
@@ -23,13 +22,9 @@ class PinholeCameraCfg(SpawnerCfg):
     ..note ::
         Focal length as well as the aperture sizes and offsets are set as a tenth of the world unit. In our case, the
         world unit is Meter s.t. all of these values are set in cm.
-
-    .. note::
-        The default values are taken from the `Replicator camera <https://docs.omniverse.nvidia.com/py/replicator/1.9.8/source/omni.replicator.core/docs/API.html#omni.replicator.core.create.camera>`__
-        function.
     """
 
-    func: Callable = sensors.spawn_camera
+    func: Callable | str = "{DIR}.sensors:spawn_camera"
 
     projection_type: str = "pinhole"
     """Type of projection to use for the camera. Defaults to "pinhole".
@@ -102,7 +97,7 @@ class PinholeCameraCfg(SpawnerCfg):
         width: int,
         height: int,
         clipping_range: tuple[float, float] = (0.01, 1e6),
-        focal_length: float = 24.0,
+        focal_length: float | None = None,
         focus_distance: float = 400.0,
         f_stop: float = 0.0,
         projection_type: str = "pinhole",
@@ -120,8 +115,8 @@ class PinholeCameraCfg(SpawnerCfg):
             0 & 0 & 1
             \\end{bmatrix},
 
-        where :math:`f_x` and :math:`f_y` are the focal length along x and y direction, while :math:`c_x` and :math:`c_y` are the
-        principle point offsets along x and y direction respectively.
+        where :math:`f_x` and :math:`f_y` are the focal length along x and y direction, while :math:`c_x` and
+        :math:`c_y` are the principle point offsets along x and y direction respectively.
 
         Args:
             intrinsic_matrix: Intrinsic matrix of the camera in row-major format.
@@ -129,7 +124,8 @@ class PinholeCameraCfg(SpawnerCfg):
             width: Width of the image (in pixels).
             height: Height of the image (in pixels).
             clipping_range: Near and far clipping distances (in m). Defaults to (0.01, 1e6).
-            focal_length: Perspective focal length (in cm). Defaults to 24.0 cm.
+            focal_length: Perspective focal length (in cm) used to calculate pixel size. Defaults to None. If None
+                focal_length will be calculated 1 / width.
             focus_distance: Distance from the camera to the focus plane (in m). Defaults to 400.0 m.
             f_stop: Lens aperture. Defaults to 0.0, which turns off focusing.
             projection_type: Type of projection to use for the camera. Defaults to "pinhole".
@@ -142,27 +138,20 @@ class PinholeCameraCfg(SpawnerCfg):
         if projection_type != "pinhole":
             raise NotImplementedError("Only pinhole projection type is supported.")
 
-        # extract parameters from matrix
-        f_x = intrinsic_matrix[0]
-        c_x = intrinsic_matrix[2]
-        f_y = intrinsic_matrix[4]
-        c_y = intrinsic_matrix[5]
-        # resolve parameters for usd camera
-        horizontal_aperture = width * focal_length / f_x
-        vertical_aperture = height * focal_length / f_y
-        horizontal_aperture_offset = (c_x - width / 2) / f_x
-        vertical_aperture_offset = (c_y - height / 2) / f_y
+        usd_camera_params = sensor_utils.convert_camera_intrinsics_to_usd(
+            intrinsic_matrix=intrinsic_matrix, height=height, width=width, focal_length=focal_length
+        )
 
         return cls(
             projection_type=projection_type,
             clipping_range=clipping_range,
-            focal_length=focal_length,
+            focal_length=usd_camera_params["focal_length"],
             focus_distance=focus_distance,
             f_stop=f_stop,
-            horizontal_aperture=horizontal_aperture,
-            vertical_aperture=vertical_aperture,
-            horizontal_aperture_offset=horizontal_aperture_offset,
-            vertical_aperture_offset=vertical_aperture_offset,
+            horizontal_aperture=usd_camera_params["horizontal_aperture"],
+            vertical_aperture=usd_camera_params["vertical_aperture"],
+            horizontal_aperture_offset=usd_camera_params["horizontal_aperture_offset"],
+            vertical_aperture_offset=usd_camera_params["vertical_aperture_offset"],
             lock_camera=lock_camera,
         )
 
@@ -175,13 +164,13 @@ class FisheyeCameraCfg(PinholeCameraCfg):
     `camera documentation <https://docs.omniverse.nvidia.com/materials-and-rendering/latest/cameras.html#fisheye-properties>`__.
 
     .. note::
-        The default values are taken from the `Replicator camera <https://docs.omniverse.nvidia.com/py/replicator/1.9.8/source/omni.replicator.core/docs/API.html#omni.replicator.core.create.camera>`__
+        The default values are taken from the `Replicator camera <https://docs.omniverse.nvidia.com/py/replicator/1.12.16/source/extensions/omni.replicator.core/docs/API.html#cameras>`__
         function.
 
     .. _fish-eye camera: https://en.wikipedia.org/wiki/Fisheye_lens
     """
 
-    func: Callable = sensors.spawn_camera
+    func: Callable | str = "{DIR}.sensors:spawn_camera"
 
     projection_type: Literal[
         "fisheyePolynomial",
@@ -233,3 +222,15 @@ class FisheyeCameraCfg(PinholeCameraCfg):
 
     fisheye_polynomial_f: float = 0.0
     """Sixth component of fisheye polynomial. Defaults to 0.0."""
+
+
+@configclass
+class SensorFrameCfg(SpawnerCfg):
+    """Spawns a plain USD Xform as a sensor attachment frame.
+
+    The spawned prim carries no rigid body or collision API. It serves as a
+    non-physics child under a link so that :class:`~isaaclab.sim.views.FrameView`
+    can track it on all backends (including Newton, which rejects physics body prims).
+    """
+
+    func: Callable | str = "{DIR}.sensors:spawn_sensor_frame"

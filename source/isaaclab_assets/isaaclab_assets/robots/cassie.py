@@ -1,4 +1,4 @@
-# Copyright (c) 2022-2026, The Isaac Lab Project Developers.
+# Copyright (c) 2022-2026, The Isaac Lab Project Developers (https://github.com/isaac-sim/IsaacLab/blob/main/CONTRIBUTORS.md).
 # All rights reserved.
 #
 # SPDX-License-Identifier: BSD-3-Clause
@@ -37,6 +37,7 @@ CASSIE_CFG = ArticulationCfg(
         articulation_props=sim_utils.ArticulationRootPropertiesCfg(
             enabled_self_collisions=True, solver_position_iteration_count=4, solver_velocity_iteration_count=0
         ),
+        joint_drive_props=sim_utils.JointDrivePropertiesCfg(ensure_drives_exist=True),
     ),
     init_state=ArticulationCfg.InitialStateCfg(
         pos=(0.0, 0.0, 0.9),
@@ -60,8 +61,7 @@ CASSIE_CFG = ArticulationCfg(
     actuators={
         "legs": ImplicitActuatorCfg(
             joint_names_expr=["hip_.*", "thigh_.*", "ankle_.*"],
-            effort_limit=200.0,
-            velocity_limit=10.0,
+            effort_limit_sim=200.0,
             stiffness={
                 "hip_abduction.*": 100.0,
                 "hip_rotation.*": 100.0,
@@ -79,8 +79,7 @@ CASSIE_CFG = ArticulationCfg(
         ),
         "toes": ImplicitActuatorCfg(
             joint_names_expr=["toe_.*"],
-            effort_limit=20.0,
-            velocity_limit=10.0,
+            effort_limit_sim=20.0,
             stiffness={
                 "toe_joint.*": 20.0,
             },

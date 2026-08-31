@@ -1,4 +1,4 @@
-# Copyright (c) 2022-2026, The Isaac Lab Project Developers.
+# Copyright (c) 2022-2026, The Isaac Lab Project Developers (https://github.com/isaac-sim/IsaacLab/blob/main/CONTRIBUTORS.md).
 # All rights reserved.
 #
 # SPDX-License-Identifier: BSD-3-Clause
@@ -6,14 +6,12 @@
 from __future__ import annotations
 
 import copy
-import numpy as np
-import torch
 import weakref
 from collections.abc import Sequence
 from typing import TYPE_CHECKING
 
-import omni.kit.app
-import omni.timeline
+import numpy as np
+import torch
 
 from isaaclab.assets.articulation.articulation import Articulation
 
@@ -52,8 +50,8 @@ class ViewportCameraController:
         self._env = env
         self._cfg = copy.deepcopy(cfg)
         # cast viewer eye and look-at to numpy arrays
-        self.default_cam_eye = np.array(self._cfg.eye)
-        self.default_cam_lookat = np.array(self._cfg.lookat)
+        self.default_cam_eye = np.array(self._cfg.eye, dtype=float)
+        self.default_cam_lookat = np.array(self._cfg.lookat, dtype=float)
 
         # set the camera origins
         if self.cfg.origin_type == "env":
@@ -75,6 +73,8 @@ class ViewportCameraController:
             self.update_view_to_world()
 
         # subscribe to post update event so that camera view can be updated at each rendering step
+        import omni.kit.app
+
         app_interface = omni.kit.app.get_app_interface()
         app_event_stream = app_interface.get_post_update_event_stream()
         self._viewport_camera_update_handle = app_event_stream.create_subscription_to_pop(
@@ -160,8 +160,9 @@ class ViewportCameraController:
         self.cfg.asset_name = asset_name
         # set origin type to asset_root
         self.cfg.origin_type = "asset_root"
-        # update the camera origins
-        self.viewer_origin = self._env.scene[self.cfg.asset_name].data.root_pos_w[self.cfg.env_index]
+        # update the camera origins (convert Warp array to torch tensor first, then index)
+        root_pos = self._env.scene[self.cfg.asset_name].data.root_pos_w.torch
+        self.viewer_origin = root_pos[self.cfg.env_index]
         # update the camera view
         self.update_view_location()
 
@@ -193,8 +194,9 @@ class ViewportCameraController:
         self.cfg.asset_name = asset_name
         # set origin type to asset_body
         self.cfg.origin_type = "asset_body"
-        # update the camera origins
-        self.viewer_origin = self._env.scene[self.cfg.asset_name].data.body_pos_w[self.cfg.env_index, body_id].view(3)
+        # update the camera origins (convert Warp array to torch tensor first, then index)
+        body_pos = self._env.scene[self.cfg.asset_name].data.body_pos_w.torch
+        self.viewer_origin = body_pos[self.cfg.env_index, body_id].squeeze(0)
         # update the camera view
         self.update_view_location()
 
@@ -207,16 +209,25 @@ class ViewportCameraController:
         """
         # store the camera view pose for later use
         if eye is not None:
-            self.default_cam_eye = np.asarray(eye)
+            self.default_cam_eye = np.asarray(eye, dtype=float)
         if lookat is not None:
-            self.default_cam_lookat = np.asarray(lookat)
+            self.default_cam_lookat = np.asarray(lookat, dtype=float)
         # set the camera locations
         viewer_origin = self.viewer_origin.detach().cpu().numpy()
         cam_eye = viewer_origin + self.default_cam_eye
         cam_target = viewer_origin + self.default_cam_lookat
 
-        # set the camera view
-        self._env.sim.set_camera_view(eye=cam_eye, target=cam_target)
+        eye_t = (float(cam_eye[0]), float(cam_eye[1]), float(cam_eye[2]))
+        target_t = (float(cam_target[0]), float(cam_target[1]), float(cam_target[2]))
+        self._env.sim.set_camera_view(eye=eye_t, target=target_t)
+
+        # Renderer viewport camera (Isaac RTX / Kit); optional — pure-Newton installs have no isaaclab_physx.
+        try:
+            from isaaclab_physx.renderers.kit_viewport_utils import set_kit_renderer_camera_view
+
+            set_kit_renderer_camera_view(eye=cam_eye, target=cam_target, camera_prim_path=self.cfg.cam_prim_path)
+        except (ImportError, ModuleNotFoundError):
+            pass
 
     """
     Private Functions

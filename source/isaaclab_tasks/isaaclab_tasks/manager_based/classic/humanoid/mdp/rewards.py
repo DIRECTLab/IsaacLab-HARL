@@ -1,21 +1,22 @@
-# Copyright (c) 2022-2026, The Isaac Lab Project Developers.
+# Copyright (c) 2022-2026, The Isaac Lab Project Developers (https://github.com/isaac-sim/IsaacLab/blob/main/CONTRIBUTORS.md).
 # All rights reserved.
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
 from __future__ import annotations
 
-import torch
 from typing import TYPE_CHECKING
+
+import torch
 
 import isaaclab.utils.math as math_utils
 import isaaclab.utils.string as string_utils
-from isaaclab.assets import Articulation
 from isaaclab.managers import ManagerTermBase, RewardTermCfg, SceneEntityCfg
 
 from . import observations as obs
 
 if TYPE_CHECKING:
+    from isaaclab.assets import Articulation
     from isaaclab.envs import ManagerBasedRLEnv
 
 
@@ -65,10 +66,13 @@ class progress_reward(ManagerTermBase):
         asset: Articulation = self._env.scene["robot"]
         # compute projection of current heading to desired heading vector
         target_pos = torch.tensor(self.cfg.params["target_pos"], device=self.device)
-        to_target_pos = target_pos - asset.data.root_pos_w[env_ids, :3]
+        to_target_pos = target_pos - asset.data.root_pos_w.torch[env_ids, :3]
         # reward terms
-        self.potentials[env_ids] = -torch.norm(to_target_pos, p=2, dim=-1) / self._env.step_dt
+        self.potentials[env_ids] = -torch.linalg.norm(to_target_pos, ord=2, dim=-1) / self._env.step_dt
         self.prev_potentials[env_ids] = self.potentials[env_ids]
+        # flush survival success rate (survived = timed out without falling)
+        survived = self._env.termination_manager.time_outs[env_ids]
+        self._env.extras.setdefault("log", {})["Metrics/success_rate"] = survived.float().mean().item()
 
     def __call__(
         self,
@@ -80,11 +84,11 @@ class progress_reward(ManagerTermBase):
         asset: Articulation = env.scene[asset_cfg.name]
         # compute vector to target
         target_pos = torch.tensor(target_pos, device=env.device)
-        to_target_pos = target_pos - asset.data.root_pos_w[:, :3]
+        to_target_pos = target_pos - asset.data.root_pos_w.torch[:, :3]
         to_target_pos[:, 2] = 0.0
         # update history buffer and compute new potential
         self.prev_potentials[:] = self.potentials[:]
-        self.potentials[:] = -torch.norm(to_target_pos, p=2, dim=-1) / env.step_dt
+        self.potentials[:] = -torch.linalg.norm(to_target_pos, ord=2, dim=-1) / env.step_dt
 
         return self.potentials - self.prev_potentials
 
@@ -153,7 +157,9 @@ class joint_limits_penalty_ratio(ManagerTermBase):
         asset: Articulation = env.scene[asset_cfg.name]
         # compute the penalty over normalized joints
         joint_pos_scaled = math_utils.scale_transform(
-            asset.data.joint_pos, asset.data.soft_joint_pos_limits[..., 0], asset.data.soft_joint_pos_limits[..., 1]
+            asset.data.joint_pos.torch,
+            asset.data.soft_joint_pos_limits.torch[..., 0],
+            asset.data.soft_joint_pos_limits.torch[..., 1],
         )
         # scale the violation amount by the gear ratio
         violation_amount = (torch.abs(joint_pos_scaled) - threshold) / (1 - threshold)
@@ -188,4 +194,6 @@ class power_consumption(ManagerTermBase):
         # extract the used quantities (to enable type-hinting)
         asset: Articulation = env.scene[asset_cfg.name]
         # return power = torque * velocity (here actions: joint torques)
-        return torch.sum(torch.abs(env.action_manager.action * asset.data.joint_vel * self.gear_ratio_scaled), dim=-1)
+        return torch.sum(
+            torch.abs(env.action_manager.action * asset.data.joint_vel.torch * self.gear_ratio_scaled), dim=-1
+        )

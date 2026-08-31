@@ -1,4 +1,4 @@
-# Copyright (c) 2022-2026, The Isaac Lab Project Developers.
+# Copyright (c) 2022-2026, The Isaac Lab Project Developers (https://github.com/isaac-sim/IsaacLab/blob/main/CONTRIBUTORS.md).
 # All rights reserved.
 #
 # SPDX-License-Identifier: BSD-3-Clause
@@ -10,28 +10,19 @@ from __future__ import annotations
 
 """Launch Isaac Sim Simulator first."""
 
-from isaaclab.app import AppLauncher, run_tests
+from isaaclab.app import AppLauncher
 
-# Can set this to False to see the GUI for debugging
-HEADLESS = True
-
-# launch omniverse app
-app_launcher = AppLauncher(headless=HEADLESS, enable_cameras=True)
-simulation_app = app_launcher.app
+simulation_app = AppLauncher(headless=True, enable_cameras=True).app
 
 """Rest everything follows."""
 
-import torch
-import unittest
+from isaacsim.core.experimental.utils.app import enable_extension
 
-import carb
-import omni.usd
-from isaacsim.core.utils.extensions import enable_extension
-
+import isaaclab.sim as sim_utils
 from isaaclab.envs import ManagerBasedRLEnv, ManagerBasedRLEnvCfg
 from isaaclab.envs.ui import ManagerBasedRLEnvWindow
 from isaaclab.scene import InteractiveSceneCfg
-from isaaclab.utils import configclass
+from isaaclab.utils.configclass import configclass
 
 enable_extension("isaacsim.gui.components")
 
@@ -61,7 +52,7 @@ def get_empty_base_env_cfg(device: str = "cuda:0", num_envs: int = 1, env_spacin
         rewards: EmptyManagerCfg = EmptyManagerCfg()
         terminations: EmptyManagerCfg = EmptyManagerCfg()
         # Define window
-        ui_window_class_type: ManagerBasedRLEnvWindow = ManagerBasedRLEnvWindow
+        ui_window_class_type: type[ManagerBasedRLEnvWindow] = ManagerBasedRLEnvWindow
 
         def __post_init__(self):
             """Post initialization."""
@@ -78,26 +69,16 @@ def get_empty_base_env_cfg(device: str = "cuda:0", num_envs: int = 1, env_spacin
     return EmptyEnvCfg()
 
 
-class TestManagerBasedRLEnvUI(unittest.TestCase):
-    """Test for manager-based RL env class UI"""
+def test_ui_window():
+    """Test UI window of ManagerBasedRLEnv."""
+    device = "cuda:0"
+    # override sim setting to enable UI
+    from isaaclab.app.settings_manager import get_settings_manager
 
-    """
-    Tests
-    """
-
-    def test_ui_window(self):
-        device = "cuda:0"
-        # override sim setting to enable UI
-        carb.settings.get_settings().set_bool("/app/window/enabled", True)
-        # create a new stage
-        omni.usd.get_context().new_stage()
-        # create environment
-        env = ManagerBasedRLEnv(cfg=get_empty_base_env_cfg(device=device))
-        env.reset()
-        env.step(torch.zeros((1, 0)))
-        # close the environment
-        env.close()
-
-
-if __name__ == "__main__":
-    run_tests()
+    get_settings_manager().set_bool("/app/window/enabled", True)
+    # create a new stage
+    sim_utils.create_new_stage()
+    # create environment
+    env = ManagerBasedRLEnv(cfg=get_empty_base_env_cfg(device=device))
+    # close the environment
+    env.close()

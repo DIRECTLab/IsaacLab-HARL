@@ -1,4 +1,4 @@
-# Copyright (c) 2022-2026, The Isaac Lab Project Developers.
+# Copyright (c) 2022-2026, The Isaac Lab Project Developers (https://github.com/isaac-sim/IsaacLab/blob/main/CONTRIBUTORS.md).
 # All rights reserved.
 #
 # SPDX-License-Identifier: BSD-3-Clause
@@ -37,15 +37,13 @@ app_launcher = AppLauncher(args_cli)
 simulation_app = app_launcher.app
 
 """Rest everything follows."""
-import io
 import os
-import torch
 
-import omni
+import torch
 
 from isaaclab.envs import ManagerBasedRLEnv
 from isaaclab.terrains import TerrainImporterCfg
-from isaaclab.utils.assets import ISAAC_NUCLEUS_DIR
+from isaaclab.utils.assets import ISAAC_NUCLEUS_DIR, read_file
 
 from isaaclab_tasks.manager_based.locomotion.velocity.config.h1.rough_env_cfg import H1RoughEnvCfg_PLAY
 
@@ -54,8 +52,7 @@ def main():
     """Main function."""
     # load the trained jit policy
     policy_path = os.path.abspath(args_cli.checkpoint)
-    file_content = omni.client.read_file(policy_path)[2]
-    file = io.BytesIO(memoryview(file_content).tobytes())
+    file = read_file(policy_path)
     policy = torch.jit.load(file, map_location=args_cli.device)
 
     # setup environment

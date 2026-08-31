@@ -1,26 +1,32 @@
-# Copyright (c) 2022-2026, The Isaac Lab Project Developers.
+# Copyright (c) 2022-2026, The Isaac Lab Project Developers (https://github.com/isaac-sim/IsaacLab/blob/main/CONTRIBUTORS.md).
 # All rights reserved.
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
+from __future__ import annotations
+
 import os
+from typing import TYPE_CHECKING
+
 import torch
 from torchvision.utils import save_image
 
 import isaaclab.sim as sim_utils
 import isaaclab.utils.math as math_utils
 from isaaclab.controllers.differential_ik_cfg import DifferentialIKControllerCfg
-from isaaclab.envs import ManagerBasedEnv
 from isaaclab.envs.mdp.actions.actions_cfg import DifferentialInverseKinematicsActionCfg
 from isaaclab.managers import ObservationGroupCfg as ObsGroup
 from isaaclab.managers import ObservationTermCfg as ObsTerm
 from isaaclab.managers import SceneEntityCfg
-from isaaclab.sensors import Camera, CameraCfg, RayCasterCamera, TiledCamera
-from isaaclab.utils import configclass
+from isaaclab.sensors import CameraCfg
+from isaaclab.utils.configclass import configclass
 
 from ... import mdp
 from . import stack_joint_pos_env_cfg
 
+if TYPE_CHECKING:
+    from isaaclab.envs import ManagerBasedEnv
+    from isaaclab.sensors import Camera, RayCasterCamera
 ##
 # Pre-defined configs
 ##
@@ -57,7 +63,7 @@ def image(
         The images produced at the last time-step
     """
     # extract the used quantities (to enable type-hinting)
-    sensor: TiledCamera | Camera | RayCasterCamera = env.scene.sensors[sensor_cfg.name]
+    sensor: Camera | RayCasterCamera = env.scene.sensors[sensor_cfg.name]
 
     # obtain the input image
     images = sensor.data.output[data_type]
@@ -81,6 +87,9 @@ def image(
         dir_path, _ = os.path.split(image_path)
         if dir_path:
             os.makedirs(dir_path, exist_ok=True)
+        # output may be a ProxyArray (Warp-backed); extract torch.Tensor before dtype check
+        if not isinstance(images, torch.Tensor):
+            images = images.torch
         if images.dtype == torch.uint8:
             images = images.float() / 255.0
         # Get total successful episodes
@@ -254,7 +263,7 @@ class FrankaCubeStackBlueprintEnvCfg(stack_joint_pos_env_cfg.FrankaCubeStackEnvC
             spawn=sim_utils.PinholeCameraCfg(
                 focal_length=24.0, focus_distance=400.0, horizontal_aperture=20.955, clipping_range=(0.1, 1.0e5)
             ),
-            offset=CameraCfg.OffsetCfg(pos=(1.0, 0.0, 0.33), rot=(-0.3799, 0.5963, 0.5963, -0.3799), convention="ros"),
+            offset=CameraCfg.OffsetCfg(pos=(1.0, 0.0, 0.33), rot=(0.5963, 0.5963, -0.3799, -0.3799), convention="ros"),
         )
 
         # Set table view camera
@@ -269,5 +278,5 @@ class FrankaCubeStackBlueprintEnvCfg(stack_joint_pos_env_cfg.FrankaCubeStackEnvC
             spawn=sim_utils.PinholeCameraCfg(
                 focal_length=24.0, focus_distance=400.0, horizontal_aperture=20.955, clipping_range=(1.5, 1.0e5)
             ),
-            offset=CameraCfg.OffsetCfg(pos=(1.4, 1.8, 1.2), rot=(-0.1393, 0.2025, 0.8185, -0.5192), convention="ros"),
+            offset=CameraCfg.OffsetCfg(pos=(1.4, 1.8, 1.2), rot=(0.2025, 0.8185, -0.5192, -0.1393), convention="ros"),
         )

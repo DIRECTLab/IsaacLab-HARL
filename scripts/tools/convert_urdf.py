@@ -1,4 +1,4 @@
-# Copyright (c) 2022-2026, The Isaac Lab Project Developers.
+# Copyright (c) 2022-2026, The Isaac Lab Project Developers (https://github.com/isaac-sim/IsaacLab/blob/main/CONTRIBUTORS.md).
 # All rights reserved.
 #
 # SPDX-License-Identifier: BSD-3-Clause
@@ -81,8 +81,6 @@ import contextlib
 import os
 
 import carb
-import isaacsim.core.utils.stage as stage_utils
-import omni.kit.app
 
 from isaaclab.sim.converters import UrdfConverter, UrdfConverterCfg
 from isaaclab.utils.assets import check_file_path
@@ -102,10 +100,11 @@ def main():
         dest_path = os.path.abspath(dest_path)
 
     # Create Urdf converter config
+    # Note: usd_file_name is determined by the URDF importer 3.0 based on the robot name
+    # and cannot be overridden. The output is placed under dest_path as usd_dir.
     urdf_converter_cfg = UrdfConverterCfg(
         asset_path=urdf_path,
-        usd_dir=os.path.dirname(dest_path),
-        usd_file_name=os.path.basename(dest_path),
+        usd_dir=dest_path,
         fix_base=args_cli.fix_base,
         merge_fixed_joints=args_cli.merge_joints,
         force_usd_conversion=True,
@@ -145,8 +144,10 @@ def main():
 
     # Simulate scene (if not headless)
     if local_gui or livestream_gui:
-        # Open the stage with USD
-        stage_utils.open_stage(urdf_converter.usd_path)
+        # Open the stage with USD and attach it to the Kit viewport context
+        import omni.usd
+
+        omni.usd.get_context().open_stage(urdf_converter.usd_path)
         # Reinitialize the simulation
         app = omni.kit.app.get_app_interface()
         # Run simulation

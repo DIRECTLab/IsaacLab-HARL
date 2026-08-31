@@ -1,19 +1,26 @@
-# Copyright (c) 2022-2026, The Isaac Lab Project Developers.
+# Copyright (c) 2022-2026, The Isaac Lab Project Developers (https://github.com/isaac-sim/IsaacLab/blob/main/CONTRIBUTORS.md).
 # All rights reserved.
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
 """Sub-module with utilities for parsing and loading configurations."""
 
+from __future__ import annotations
 
-import gymnasium as gym
+import collections
 import importlib
 import inspect
 import os
 import re
+from typing import TYPE_CHECKING
+
+import gymnasium as gym
 import yaml
 
-from isaaclab.envs import DirectRLEnvCfg, ManagerBasedRLEnvCfg
+from isaaclab_tasks.utils.hydra import resolve_presets
+
+if TYPE_CHECKING:
+    from isaaclab.envs import DirectRLEnvCfg, ManagerBasedRLEnvCfg
 
 
 def load_cfg_from_registry(task_name: str, entry_point_key: str) -> dict | object:
@@ -32,6 +39,7 @@ def load_cfg_from_registry(task_name: str, entry_point_key: str) -> dict | objec
             kwargs={"env_entry_point_cfg": "path.to.config:ConfigClass"},
         )
 
+
     The parsed configuration object for above example can be obtained as:
 
     .. code-block:: python
@@ -39,6 +47,7 @@ def load_cfg_from_registry(task_name: str, entry_point_key: str) -> dict | objec
         from isaaclab_tasks.utils.parse_cfg import load_cfg_from_registry
 
         cfg = load_cfg_from_registry("My-Awesome-Task-v0", "env_entry_point_cfg")
+
 
     Args:
         task_name: The name of the environment.
@@ -52,12 +61,30 @@ def load_cfg_from_registry(task_name: str, entry_point_key: str) -> dict | objec
         ValueError: If the entry point key is not available in the gym registry for the task.
     """
     # obtain the configuration entry point
-    cfg_entry_point = gym.spec(task_name).kwargs.get(entry_point_key)
+    cfg_entry_point = gym.spec(task_name.split(":")[-1]).kwargs.get(entry_point_key)
     # check if entry point exists
     if cfg_entry_point is None:
+        # get existing agents and algorithms
+        agents = collections.defaultdict(list)
+        for k in gym.spec(task_name.split(":")[-1]).kwargs:
+            if k.endswith("_cfg_entry_point") and k != "env_cfg_entry_point":
+                spec = (
+                    k.replace("_cfg_entry_point", "")
+                    .replace("rl_games", "rl-games")
+                    .replace("rsl_rl", "rsl-rl")
+                    .split("_")
+                )
+                agent = spec[0].replace("-", "_")
+                algorithms = [item.upper() for item in (spec[1:] if len(spec) > 1 else ["PPO"])]
+                agents[agent].extend(algorithms)
+        msg = "\nExisting RL library (and algorithms) config entry points: "
+        for agent, algorithms in agents.items():
+            msg += f"\n  |-- {agent}: {', '.join(algorithms)}"
+        # raise error
         raise ValueError(
             f"Could not find configuration for the environment: '{task_name}'."
-            f" Please check that the gym registry has the entry point: '{entry_point_key}'."
+            f"\nPlease check that the gym registry has the entry point: '{entry_point_key}'."
+            f"{msg if agents else ''}"
         )
     # parse the default config file
     if isinstance(cfg_entry_point, str) and cfg_entry_point.endswith(".yaml"):
@@ -117,12 +144,19 @@ def parse_env_cfg(
             environment configuration.
     """
     # load the default configuration
-    cfg = load_cfg_from_registry(task_name, "env_cfg_entry_point")
+    cfg = load_cfg_from_registry(task_name.split(":")[-1], "env_cfg_entry_point")
 
     # check that it is not a dict
     # we assume users always use a class for the configuration
     if isinstance(cfg, dict):
         raise RuntimeError(f"Configuration for the task: '{task_name}' is not a class. Please provide a class.")
+
+    # Resolve any PresetCfg wrappers to their default preset so the config
+    # is usable without a Hydra CLI override (e.g. in tests).
+    # Must happen BEFORE attribute overrides, otherwise overrides on PresetCfg wrapper
+    # fields (e.g. cfg.scene when scene is a PresetCfg) get discarded when the wrapper
+    # is replaced by its .default.
+    cfg = resolve_presets(cfg)
 
     # simulation device
     cfg.sim.device = device
@@ -140,7 +174,12 @@ def parse_env_cfg(
 
 
 def get_checkpoint_path(
-    log_path: str, run_dir: str = ".*", checkpoint: str = ".*", other_dirs: list[str] = None, sort_alpha: bool = True
+    log_path: str,
+    run_dir: str = ".*",
+    checkpoint: str = ".*",
+    other_dirs: list[str] = None,
+    sort_alpha: bool = True,
+    preferred_checkpoint: str | None = None,
 ) -> str:
     """Get path to the model checkpoint in input directory.
 
@@ -156,10 +195,15 @@ def get_checkpoint_path(
             recent directory created inside :attr:`log_path`.
         other_dirs: The intermediate directories between the run directory and the checkpoint file. Defaults to
             None, which implies that checkpoint file is directly under the run directory.
-        checkpoint: The regex expression for the model checkpoint file. Defaults to the most recent
-            torch-model saved in the :attr:`run_dir` directory.
+        checkpoint: The regex expression for the model checkpoint file. Defaults to ``".*"``, which matches all
+            checkpoints and selects the most recent one.
         sort_alpha: Whether to sort the runs by alphabetical order. Defaults to True.
             If False, the folders in :attr:`run_dir` are sorted by the last modified time.
+        preferred_checkpoint: An optional regex expression that is matched before :attr:`checkpoint`. When it is
+            provided and matches at least one file, that match is used; otherwise resolution falls back to
+            :attr:`checkpoint`. This allows preferring a specific checkpoint (e.g. the best or final model) while
+            still resolving the latest available checkpoint when the preferred file has not been written yet (e.g.
+            for short runs). Defaults to None, which matches :attr:`checkpoint` directly.
 
     Returns:
         The path to the model checkpoint.
@@ -188,13 +232,22 @@ def get_checkpoint_path(
     except IndexError:
         raise ValueError(f"No runs present in the directory: '{log_path}' match: '{run_dir}'.")
 
-    # list all model checkpoints in the directory
-    model_checkpoints = [f for f in os.listdir(run_path) if re.match(checkpoint, f)]
+    # prefer ``preferred_checkpoint`` when given and it matches; otherwise fall back to the general
+    # ``checkpoint`` pattern (e.g. resolve the latest numbered checkpoint when the preferred best/final
+    # checkpoint file has not been written yet)
+    model_checkpoints = []
+    if preferred_checkpoint is not None:
+        model_checkpoints = [f for f in os.listdir(run_path) if re.match(preferred_checkpoint, f)]
+    if len(model_checkpoints) == 0:
+        model_checkpoints = [f for f in os.listdir(run_path) if re.match(checkpoint, f)]
     # check if any checkpoints are present
     if len(model_checkpoints) == 0:
-        raise ValueError(f"No checkpoints in the directory: '{run_path}' match '{checkpoint}'.")
-    # sort alphabetically while ensuring that *_10 comes after *_9
-    model_checkpoints.sort(key=lambda m: f"{m:0>15}")
+        patterns = f"'{checkpoint}'"
+        if preferred_checkpoint is not None:
+            patterns = f"'{preferred_checkpoint}' nor '{checkpoint}'"
+        raise ValueError(f"No checkpoints in the directory: '{run_path}' match {patterns}.")
+    # sort naturally so numbered checkpoints such as *_10 come after *_9 even with long filename prefixes
+    model_checkpoints.sort(key=lambda m: [int(token) if token.isdigit() else token for token in re.split(r"(\d+)", m)])
     # get latest matched checkpoint file
     checkpoint_file = model_checkpoints[-1]
 

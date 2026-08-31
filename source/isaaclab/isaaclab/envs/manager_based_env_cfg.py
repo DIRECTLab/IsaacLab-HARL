@@ -1,4 +1,4 @@
-# Copyright (c) 2022-2026, The Isaac Lab Project Developers.
+# Copyright (c) 2022-2026, The Isaac Lab Project Developers (https://github.com/isaac-sim/IsaacLab/blob/main/CONTRIBUTORS.md).
 # All rights reserved.
 #
 # SPDX-License-Identifier: BSD-3-Clause
@@ -9,18 +9,24 @@ This module defines the general configuration of the environment. It includes pa
 configuring the environment instances, viewer settings, and simulation parameters.
 """
 
-from dataclasses import MISSING
+from __future__ import annotations
+
+from dataclasses import MISSING, field
+from typing import TYPE_CHECKING
 
 import isaaclab.envs.mdp as mdp
-from isaaclab.devices.openxr import XrCfg
+from isaaclab.devices.device_base import DevicesCfg
+
+if TYPE_CHECKING:
+    from isaaclab.devices.openxr import XrCfg
 from isaaclab.managers import EventTermCfg as EventTerm
 from isaaclab.managers import RecorderManagerBaseCfg as DefaultEmptyRecorderManagerCfg
 from isaaclab.scene import InteractiveSceneCfg
 from isaaclab.sim import SimulationCfg
-from isaaclab.utils import configclass
+from isaaclab.utils.configclass import configclass
 
 from .common import ViewerCfg
-from .ui import BaseEnvWindow
+from .utils.video_recorder_cfg import VideoRecorderCfg
 
 
 @configclass
@@ -46,7 +52,7 @@ class ManagerBasedEnvCfg:
     """Physics simulation configuration. Default is SimulationCfg()."""
 
     # ui settings
-    ui_window_class_type: type | None = BaseEnvWindow
+    ui_window_class_type: type | str | None = "isaaclab.envs.ui.base_env_window:BaseEnvWindow"
     """The class type of the UI window. Default is None.
 
     If None, then no UI window is created.
@@ -114,6 +120,23 @@ class ManagerBasedEnvCfg:
       to reflect the latest states from the reset. This comes at a cost of performance as an additional render
       step will be performed after each time an environment is reset.
 
+    .. deprecated:: 2.3.1
+        This attribute is deprecated and will be removed in the future. Please use
+        :attr:`num_rerenders_on_reset` instead.
+
+        To get the same behaviour as setting this parameter to ``True`` or ``False``, set
+        :attr:`num_rerenders_on_reset` to 1 or 0, respectively.
+    """
+
+    num_rerenders_on_reset: int = 0
+    """Number of render steps to perform after reset. Defaults to 0, which means no render step will be
+    performed after reset.
+
+    * When this is 0, no render step will be performed after reset. Data collected from sensors after performing
+      reset will be stale and will not reflect the latest states in simulation caused by the reset.
+    * When this is greater than 0, the specified number of extra render steps will be performed to update the
+      sensor data to reflect the latest states from the reset. This comes at a cost of performance as additional
+      render steps will be performed after each time an environment is reset.
     """
 
     wait_for_textures: bool = True
@@ -121,3 +144,26 @@ class ManagerBasedEnvCfg:
 
     xr: XrCfg | None = None
     """Configuration for viewing and interacting with the environment through an XR device."""
+
+    teleop_devices: DevicesCfg = field(default_factory=DevicesCfg)
+    """Configuration for teleoperation devices."""
+
+    isaac_teleop: object | None = None
+    """Configuration for IsaacTeleop-based teleoperation.
+
+    When set, the environment uses the IsaacTeleop stack for XR teleoperation instead
+    of the native Isaac Lab teleop devices. This should be a IsaacTeleopCfg instance
+    from the isaaclab_teleop package.
+
+    The teleop scripts will automatically detect this configuration and use the
+    IsaacTeleop stack when present.
+    """
+
+    export_io_descriptors: bool = False
+    """Whether to export the IO descriptors for the environment. Defaults to False."""
+
+    log_dir: str | None = None
+    """Directory for logging experiment artifacts. Defaults to None, in which case no specific log directory is set."""
+
+    video_recorder: VideoRecorderCfg = VideoRecorderCfg()
+    """Configuration for video recording when ``render_mode="rgb_array"`` (i.e. ``--video``)."""

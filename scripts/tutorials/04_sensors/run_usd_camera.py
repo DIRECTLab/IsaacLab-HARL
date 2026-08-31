@@ -1,4 +1,4 @@
-# Copyright (c) 2022-2026, The Isaac Lab Project Developers.
+# Copyright (c) 2022-2026, The Isaac Lab Project Developers (https://github.com/isaac-sim/IsaacLab/blob/main/CONTRIBUTORS.md).
 # All rights reserved.
 #
 # SPDX-License-Identifier: BSD-3-Clause
@@ -12,7 +12,7 @@ the simulator or OpenGL convention for the camera, we use the robotics or ROS co
 .. code-block:: bash
 
     # Usage with GUI
-    ./isaaclab.sh -p scripts/tutorials/04_sensors/run_usd_camera.py --enable_cameras
+    ./isaaclab.sh -p scripts/tutorials/04_sensors/run_usd_camera.py --enable_cameras --viz kit
 
     # Usage with headless
     ./isaaclab.sh -p scripts/tutorials/04_sensors/run_usd_camera.py --headless --enable_cameras
@@ -60,12 +60,13 @@ simulation_app = app_launcher.app
 
 """Rest everything follows."""
 
-import numpy as np
 import os
 import random
-import torch
 
-import isaacsim.core.utils.prims as prim_utils
+import numpy as np
+import torch
+from isaaclab_physx.renderers import IsaacRtxRendererCfg
+
 import omni.replicator.core as rep
 
 import isaaclab.sim as sim_utils
@@ -82,8 +83,8 @@ def define_sensor() -> Camera:
     # Setup camera sensor
     # In contrast to the ray-cast camera, we spawn the prim at these locations.
     # This means the camera sensor will be attached to these prims.
-    prim_utils.create_prim("/World/Origin_00", "Xform")
-    prim_utils.create_prim("/World/Origin_01", "Xform")
+    sim_utils.create_prim("/World/Origin_00", "Xform")
+    sim_utils.create_prim("/World/Origin_01", "Xform")
     camera_cfg = CameraCfg(
         prim_path="/World/Origin_.*/CameraSensor",
         update_period=0,
@@ -97,9 +98,11 @@ def define_sensor() -> Camera:
             "instance_segmentation_fast",
             "instance_id_segmentation_fast",
         ],
-        colorize_semantic_segmentation=True,
-        colorize_instance_id_segmentation=True,
-        colorize_instance_segmentation=True,
+        renderer_cfg=IsaacRtxRendererCfg(
+            colorize_semantic_segmentation=True,
+            colorize_instance_id_segmentation=True,
+            colorize_instance_segmentation=True,
+        ),
         spawn=sim_utils.PinholeCameraCfg(
             focal_length=24.0, focus_distance=400.0, horizontal_aperture=20.955, clipping_range=(0.1, 1.0e5)
         ),
@@ -124,7 +127,7 @@ def design_scene() -> dict:
     scene_entities = {}
 
     # Xform to hold objects
-    prim_utils.create_prim("/World/Objects", "Xform")
+    sim_utils.create_prim("/World/Objects", "Xform")
     # Random objects
     for i in range(8):
         # sample random position
@@ -173,9 +176,9 @@ def run_simulator(sim: sim_utils.SimulationContext, scene_entities: dict):
     rep_writer = rep.BasicWriter(
         output_dir=output_dir,
         frame_padding=0,
-        colorize_instance_id_segmentation=camera.cfg.colorize_instance_id_segmentation,
-        colorize_instance_segmentation=camera.cfg.colorize_instance_segmentation,
-        colorize_semantic_segmentation=camera.cfg.colorize_semantic_segmentation,
+        colorize_instance_id_segmentation=camera.cfg.renderer_cfg.colorize_instance_id_segmentation,
+        colorize_instance_segmentation=camera.cfg.renderer_cfg.colorize_instance_segmentation,
+        colorize_semantic_segmentation=camera.cfg.renderer_cfg.colorize_semantic_segmentation,
     )
 
     # Camera positions, targets, orientations
@@ -196,7 +199,7 @@ def run_simulator(sim: sim_utils.SimulationContext, scene_entities: dict):
     camera_index = args_cli.camera_id
 
     # Create the markers for the --draw option outside of is_running() loop
-    if sim.has_gui() and args_cli.draw:
+    if sim.get_setting("/isaaclab/has_gui") and args_cli.draw:
         cfg = RAY_CASTER_MARKER_CFG.replace(prim_path="/Visuals/CameraPointCloud")
         cfg.markers["hit"].radius = 0.002
         pc_markers = VisualizationMarkers(cfg)
@@ -232,12 +235,10 @@ def run_simulator(sim: sim_utils.SimulationContext, scene_entities: dict):
                 {k: v[camera_index] for k, v in camera.data.output.items()}, backend="numpy"
             )
 
-            # Extract the other information
-            single_cam_info = camera.data.info[camera_index]
-
             # Pack data back into replicator format to save them using its writer
             rep_output = {"annotators": {}}
-            for key, data, info in zip(single_cam_data.keys(), single_cam_data.values(), single_cam_info.values()):
+            for key, data in single_cam_data.items():
+                info = camera.data.info.get(key)
                 if info is not None:
                     rep_output["annotators"][key] = {"render_product": {"data": data, **info}}
                 else:
@@ -248,7 +249,11 @@ def run_simulator(sim: sim_utils.SimulationContext, scene_entities: dict):
             rep_writer.write(rep_output)
 
         # Draw pointcloud if there is a GUI and --draw has been passed
-        if sim.has_gui() and args_cli.draw and "distance_to_image_plane" in camera.data.output.keys():
+        if (
+            sim.get_setting("/isaaclab/has_gui")
+            and args_cli.draw
+            and "distance_to_image_plane" in camera.data.output.keys()
+        ):
             # Derive pointcloud from camera at camera_index
             pointcloud = create_pointcloud_from_depth(
                 intrinsic_matrix=camera.data.intrinsic_matrices[camera_index],
@@ -272,7 +277,7 @@ def main():
     sim = sim_utils.SimulationContext(sim_cfg)
     # Set main camera
     sim.set_camera_view([2.5, 2.5, 2.5], [0.0, 0.0, 0.0])
-    # design the scene
+    # Design scene
     scene_entities = design_scene()
     # Play simulator
     sim.reset()

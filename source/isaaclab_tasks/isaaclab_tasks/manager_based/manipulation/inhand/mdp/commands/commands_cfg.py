@@ -1,4 +1,4 @@
-# Copyright (c) 2022-2026, The Isaac Lab Project Developers.
+# Copyright (c) 2022-2026, The Isaac Lab Project Developers (https://github.com/isaac-sim/IsaacLab/blob/main/CONTRIBUTORS.md).
 # All rights reserved.
 #
 # SPDX-License-Identifier: BSD-3-Clause
@@ -8,10 +8,8 @@ from dataclasses import MISSING
 import isaaclab.sim as sim_utils
 from isaaclab.managers import CommandTermCfg
 from isaaclab.markers import VisualizationMarkersCfg
-from isaaclab.utils import configclass
 from isaaclab.utils.assets import ISAAC_NUCLEUS_DIR
-
-from .orientation_command import InHandReOrientationCommand
+from isaaclab.utils.configclass import configclass
 
 
 @configclass
@@ -21,7 +19,8 @@ class InHandReOrientationCommandCfg(CommandTermCfg):
     Please refer to the :class:`InHandReOrientationCommand` class for more details.
     """
 
-    class_type: type = InHandReOrientationCommand
+    class_type: type | str = "{DIR}.orientation_command:InHandReOrientationCommand"
+
     resampling_time_range: tuple[float, float] = (1e6, 1e6)  # no resampling based on time
 
     asset_name: str = MISSING

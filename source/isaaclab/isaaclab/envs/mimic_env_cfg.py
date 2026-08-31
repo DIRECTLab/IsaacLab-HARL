@@ -1,8 +1,7 @@
-# Copyright (c) 2024-2026, The Isaac Lab Project Developers.
+# Copyright (c) 2022-2026, The Isaac Lab Project Developers (https://github.com/isaac-sim/IsaacLab/blob/main/CONTRIBUTORS.md).
 # All rights reserved.
 #
 # SPDX-License-Identifier: BSD-3-Clause
-
 # Copyright (c) 2024 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
 #
 # Licensed under the NVIDIA Source Code License [see LICENSE for details].
@@ -10,9 +9,13 @@
 """
 Base MimicEnvCfg object for Isaac Lab Mimic data generation.
 """
+
+from __future__ import annotations
+
 import enum
 
-from isaaclab.utils import configclass
+from isaaclab.managers.recorder_manager import RecorderManagerBaseCfg
+from isaaclab.utils.configclass import configclass
 
 
 @configclass
@@ -74,6 +77,12 @@ class DataGenConfig:
     generation_interpolate_from_last_target_pose: bool = True
     """Whether to interpolate from last target pose."""
 
+    use_skillgen: bool = False
+    """Whether to use skillgen to generate motion trajectories."""
+
+    use_navigation_controller: bool = False
+    """Whether to use a navigation controller to generate loco-manipulation trajectories."""
+
 
 @configclass
 class SubTaskConfig:
@@ -115,6 +124,12 @@ class SubTaskConfig:
 
     first_subtask_start_offset_range: tuple = (0, 0)
     """Range for start offset of the first subtask."""
+
+    subtask_start_offset_range: tuple = (0, 0)
+    """Range for start offset of the subtask (only used if use_skillgen is True)
+
+    Note: This value overrides the first_subtask_start_offset_range when skillgen is enabled
+    """
 
     subtask_term_offset_range: tuple = (0, 0)
     """Range for offsetting subtask termination."""
@@ -203,7 +218,8 @@ class SubTaskConstraintConfig:
         - "coordination"
 
         For a "sequential" constraint:
-            - Data from task_constraint_configs is added to task_constraints_dict as "sequential former" task constraint.
+            - Data from task_constraint_configs is added to task_constraints_dict as "sequential former"
+              task constraint.
             - The opposite constraint, of type "sequential latter", is also added to task_constraints_dict.
             - Additionally, a ("fulfilled", Bool) key-value pair is added to task_constraints_dict.
             - This is used to check if the precondition (i.e., the sequential former task) has been met.
@@ -215,7 +231,8 @@ class SubTaskConstraintConfig:
             - The opposite constraint, of type "coordination", is also added to task_constraints_dict.
             - The number of synchronous steps is set to the minimum of subtask_len and concurrent_subtask_len.
             - This ensures both concurrent tasks end at the same time step.
-            - A "selected_src_demo_ind" and "transform" field are used to ensure the transforms used by both subtasks are the same.
+            - A "selected_src_demo_ind" and "transform" field are used to ensure the transforms used by
+              both subtasks are the same.
         """
         task_constraints_dict = dict()
         if self.constraint_type == SubTaskConstraintType.SEQUENTIAL:
@@ -300,3 +317,6 @@ class MimicEnvCfg:
 
     # List of configurations for subtask constraints
     task_constraint_configs: list[SubTaskConstraintConfig] = []
+
+    # Optional recorder configuration
+    mimic_recorder_config: RecorderManagerBaseCfg | None = None

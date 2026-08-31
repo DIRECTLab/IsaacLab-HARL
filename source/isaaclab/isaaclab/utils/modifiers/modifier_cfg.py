@@ -1,14 +1,15 @@
-# Copyright (c) 2022-2026, The Isaac Lab Project Developers.
+# Copyright (c) 2022-2026, The Isaac Lab Project Developers (https://github.com/isaac-sim/IsaacLab/blob/main/CONTRIBUTORS.md).
 # All rights reserved.
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
-import torch
 from collections.abc import Callable
 from dataclasses import MISSING
 from typing import Any
 
-from isaaclab.utils import configclass
+import torch
+
+from isaaclab.utils.configclass import configclass
 
 from . import modifier
 

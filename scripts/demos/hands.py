@@ -1,4 +1,4 @@
-# Copyright (c) 2022-2026, The Isaac Lab Project Developers.
+# Copyright (c) 2022-2026, The Isaac Lab Project Developers (https://github.com/isaac-sim/IsaacLab/blob/main/CONTRIBUTORS.md).
 # All rights reserved.
 #
 # SPDX-License-Identifier: BSD-3-Clause
@@ -23,6 +23,8 @@ from isaaclab.app import AppLauncher
 parser = argparse.ArgumentParser(description="This script demonstrates different dexterous hands.")
 # append AppLauncher cli args
 AppLauncher.add_app_launcher_args(parser)
+# demos should open Kit visualizer by default
+parser.set_defaults(visualizer=["kit"])
 # parse the arguments
 args_cli = parser.parse_args()
 
@@ -34,8 +36,6 @@ simulation_app = app_launcher.app
 
 import numpy as np
 import torch
-
-import isaacsim.core.utils.prims as prim_utils
 
 import isaaclab.sim as sim_utils
 from isaaclab.assets import Articulation
@@ -76,12 +76,12 @@ def design_scene() -> tuple[dict, list[list[float]]]:
     origins = define_origins(num_origins=2, spacing=0.5)
 
     # Origin 1 with Allegro Hand
-    prim_utils.create_prim("/World/Origin1", "Xform", translation=origins[0])
+    sim_utils.create_prim("/World/Origin1", "Xform", translation=origins[0])
     # -- Robot
     allegro = Articulation(ALLEGRO_HAND_CFG.replace(prim_path="/World/Origin1/Robot"))
 
     # Origin 2 with Shadow Hand
-    prim_utils.create_prim("/World/Origin2", "Xform", translation=origins[1])
+    sim_utils.create_prim("/World/Origin2", "Xform", translation=origins[1])
     # -- Robot
     shadow_hand = Articulation(SHADOW_HAND_CFG.replace(prim_path="/World/Origin2/Robot"))
 
@@ -111,13 +111,18 @@ def run_simulator(sim: sim_utils.SimulationContext, entities: dict[str, Articula
             # reset robots
             for index, robot in enumerate(entities.values()):
                 # root state
-                root_state = robot.data.default_root_state.clone()
-                root_state[:, :3] += origins[index]
-                robot.write_root_pose_to_sim(root_state[:, :7])
-                robot.write_root_velocity_to_sim(root_state[:, 7:])
+                root_pose = robot.data.default_root_pose.torch.clone()
+                root_pose[:, :3] += origins[index]
+                robot.write_root_pose_to_sim_index(root_pose=root_pose)
+                root_vel = robot.data.default_root_vel.torch.clone()
+                robot.write_root_velocity_to_sim_index(root_velocity=root_vel)
                 # joint state
-                joint_pos, joint_vel = robot.data.default_joint_pos.clone(), robot.data.default_joint_vel.clone()
-                robot.write_joint_state_to_sim(joint_pos, joint_vel)
+                joint_pos, joint_vel = (
+                    robot.data.default_joint_pos.torch.clone(),
+                    robot.data.default_joint_vel.torch.clone(),
+                )
+                robot.write_joint_position_to_sim_index(position=joint_pos)
+                robot.write_joint_velocity_to_sim_index(velocity=joint_vel)
                 # reset the internal state
                 robot.reset()
             print("[INFO]: Resetting robots state...")
@@ -127,9 +132,9 @@ def run_simulator(sim: sim_utils.SimulationContext, entities: dict[str, Articula
         # apply default actions to the hands robots
         for robot in entities.values():
             # generate joint positions
-            joint_pos_target = robot.data.soft_joint_pos_limits[..., grasp_mode]
+            joint_pos_target = robot.data.soft_joint_pos_limits.torch[..., grasp_mode]
             # apply action to the robot
-            robot.set_joint_position_target(joint_pos_target)
+            robot.set_joint_position_target_index(target=joint_pos_target)
             # write data to sim
             robot.write_data_to_sim()
         # perform step

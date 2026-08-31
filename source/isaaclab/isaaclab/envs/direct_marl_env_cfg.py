@@ -1,18 +1,23 @@
-# Copyright (c) 2022-2026, The Isaac Lab Project Developers.
+# Copyright (c) 2022-2026, The Isaac Lab Project Developers (https://github.com/isaac-sim/IsaacLab/blob/main/CONTRIBUTORS.md).
 # All rights reserved.
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
-from dataclasses import MISSING
+from __future__ import annotations
 
-from isaaclab.devices.openxr import XrCfg
+from dataclasses import MISSING
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from isaaclab.devices.openxr import XrCfg
+
 from isaaclab.scene import InteractiveSceneCfg
 from isaaclab.sim import SimulationCfg
-from isaaclab.utils import configclass
+from isaaclab.utils.configclass import configclass
 from isaaclab.utils.noise import NoiseModelCfg
 
 from .common import AgentID, SpaceType, ViewerCfg
-from .ui import BaseEnvWindow
+from .utils.video_recorder_cfg import VideoRecorderCfg
 
 
 @configclass
@@ -30,7 +35,7 @@ class DirectMARLEnvCfg:
     """Physics simulation configuration. Default is SimulationCfg()."""
 
     # ui settings
-    ui_window_class_type: type | None = BaseEnvWindow
+    ui_window_class_type: type | str | None = "isaaclab.envs.ui.base_env_window:BaseEnvWindow"
     """The class type of the UI window. Default is None.
 
     If None, then no UI window is created.
@@ -175,7 +180,8 @@ class DirectMARLEnvCfg:
     """
 
     observation_noise_model: dict[AgentID, NoiseModelCfg | None] | None = None
-    """The noise model to apply to the computed observations from the environment. Default is None, which means no noise is added.
+    """The noise model to apply to the computed observations from the environment. Default is None,
+    which means no noise is added.
 
     Please refer to the :class:`isaaclab.utils.noise.NoiseModel` class for more details.
     """
@@ -212,7 +218,8 @@ class DirectMARLEnvCfg:
     """
 
     action_noise_model: dict[AgentID, NoiseModelCfg | None] | None = None
-    """The noise model applied to the actions provided to the environment. Default is None, which means no noise is added.
+    """The noise model applied to the actions provided to the environment. Default is None,
+    which means no noise is added.
 
     Please refer to the :class:`isaaclab.utils.noise.NoiseModel` class for more details.
     """
@@ -225,3 +232,9 @@ class DirectMARLEnvCfg:
 
     xr: XrCfg | None = None
     """Configuration for viewing and interacting with the environment through an XR device."""
+
+    log_dir: str | None = None
+    """Directory for logging experiment artifacts. Defaults to None, in which case no specific log directory is set."""
+
+    video_recorder: VideoRecorderCfg = VideoRecorderCfg()
+    """Configuration for video recording when ``render_mode="rgb_array"`` (i.e. ``--video``)."""

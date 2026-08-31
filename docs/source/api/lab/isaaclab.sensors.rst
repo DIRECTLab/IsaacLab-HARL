@@ -18,8 +18,6 @@
     Camera
     CameraData
     CameraCfg
-    TiledCamera
-    TiledCameraCfg
     ContactSensor
     ContactSensorData
     ContactSensorCfg
@@ -31,8 +29,19 @@
     RayCasterCfg
     RayCasterCamera
     RayCasterCameraCfg
+    MultiMeshRayCaster
+    MultiMeshRayCasterData
+    MultiMeshRayCasterCfg
+    MultiMeshRayCasterCamera
+    MultiMeshRayCasterCameraCfg
     Imu
     ImuCfg
+    Pva
+    PvaData
+    PvaCfg
+    JointWrenchSensor
+    JointWrenchSensorData
+    JointWrenchSensorCfg
 
 Sensor Base
 -----------
@@ -61,21 +70,8 @@ USD Camera
     :members:
     :inherited-members:
     :show-inheritance:
-    :exclude-members: __init__, class_type
+    :exclude-members: __init__, class_type, OffsetCfg
 
-Tile-Rendered USD Camera
-------------------------
-
-.. autoclass:: TiledCamera
-    :members:
-    :inherited-members:
-    :show-inheritance:
-
-.. autoclass:: TiledCameraCfg
-    :members:
-    :inherited-members:
-    :show-inheritance:
-    :exclude-members: __init__, class_type
 
 Contact Sensor
 --------------
@@ -151,7 +147,40 @@ Ray-Cast Camera
     :members:
     :inherited-members:
     :show-inheritance:
-    :exclude-members: __init__, class_type
+    :exclude-members: __init__, class_type, OffsetCfg
+
+Multi-Mesh Ray-Cast Sensor
+--------------------------
+
+.. autoclass:: MultiMeshRayCaster
+    :members:
+    :inherited-members:
+    :show-inheritance:
+
+.. autoclass:: MultiMeshRayCasterData
+    :members:
+    :inherited-members:
+    :exclude-members: __init__
+
+.. autoclass:: MultiMeshRayCasterCfg
+    :members:
+    :inherited-members:
+    :show-inheritance:
+    :exclude-members: __init__, class_type, OffsetCfg
+
+Multi-Mesh Ray-Cast Camera
+--------------------------
+
+.. autoclass:: MultiMeshRayCasterCamera
+    :members:
+    :inherited-members:
+    :show-inheritance:
+
+.. autoclass:: MultiMeshRayCasterCameraCfg
+    :members:
+    :inherited-members:
+    :show-inheritance:
+    :exclude-members: __init__, class_type, OffsetCfg, RaycastTargetCfg
 
 Inertia Measurement Unit
 ------------------------
@@ -162,6 +191,44 @@ Inertia Measurement Unit
     :show-inheritance:
 
 .. autoclass:: ImuCfg
+    :members:
+    :inherited-members:
+    :show-inheritance:
+    :exclude-members: __init__, class_type
+
+Pose Velocity Acceleration Sensor
+---------------------------------
+
+.. autoclass:: Pva
+    :members:
+    :inherited-members:
+    :show-inheritance:
+
+.. autoclass:: PvaData
+    :members:
+    :inherited-members:
+    :exclude-members: __init__
+
+.. autoclass:: PvaCfg
+    :members:
+    :inherited-members:
+    :show-inheritance:
+    :exclude-members: __init__, class_type
+
+Joint Wrench Sensor
+-------------------
+
+.. autoclass:: JointWrenchSensor
+    :members:
+    :inherited-members:
+    :show-inheritance:
+
+.. autoclass:: JointWrenchSensorData
+    :members:
+    :inherited-members:
+    :exclude-members: __init__
+
+.. autoclass:: JointWrenchSensorCfg
     :members:
     :inherited-members:
     :show-inheritance:

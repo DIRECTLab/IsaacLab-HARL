@@ -1,4 +1,4 @@
-# Copyright (c) 2022-2026, The Isaac Lab Project Developers.
+# Copyright (c) 2022-2026, The Isaac Lab Project Developers (https://github.com/isaac-sim/IsaacLab/blob/main/CONTRIBUTORS.md).
 # All rights reserved.
 #
 # SPDX-License-Identifier: BSD-3-Clause
@@ -8,14 +8,16 @@ from __future__ import annotations
 
 import math
 import random
-import torch
 from typing import TYPE_CHECKING
 
+import torch
+import warp as wp
+
 import isaaclab.utils.math as math_utils
-from isaaclab.assets import Articulation, AssetBase
 from isaaclab.managers import SceneEntityCfg
 
 if TYPE_CHECKING:
+    from isaaclab.assets import Articulation, AssetBase
     from isaaclab.envs import ManagerBasedEnv
 
 
@@ -27,7 +29,23 @@ def set_default_joint_pose(
 ):
     # Set the default pose for robots in all envs
     asset = env.scene[asset_cfg.name]
-    asset.data.default_joint_pos = torch.tensor(default_pose, device=env.device).repeat(env.num_envs, 1)
+    # Convert default_pose to 1D array and create joint indices
+    default_pose_1d = torch.tensor(default_pose, device=env.device).repeat(env.num_envs, 1).flatten()
+    num_joints = len(default_pose)
+    joint_ids = torch.arange(num_joints, device=env.device, dtype=torch.int32)
+    # Use update_default_joint_values kernel to update all joints for all environments
+    from isaaclab_physx.assets.articulation.kernels import update_default_joint_values
+
+    wp.launch(
+        update_default_joint_values,
+        dim=(env.num_envs, num_joints),
+        inputs=[
+            default_pose_1d,
+            joint_ids,
+        ],
+        outputs=[asset.data.default_joint_pos],
+        device=env.device,
+    )
 
 
 def randomize_joint_by_gaussian_offset(
@@ -40,38 +58,93 @@ def randomize_joint_by_gaussian_offset(
     asset: Articulation = env.scene[asset_cfg.name]
 
     # Add gaussian noise to joint states
-    joint_pos = asset.data.default_joint_pos[env_ids].clone()
-    joint_vel = asset.data.default_joint_vel[env_ids].clone()
+    joint_pos = asset.data.default_joint_pos.torch[env_ids].clone()
+    joint_vel = asset.data.default_joint_vel.torch[env_ids].clone()
     joint_pos += math_utils.sample_gaussian(mean, std, joint_pos.shape, joint_pos.device)
 
     # Clamp joint pos to limits
-    joint_pos_limits = asset.data.soft_joint_pos_limits[env_ids]
+    joint_pos_limits = asset.data.soft_joint_pos_limits.torch[env_ids]
     joint_pos = joint_pos.clamp_(joint_pos_limits[..., 0], joint_pos_limits[..., 1])
 
     # Don't noise the gripper poses
-    joint_pos[:, -2:] = asset.data.default_joint_pos[env_ids, -2:]
+    joint_pos[:, -2:] = asset.data.default_joint_pos.torch[env_ids, -2:]
 
     # Set into the physics simulation
-    asset.set_joint_position_target(joint_pos, env_ids=env_ids)
-    asset.set_joint_velocity_target(joint_vel, env_ids=env_ids)
-    asset.write_joint_state_to_sim(joint_pos, joint_vel, env_ids=env_ids)
+    asset.set_joint_position_target_index(target=joint_pos, env_ids=env_ids)
+    asset.set_joint_velocity_target_index(target=joint_vel, env_ids=env_ids)
+    asset.write_joint_position_to_sim_index(position=joint_pos, env_ids=env_ids)
+    asset.write_joint_velocity_to_sim_index(velocity=joint_vel, env_ids=env_ids)
+
+
+def sample_random_color(base=(0.75, 0.75, 0.75), variation=0.1):
+    """
+    Generates a randomized color that stays close to the base color while preserving overall brightness.
+    The relative balance between the R, G, and B components is maintained by ensuring that
+    the sum of random offsets is zero.
+
+    Parameters:
+        base (tuple): The base RGB color with each component between 0 and 1.
+        variation (float): Maximum deviation to sample for each channel before balancing.
+
+    Returns:
+        tuple: A new RGB color with balanced random variation.
+    """
+    # Generate random offsets for each channel in the range [-variation, variation]
+    offsets = [random.uniform(-variation, variation) for _ in range(3)]
+    # Compute the average offset
+    avg_offset = sum(offsets) / 3
+    # Adjust offsets so their sum is zero (maintaining brightness)
+    balanced_offsets = [offset - avg_offset for offset in offsets]
+
+    # Apply the balanced offsets to the base color and clamp each channel between 0 and 1
+    new_color = tuple(max(0, min(1, base_component + offset)) for base_component, offset in zip(base, balanced_offsets))
+
+    return new_color
 
 
 def randomize_scene_lighting_domelight(
     env: ManagerBasedEnv,
     env_ids: torch.Tensor,
     intensity_range: tuple[float, float],
+    color_variation: float,
+    textures: list[str],
+    default_intensity: float = 3000.0,
+    default_color: tuple[float, float, float] = (0.75, 0.75, 0.75),
+    default_texture: str = "",
     asset_cfg: SceneEntityCfg = SceneEntityCfg("light"),
 ):
     asset: AssetBase = env.scene[asset_cfg.name]
     light_prim = asset.prims[0]
 
-    # Sample new light intensity
-    new_intensity = random.uniform(intensity_range[0], intensity_range[1])
-
-    # Set light intensity to light prim
     intensity_attr = light_prim.GetAttribute("inputs:intensity")
-    intensity_attr.Set(new_intensity)
+    intensity_attr.Set(default_intensity)
+
+    color_attr = light_prim.GetAttribute("inputs:color")
+    color_attr.Set(default_color)
+
+    texture_file_attr = light_prim.GetAttribute("inputs:texture:file")
+    texture_file_attr.Set(default_texture)
+
+    if not hasattr(env.cfg, "eval_mode") or not env.cfg.eval_mode:
+        return
+
+    if env.cfg.eval_type in ["light_intensity", "all"]:
+        # Sample new light intensity
+        new_intensity = random.uniform(intensity_range[0], intensity_range[1])
+        # Set light intensity to light prim
+        intensity_attr.Set(new_intensity)
+
+    if env.cfg.eval_type in ["light_color", "all"]:
+        # Sample new light color
+        new_color = sample_random_color(base=default_color, variation=color_variation)
+        # Set light color to light prim
+        color_attr.Set(new_color)
+
+    if env.cfg.eval_type in ["light_texture", "all"]:
+        # Sample new light texture (background)
+        new_texture = random.sample(textures, 1)[0]
+        # Set light texture to light prim
+        texture_file_attr.Set(new_texture)
 
 
 def sample_object_poses(
@@ -130,11 +203,12 @@ def randomize_object_pose(
             pose_tensor = torch.tensor([pose_list[i]], device=env.device)
             positions = pose_tensor[:, 0:3] + env.scene.env_origins[cur_env, 0:3]
             orientations = math_utils.quat_from_euler_xyz(pose_tensor[:, 3], pose_tensor[:, 4], pose_tensor[:, 5])
-            asset.write_root_pose_to_sim(
-                torch.cat([positions, orientations], dim=-1), env_ids=torch.tensor([cur_env], device=env.device)
+            asset.write_root_pose_to_sim_index(
+                root_pose=torch.cat([positions, orientations], dim=-1),
+                env_ids=torch.tensor([cur_env], device=env.device),
             )
-            asset.write_root_velocity_to_sim(
-                torch.zeros(1, 6, device=env.device), env_ids=torch.tensor([cur_env], device=env.device)
+            asset.write_root_velocity_to_sim_index(
+                root_velocity=torch.zeros(1, 6, device=env.device), env_ids=torch.tensor([cur_env], device=env.device)
             )
 
 
@@ -168,19 +242,97 @@ def randomize_rigid_objects_in_focus(
             asset = env.scene[asset_cfg.name]
 
             # Randomly select an object to bring into focus
-            object_id = random.randint(0, asset.num_objects - 1)
+            object_id = random.randint(0, asset.num_bodies - 1)
             selected_ids.append(object_id)
 
-            # Create object state tensor
-            object_states = torch.stack([out_focus_state] * asset.num_objects).to(device=env.device)
+            # Create object state tensor with shape (num_envs, num_objects, state_dim)
+            # Since we're updating one environment, we need shape (1, num_objects, state_dim)
+            object_states = torch.stack([out_focus_state] * asset.num_bodies).to(device=env.device).unsqueeze(0)
             pose_tensor = torch.tensor([pose_list[asset_idx]], device=env.device)
             positions = pose_tensor[:, 0:3] + env.scene.env_origins[cur_env, 0:3]
             orientations = math_utils.quat_from_euler_xyz(pose_tensor[:, 3], pose_tensor[:, 4], pose_tensor[:, 5])
-            object_states[object_id, 0:3] = positions
-            object_states[object_id, 3:7] = orientations
+            object_states[0, object_id, 0:3] = positions.squeeze(0)
+            object_states[0, object_id, 3:7] = orientations.squeeze(0)
 
-            asset.write_object_state_to_sim(
-                object_state=object_states, env_ids=torch.tensor([cur_env], device=env.device)
+            asset.write_body_pose_to_sim_index(
+                body_poses=object_states[:, :, :7], env_ids=torch.tensor([cur_env], device=env.device)
+            )
+            asset.write_body_link_velocity_to_sim_index(
+                body_velocities=object_states[:, :, 7:], env_ids=torch.tensor([cur_env], device=env.device)
             )
 
         env.rigid_objects_in_focus.append(selected_ids)
+
+
+def randomize_visual_texture_material(
+    env: ManagerBasedEnv,
+    env_ids: torch.Tensor,
+    asset_cfg: SceneEntityCfg,
+    textures: list[str],
+    default_texture: str = "",
+    texture_rotation: tuple[float, float] = (0.0, 0.0),
+):
+    """Randomize the visual texture of bodies on an asset using Replicator API.
+
+    This function randomizes the visual texture of the bodies of the asset using the Replicator API.
+    The function samples random textures from the given texture paths and applies them to the bodies
+    of the asset. The textures are projected onto the bodies and rotated by the given angles.
+
+    .. note::
+        The function assumes that the asset follows the prim naming convention as:
+        "{asset_prim_path}/{body_name}/visuals" where the body name is the name of the body to
+        which the texture is applied. This is the default prim ordering when importing assets
+        from the asset converters in Isaac Lab.
+
+    .. note::
+        When randomizing the texture of individual assets, please make sure to set
+        :attr:`isaaclab.scene.InteractiveSceneCfg.replicate_physics` to False. This ensures that physics
+        parser will parse the individual asset properties separately.
+    """
+    if hasattr(env.cfg, "eval_mode") and (
+        not env.cfg.eval_mode or env.cfg.eval_type not in [f"{asset_cfg.name}_texture", "all"]
+    ):
+        return
+        # textures = [default_texture]
+
+    # enable replicator extension if not already enabled
+    from isaacsim.core.experimental.utils.app import enable_extension
+
+    enable_extension("omni.replicator.core")
+    # we import the module here since we may not always need the replicator
+    import omni.replicator.core as rep
+
+    # check to make sure replicate_physics is set to False, else raise error
+    # note: We add an explicit check here since texture randomization can happen outside of 'prestartup' mode
+    #   and the event manager doesn't check in that case.
+    if env.cfg.scene.replicate_physics:
+        raise RuntimeError(
+            "Unable to randomize visual texture material with scene replication enabled."
+            " For stable USD-level randomization, please disable scene replication"
+            " by setting 'replicate_physics' to False in 'InteractiveSceneCfg'."
+        )
+
+    # convert from radians to degrees
+    texture_rotation = tuple(math.degrees(angle) for angle in texture_rotation)
+
+    # obtain the asset entity
+    asset = env.scene[asset_cfg.name]
+
+    # join all bodies in the asset
+    body_names = asset_cfg.body_names
+    if isinstance(body_names, str):
+        body_names_regex = body_names
+    elif isinstance(body_names, list):
+        body_names_regex = "|".join(body_names)
+    else:
+        body_names_regex = ".*"
+
+    if not hasattr(asset, "cfg"):
+        prims_group = rep.get.prims(path_pattern=f"{asset.prim_paths[0]}/visuals")
+    else:
+        prims_group = rep.get.prims(path_pattern=f"{asset.cfg.prim_path}/{body_names_regex}/visuals")
+
+    with prims_group:
+        rep.randomizer.texture(
+            textures=textures, project_uvw=True, texture_rotate=rep.distribution.uniform(*texture_rotation)
+        )

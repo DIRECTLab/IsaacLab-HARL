@@ -1,6 +1,244 @@
 Changelog
 ---------
 
+1.3.4 (2026-07-24)
+~~~~~~~~~~~~~~~~~~
+
+Added
+^^^^^
+
+* Added support for environment-provided demonstration recorder configurations during Mimic generation.
+
+
+1.3.3 (2026-06-26)
+~~~~~~~~~~~~~~~~~~
+
+Changed
+^^^^^^^
+
+* Bumped the ``h5py`` requirement from a pinned ``==3.15.1`` to ``>=3.16.0``.
+
+
+1.3.2 (2026-06-14)
+~~~~~~~~~~~~~~~~~~
+
+Removed
+^^^^^^^
+
+* Removed the ``nvidia-srl-usd-to-urdf`` dependency now that Pink IK conversion uses Isaac Sim's URDF exporter.
+
+
+1.3.1 (2026-06-02)
+~~~~~~~~~~~~~~~~~~
+
+Changed
+^^^^^^^
+
+* Declared ``isaaclab_teleop`` as a required extension of
+  ``isaaclab_mimic`` in ``install.py``. ``./isaaclab.sh -i mimic``
+  now installs ``isaaclab_teleop`` alongside ``isaaclab_mimic``.
+
+
+1.3.0 (2026-05-18)
+~~~~~~~~~~~~~~~~~~
+
+Changed
+^^^^^^^
+
+* Moved ``robomimic`` from an opt-in extra (``isaaclab_mimic[robomimic]``) to a
+  required dependency of :mod:`isaaclab_mimic` on Linux (via a ``sys_platform``
+  marker). ``robomimic`` is now installed automatically whenever
+  ``isaaclab_mimic`` is installed on Linux; no extra selector is needed.
+
+
+1.2.7 (2026-05-14)
+~~~~~~~~~~~~~~~~~~
+
+Fixed
+^^^^^
+
+* Fixed :mod:`isaaclab_mimic.datagen` imports in packaged installs and avoided
+  importing task configuration modules until data generation config setup.
+
+
+1.2.6 (2026-05-08)
+~~~~~~~~~~~~~~~~~~
+
+Added
+^^^^^
+
+* Added a temporary ``warp.torch`` compatibility shim at
+  :mod:`isaaclab_mimic` import time so that cuRobo (NVlabs/curobo) keeps
+  working with ``warp-lang>=1.13``, which dropped the ``warp.torch``
+  submodule in favour of top-level ``warp.*`` (e.g.
+  ``wp.torch.device_from_torch`` → ``wp.device_from_torch``). cuRobo's
+  pinned commit and ``main`` still call ``wp.torch.*`` and raise
+  ``AttributeError: module 'warp' has no attribute 'torch'`` at
+  :meth:`MotionGenConfig.load_from_robot_config` time. The shim
+  reconstructs ``warp.torch`` as a thin forwarding module and is a
+  no-op once warp re-introduces the namespace or cuRobo migrates.
+  Remove this shim once the cuRobo pin in ``docker/Dockerfile.curobo``
+  is bumped to a commit that uses the top-level ``wp.*`` API directly.
+
+
+1.2.5 (2026-04-14)
+~~~~~~~~~~~~~~~~~~~
+
+Changed
+^^^^^^^
+
+* Updated mobility path utilities to import from ``isaacsim.replicator.experimental.mobility_gen``.
+
+
+1.2.4 (2026-04-06)
+~~~~~~~~~~~~~~~~~~~
+
+Changed
+^^^^^^^
+
+* Made performance enhancing changes to data generation pipeline (elimate large tensor usage, reduce asyncio overhead and blocking)
+* Locked h5py dependency to last stable version 3.15.1 to prevent package import errors on Windows with version 3.16.0.
+
+Added
+^^^^^
+
+* Added data generation test cases for all tasks (single and multi environment).
+
+
+1.2.3 (2026-03-12)
+~~~~~~~~~~~~~~~~~~~
+
+Added
+^^^^^
+
+* Add nvidia-srl-usd-to-urdf dependency to isaaclab_mimic extension.
+
+
+1.2.2 (2026-03-10)
+~~~~~~~~~~~~~~~~~~~
+
+Added
+^^^^^
+
+* Add h5py dependency to isaaclab_mimic extension.
+
+
+1.2.1 (2026-02-25)
+~~~~~~~~~~~~~~~~~~~
+
+Fixed
+^^^^^
+
+* Fixed cuRobo planner quaternion handling and Warp API compatibility for Isaac Lab 3.0.
+* Fixed Rerun visualization in cuRobo plan visualizer.
+* Added ``--visualizer kit`` to SkillGen documentation for all non-headless commands.
+
+
+1.2.0 (2026-02-23)
+~~~~~~~~~~~~~~~~~~~
+
+Changed
+^^^^^^^
+
+* Update data generator to support Isaac Lab 3.0.
+* Use unique quaternion for GR1 pick place env Mimic actions.
+* Discard failed Mimic demos by default for Franka stacking task.
+
+
+1.1.0 (2026-01-30)
+~~~~~~~~~~~~~~~~~~~
+
+Changed
+^^^^^^^
+
+* Changed the quaternion ordering to match warp, PhysX, and Newton native XYZW quaternion ordering.
+
+
+1.0.16 (2025-11-10)
+~~~~~~~~~~~~~~~~~~~
+
+Added
+^^^^^
+
+* Add body end effector to Mimic data generation to enable loco-manipulation data generation when a navigation p-controller is provided.
+
+
+1.0.15 (2025-09-25)
+
+Fixed
+^^^^^
+
+* Fixed a bug in the instruction UI logic that caused incorrect switching between XR and non-XR display modes. The instruction display now properly detects and updates the UI based on the teleoperation device (e.g., handtracking/XR vs. keyboard).
+
+
+1.0.14 (2025-09-08)
+~~~~~~~~~~~~~~~~~~~
+
+Added
+^^^^^
+
+* Added SkillGen integration for automated demonstration generation using cuRobo; enable via ``--use_skillgen`` in ``scripts/imitation_learning/isaaclab_mimic/generate_dataset.py``.
+* Added cuRobo motion planner interface (:class:`CuroboPlanner`, :class:`CuroboPlannerCfg`)
+* Added manual subtask start boundary annotation for SkillGen; enable via ``--annotate_subtask_start_signals`` in ``scripts/imitation_learning/isaaclab_mimic/annotate_demos.py``.
+* Added Rerun integration for motion plan visualization and debugging; enable via ``visualize_plan = True`` in :class:`CuroboPlannerCfg`.
+
+
+1.0.13 (2025-08-14)
+~~~~~~~~~~~~~~~~~~~
+
+Added
+^^^^^
+
+* Added :class:`PickPlaceGR1T2WaistEnabledEnvCfg` and :class:`PickPlaceGR1T2WaistEnabledMimicEnvCfg` for GR1T2 robot manipulation tasks with waist joint control enabled.
+
+1.0.12 (2025-07-31)
+~~~~~~~~~~~~~~~~~~~
+
+Added
+^^^^^
+
+* Added ``from __future__ import annotations`` to utils.py to fix Sphinx
+  doc warnings for IsaacLab Mimic docs.
+
+
+1.0.11 (2025-07-17)
+~~~~~~~~~~~~~~~~~~~
+
+Changed
+^^^^^^^
+
+* Updated test_selection_strategy.py and test_generate_dataset.py test cases to pytest format.
+* Updated annotate_demos.py script to return the number of successful task completions as the exit code to support check in test_generate_dataset.py test case.
+
+
+1.0.10 (2025-07-08)
+~~~~~~~~~~~~~~~~~~~
+
+Changed
+^^^^^^^
+
+* Updated generate dataset script to cancel remaining async tasks before closing the simulation app.
+
+
+1.0.9 (2025-05-20)
+~~~~~~~~~~~~~~~~~~
+
+Added
+^^^^^
+
+* Added ``Isaac-Stack-Cube-Franka-IK-Rel-Visuomotor-Cosmos-Mimic-v0`` environment for Cosmos vision stacking.
+
+
+1.0.8 (2025-05-01)
+~~~~~~~~~~~~~~~~~~
+
+Added
+^^^^^
+
+* Added :class:`NutPourGR1T2MimicEnv` and :class:`ExhaustPipeGR1T2MimicEnv` for the GR1T2 nut pouring and exhaust pipe tasks.
+* Updated instruction display to support all XR handtracking devices.
+
+
 1.0.7 (2025-03-19)
 ~~~~~~~~~~~~~~~~~~
 
@@ -14,7 +252,7 @@ Changed
 ~~~~~~~~~~~~~~~~~~
 
 Added
-^^^^^^^
+^^^^^
 
 * Added :class:`FrankaCubeStackIKAbsMimicEnv` and support for the GR1T2 robot task (:class:`PickPlaceGR1T2MimicEnv`).
 

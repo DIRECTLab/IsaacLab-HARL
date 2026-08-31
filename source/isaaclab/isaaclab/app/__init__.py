@@ -1,4 +1,4 @@
-# Copyright (c) 2022-2026, The Isaac Lab Project Developers.
+# Copyright (c) 2022-2026, The Isaac Lab Project Developers (https://github.com/isaac-sim/IsaacLab/blob/main/CONTRIBUTORS.md).
 # All rights reserved.
 #
 # SPDX-License-Identifier: BSD-3-Clause
@@ -12,5 +12,6 @@ These include:
 
 """
 
-from .app_launcher import AppLauncher  # noqa: F401, F403
-from .runners import run_tests  # noqa: F401, F403
+from isaaclab.utils.module import lazy_export
+
+lazy_export()

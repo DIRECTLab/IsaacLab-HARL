@@ -1,4 +1,4 @@
-# Copyright (c) 2022-2026, The Isaac Lab Project Developers.
+# Copyright (c) 2022-2026, The Isaac Lab Project Developers (https://github.com/isaac-sim/IsaacLab/blob/main/CONTRIBUTORS.md).
 # All rights reserved.
 #
 # SPDX-License-Identifier: BSD-3-Clause
@@ -9,19 +9,18 @@ from dataclasses import MISSING
 from typing import TYPE_CHECKING, Literal
 
 import isaaclab.sim as sim_utils
-from isaaclab.utils import configclass
-
-from .terrain_importer import TerrainImporter
+from isaaclab.utils.configclass import configclass
 
 if TYPE_CHECKING:
     from .terrain_generator_cfg import TerrainGeneratorCfg
+    from .terrain_importer import TerrainImporter
 
 
 @configclass
 class TerrainImporterCfg:
     """Configuration for the terrain manager."""
 
-    class_type: type = TerrainImporter
+    class_type: type[TerrainImporter] | str = "{DIR}.terrain_importer:TerrainImporter"
     """The class to use for the terrain importer.
 
     Defaults to :class:`isaaclab.terrains.terrain_importer.TerrainImporter`.
@@ -65,7 +64,16 @@ class TerrainImporterCfg:
     """The spacing between environment origins when defined in a grid. Defaults to None.
 
     Note:
-      This parameter is used only when the ``terrain_type`` is "plane" or "usd".
+      This parameter is used only when the ``terrain_type`` is "plane" or "usd" or if
+      :attr:`use_terrain_origins` is False.
+    """
+
+    use_terrain_origins: bool = True
+    """Whether to set the environment origins based on the terrain origins or in a grid
+    according to :attr:`env_spacing`. Defaults to True.
+
+    Note:
+      This parameter is used only when the :attr:`terrain type` is "generator".
     """
 
     visual_material: sim_utils.VisualMaterialCfg | None = sim_utils.PreviewSurfaceCfg(diffuse_color=(0.0, 0.0, 0.0))

@@ -15,12 +15,14 @@
     RigidObjectCollection
     RigidObjectCollectionData
     RigidObjectCollectionCfg
-    Articulation
-    ArticulationData
-    ArticulationCfg
+    BaseDeformableObject
+    BaseDeformableObjectData
     DeformableObject
     DeformableObjectData
     DeformableObjectCfg
+    Articulation
+    ArticulationData
+    ArticulationCfg
 
 .. currentmodule:: isaaclab.assets
 
@@ -32,7 +34,7 @@ Asset Base
 
 .. autoclass:: AssetBaseCfg
     :members:
-    :exclude-members: __init__, class_type
+    :exclude-members: __init__, class_type, InitialStateCfg
 
 Rigid Object
 ------------
@@ -74,6 +76,37 @@ Rigid Object Collection
     :show-inheritance:
     :exclude-members: __init__, class_type
 
+Deformable Object
+-----------------
+
+.. autoclass:: DeformableObject
+    :members:
+    :inherited-members:
+    :show-inheritance:
+
+.. autoclass:: BaseDeformableObject
+    :members:
+    :inherited-members:
+    :show-inheritance:
+
+.. autoclass:: DeformableObjectData
+    :members:
+    :inherited-members:
+    :show-inheritance:
+    :exclude-members: __init__
+
+.. autoclass:: BaseDeformableObjectData
+    :members:
+    :inherited-members:
+    :show-inheritance:
+    :exclude-members: __init__
+
+.. autoclass:: DeformableObjectCfg
+    :members:
+    :inherited-members:
+    :show-inheritance:
+    :exclude-members: __init__, class_type, InitialStateCfg
+
 Articulation
 ------------
 
@@ -89,26 +122,6 @@ Articulation
     :exclude-members: __init__
 
 .. autoclass:: ArticulationCfg
-    :members:
-    :inherited-members:
-    :show-inheritance:
-    :exclude-members: __init__, class_type
-
-Deformable Object
------------------
-
-.. autoclass:: DeformableObject
-    :members:
-    :inherited-members:
-    :show-inheritance:
-
-.. autoclass:: DeformableObjectData
-    :members:
-    :inherited-members:
-    :show-inheritance:
-    :exclude-members: __init__
-
-.. autoclass:: DeformableObjectCfg
     :members:
     :inherited-members:
     :show-inheritance:

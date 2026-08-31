@@ -1,7 +1,10 @@
-# Copyright (c) 2022-2026, The Isaac Lab Project Developers.
+# Copyright (c) 2022-2026, The Isaac Lab Project Developers (https://github.com/isaac-sim/IsaacLab/blob/main/CONTRIBUTORS.md).
 # All rights reserved.
 #
 # SPDX-License-Identifier: BSD-3-Clause
+
+from isaaclab_newton.physics import KaminoSolverCfg, MJWarpSolverCfg, NewtonCfg
+from isaaclab_physx.physics import PhysxCfg
 
 import isaaclab.sim as sim_utils
 from isaaclab.assets import AssetBaseCfg
@@ -13,15 +16,57 @@ from isaaclab.managers import RewardTermCfg as RewTerm
 from isaaclab.managers import SceneEntityCfg
 from isaaclab.managers import TerminationTermCfg as DoneTerm
 from isaaclab.scene import InteractiveSceneCfg
+from isaaclab.sensors import JointWrenchSensorCfg
 from isaaclab.terrains import TerrainImporterCfg
-from isaaclab.utils import configclass
+from isaaclab.utils.configclass import configclass
 
 import isaaclab_tasks.manager_based.classic.humanoid.mdp as mdp
+from isaaclab_tasks.utils import PresetCfg
 
 ##
 # Pre-defined configs
 ##
 from isaaclab_assets.robots.ant import ANT_CFG  # isort: skip
+
+
+@configclass
+class AntPhysicsCfg(PresetCfg):
+    default: PhysxCfg = PhysxCfg(bounce_threshold_velocity=0.2)
+    physx: PhysxCfg = PhysxCfg(bounce_threshold_velocity=0.2)
+    newton_mjwarp: NewtonCfg = NewtonCfg(
+        solver_cfg=MJWarpSolverCfg(
+            njmax=38,
+            nconmax=15,
+            cone="pyramidal",
+            integrator="implicitfast",
+            impratio=1,
+        ),
+        num_substeps=1,
+        debug_mode=False,
+    )
+    newton_kamino: NewtonCfg = NewtonCfg(
+        solver_cfg=KaminoSolverCfg(
+            integrator="moreau",
+            use_collision_detector=False,
+            sparse_jacobian=True,
+            constraints_alpha=0.1,
+            padmm_max_iterations=100,
+            padmm_primal_tolerance=1e-4,
+            padmm_dual_tolerance=1e-4,
+            padmm_compl_tolerance=1e-4,
+            padmm_rho_0=0.05,
+            padmm_eta=1e-5,
+            padmm_use_acceleration=True,
+            padmm_warmstart_mode="containers",
+            padmm_contact_warmstart_method="geom_pair_net_force",
+            padmm_use_graph_conditionals=False,
+            collision_detector_pipeline="unified",
+            collision_detector_max_contacts_per_pair=8,
+        ),
+        num_substeps=2,
+        debug_mode=False,
+        use_cuda_graph=True,
+    )
 
 
 @configclass
@@ -45,6 +90,9 @@ class MySceneCfg(InteractiveSceneCfg):
 
     # robot
     robot = ANT_CFG.replace(prim_path="{ENV_REGEX_NS}/Robot")
+
+    # sensors
+    joint_wrench = JointWrenchSensorCfg(prim_path="{ENV_REGEX_NS}/Robot")
 
     # lights
     light = AssetBaseCfg(
@@ -86,8 +134,9 @@ class ObservationsCfg:
             func=mdp.body_incoming_wrench,
             scale=0.1,
             params={
-                "asset_cfg": SceneEntityCfg(
-                    "robot", body_names=["front_left_foot", "front_right_foot", "left_back_foot", "right_back_foot"]
+                "sensor_cfg": SceneEntityCfg(
+                    "joint_wrench",
+                    body_names=["front_left_foot", "front_right_foot", "left_back_foot", "right_back_foot"],
                 )
             },
         )
@@ -99,6 +148,13 @@ class ObservationsCfg:
 
     # observation groups
     policy: PolicyCfg = PolicyCfg()
+
+
+@configclass
+class AntObservationsCfg(PresetCfg):
+    default: ObservationsCfg = ObservationsCfg()
+    physx: ObservationsCfg = ObservationsCfg()
+    newton_mjwarp: ObservationsCfg = ObservationsCfg()
 
 
 @configclass
@@ -160,9 +216,9 @@ class AntEnvCfg(ManagerBasedRLEnvCfg):
     """Configuration for the MuJoCo-style Ant walking environment."""
 
     # Scene settings
-    scene: MySceneCfg = MySceneCfg(num_envs=4096, env_spacing=5.0)
+    scene: MySceneCfg = MySceneCfg(num_envs=4096, env_spacing=5.0, clone_in_fabric=True)
     # Basic settings
-    observations: ObservationsCfg = ObservationsCfg()
+    observations: AntObservationsCfg = AntObservationsCfg()
     actions: ActionsCfg = ActionsCfg()
     # MDP settings
     rewards: RewardsCfg = RewardsCfg()
@@ -177,7 +233,7 @@ class AntEnvCfg(ManagerBasedRLEnvCfg):
         # simulation settings
         self.sim.dt = 1 / 120.0
         self.sim.render_interval = self.decimation
-        self.sim.physx.bounce_threshold_velocity = 0.2
+        self.sim.physics = AntPhysicsCfg()
         # default friction material
         self.sim.physics_material.static_friction = 1.0
         self.sim.physics_material.dynamic_friction = 1.0

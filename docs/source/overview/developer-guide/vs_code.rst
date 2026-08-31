@@ -52,9 +52,27 @@ If everything executes correctly, it should create the following files:
 For more information on VSCode support for Omniverse, please refer to the
 following links:
 
-* `Isaac Sim VSCode support <https://docs.omniverse.nvidia.com/app_isaacsim/app_isaacsim/manual_standalone_python.html#isaac-sim-python-vscode>`__
-* `Debugging with VSCode <https://docs.isaacsim.omniverse.nvidia.com/latest/development_tools/vscode.html#visual-studio-code-vs-code>`__
+* `Isaac Sim VSCode support <https://docs.isaacsim.omniverse.nvidia.com/latest/development_tools/vscode.html#visual-studio-code-vs-code>`__
 
+
+Attach to a Running ``debugpy`` Session
+---------------------------------------
+
+The generated ``.vscode/launch.json`` includes a ``Python: Debugger Attach``
+configuration that starts to listen on port ``localhost:3000`` for the debugpy session.
+
+To use it:
+
+1. Set your breakpoints.
+2. Run your code under debugpy like so:
+
+   .. code-block:: bash
+
+      ./isaaclab.sh -p -m debugpy --listen 3000 --wait-for-client -c "from isaaclab.cli import cli; cli()" [cli_args]
+
+3. In VS Code, select the ``Python: Debugger Attach`` configuration from the Run and Debug panel
+   and press the green play button or ``F5``. VS Code will connect to the debugpy server
+   running on ``localhost:3000``.
 
 Configuring the python interpreter
 ----------------------------------
@@ -69,10 +87,25 @@ python executable provided by Omniverse. This is specified in the
       "python.defaultInterpreterPath": "${workspaceFolder}/_isaac_sim/python.sh",
    }
 
-If you want to use a different python interpreter (for instance, from your conda environment),
+If you want to use a different python interpreter (for instance, from your conda or uv environment),
 you need to change the python interpreter used by selecting and activating the python interpreter
 of your choice in the bottom left corner of VSCode, or opening the command palette (``Ctrl+Shift+P``)
 and selecting ``Python: Select Interpreter``.
 
 For more information on how to set python interpreter for VSCode, please
 refer to the `VSCode documentation <https://code.visualstudio.com/docs/python/environments#_working-with-python-interpreters>`_.
+
+
+Setting up formatting and linting
+---------------------------------
+
+We use `ruff <https://github.com/astral-sh/ruff/>`_ as a formatter and linter.
+These are configured in the ``.vscode/settings.json`` file:
+
+.. code-block:: json
+
+   {
+      "ruff.configuration": "${workspaceFolder}/pyproject.toml",
+   }
+
+The ruff linter will show warnings and errors in your code to help you follow Python best practices and the project's coding standards.

@@ -1,4 +1,4 @@
-# Copyright (c) 2022-2026, The Isaac Lab Project Developers.
+# Copyright (c) 2022-2026, The Isaac Lab Project Developers (https://github.com/isaac-sim/IsaacLab/blob/main/CONTRIBUTORS.md).
 # All rights reserved.
 #
 # SPDX-License-Identifier: BSD-3-Clause
@@ -12,14 +12,15 @@ the randomization introduced by the function.
 
 from __future__ import annotations
 
-import torch
 from typing import TYPE_CHECKING
 
-from isaaclab.assets import Articulation
+import torch
+
 from isaaclab.managers import SceneEntityCfg
 from isaaclab.utils.math import sample_uniform
 
 if TYPE_CHECKING:
+    from isaaclab.assets import Articulation
     from isaaclab.envs import ManagerBasedEnv
 
 
@@ -39,20 +40,21 @@ def reset_joints_around_default(
     # extract the used quantities (to enable type-hinting)
     asset: Articulation = env.scene[asset_cfg.name]
     # get default joint state
-    joint_min_pos = asset.data.default_joint_pos[env_ids] + position_range[0]
-    joint_max_pos = asset.data.default_joint_pos[env_ids] + position_range[1]
-    joint_min_vel = asset.data.default_joint_vel[env_ids] + velocity_range[0]
-    joint_max_vel = asset.data.default_joint_vel[env_ids] + velocity_range[1]
+    joint_min_pos = asset.data.default_joint_pos.torch[env_ids] + position_range[0]
+    joint_max_pos = asset.data.default_joint_pos.torch[env_ids] + position_range[1]
+    joint_min_vel = asset.data.default_joint_vel.torch[env_ids] + velocity_range[0]
+    joint_max_vel = asset.data.default_joint_vel.torch[env_ids] + velocity_range[1]
     # clip pos to range
-    joint_pos_limits = asset.data.soft_joint_pos_limits[env_ids, ...]
+    joint_pos_limits = asset.data.soft_joint_pos_limits.torch[env_ids, ...]
     joint_min_pos = torch.clamp(joint_min_pos, min=joint_pos_limits[..., 0], max=joint_pos_limits[..., 1])
     joint_max_pos = torch.clamp(joint_max_pos, min=joint_pos_limits[..., 0], max=joint_pos_limits[..., 1])
     # clip vel to range
-    joint_vel_abs_limits = asset.data.soft_joint_vel_limits[env_ids]
+    joint_vel_abs_limits = asset.data.soft_joint_vel_limits.torch[env_ids]
     joint_min_vel = torch.clamp(joint_min_vel, min=-joint_vel_abs_limits, max=joint_vel_abs_limits)
     joint_max_vel = torch.clamp(joint_max_vel, min=-joint_vel_abs_limits, max=joint_vel_abs_limits)
     # sample these values randomly
     joint_pos = sample_uniform(joint_min_pos, joint_max_pos, joint_min_pos.shape, joint_min_pos.device)
     joint_vel = sample_uniform(joint_min_vel, joint_max_vel, joint_min_vel.shape, joint_min_vel.device)
     # set into the physics simulation
-    asset.write_joint_state_to_sim(joint_pos, joint_vel, env_ids=env_ids)
+    asset.write_joint_position_to_sim_index(position=joint_pos, env_ids=env_ids)
+    asset.write_joint_velocity_to_sim_index(velocity=joint_vel, env_ids=env_ids)

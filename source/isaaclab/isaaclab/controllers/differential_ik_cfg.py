@@ -1,21 +1,24 @@
-# Copyright (c) 2022-2026, The Isaac Lab Project Developers.
+# Copyright (c) 2022-2026, The Isaac Lab Project Developers (https://github.com/isaac-sim/IsaacLab/blob/main/CONTRIBUTORS.md).
 # All rights reserved.
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
+from __future__ import annotations
+
 from dataclasses import MISSING
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
 
-from isaaclab.utils import configclass
+from isaaclab.utils.configclass import configclass
 
-from .differential_ik import DifferentialIKController
+if TYPE_CHECKING:
+    from .differential_ik import DifferentialIKController
 
 
 @configclass
 class DifferentialIKControllerCfg:
     """Configuration for differential inverse kinematics controller."""
 
-    class_type: type = DifferentialIKController
+    class_type: type[DifferentialIKController] | str = "{DIR}.differential_ik:DifferentialIKController"
     """The associated controller class."""
 
     command_type: Literal["position", "pose"] = MISSING

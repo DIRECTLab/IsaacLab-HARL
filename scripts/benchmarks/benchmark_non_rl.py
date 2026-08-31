@@ -1,4 +1,4 @@
-# Copyright (c) 2022-2026, The Isaac Lab Project Developers.
+# Copyright (c) 2022-2026, The Isaac Lab Project Developers (https://github.com/isaac-sim/IsaacLab/blob/main/CONTRIBUTORS.md).
 # All rights reserved.
 #
 # SPDX-License-Identifier: BSD-3-Clause
@@ -8,11 +8,14 @@
 """Launch Isaac Sim Simulator first."""
 
 import argparse
+import contextlib
 import os
 import sys
 import time
 
 from isaaclab.app import AppLauncher
+
+from isaaclab_tasks.utils import setup_preset_cli
 
 # add argparse arguments
 parser = argparse.ArgumentParser(description="Train an RL agent with RL-Games.")
@@ -29,42 +32,36 @@ parser.add_argument("--num_frames", type=int, default=100, help="Number of envir
 parser.add_argument(
     "--benchmark_backend",
     type=str,
-    default="OmniPerfKPIFile",
-    choices=["LocalLogMetrics", "JSONFileMetrics", "OsmoKPIFile", "OmniPerfKPIFile"],
-    help="Benchmarking backend options, defaults OmniPerfKPIFile",
+    default="omniperf",
+    choices=[
+        "json",
+        "osmo",
+        "omniperf",
+        "summary",
+        "LocalLogMetrics",
+        "JSONFileMetrics",
+        "OsmoKPIFile",
+        "OmniPerfKPIFile",
+    ],
+    help="Benchmarking backend options, defaults omniperf",
 )
+parser.add_argument("--output_path", type=str, default=".", help="Path to output benchmark results.")
 
 # append AppLauncher cli args
 AppLauncher.add_app_launcher_args(parser)
-# parse the arguments
-args_cli, hydra_args = parser.parse_known_args()
-# always enable cameras to record video
+args_cli, hydra_args = setup_preset_cli(parser)
+sys.argv = [sys.argv[0]] + hydra_args
 if args_cli.video:
     args_cli.enable_cameras = True
 
-# clear out sys.argv for Hydra
-sys.argv = [sys.argv[0]] + hydra_args
-
-app_start_time_begin = time.perf_counter_ns()
-
-# launch omniverse app
-app_launcher = AppLauncher(args_cli)
-simulation_app = app_launcher.app
-
-app_start_time_end = time.perf_counter_ns()
-
-"""Rest everything follows."""
-
-# enable benchmarking extension
-from isaacsim.core.utils.extensions import enable_extension
-
-enable_extension("isaacsim.benchmark.services")
-from isaacsim.benchmark.services import BaseIsaacBenchmark
-
 sys.path.append(os.path.join(os.path.dirname(os.path.abspath(__file__)), "../.."))
 
+from isaaclab.test.benchmark import BaseIsaacLabBenchmark, BenchmarkMonitor
 from isaaclab.utils.timer import Timer
+
 from scripts.benchmarks.utils import (
+    get_backend_type,
+    get_preset_string,
     log_app_start_time,
     log_python_imports_time,
     log_runtime_step_times,
@@ -76,51 +73,78 @@ from scripts.benchmarks.utils import (
 
 imports_time_begin = time.perf_counter_ns()
 
+import os
+from datetime import datetime
+
 import gymnasium as gym
 import numpy as np
-import os
 import torch
-from datetime import datetime
 
 from isaaclab.envs import DirectMARLEnvCfg, DirectRLEnvCfg, ManagerBasedRLEnvCfg
 from isaaclab.utils.dict import print_dict
 
 import isaaclab_tasks  # noqa: F401
-from isaaclab_tasks.utils.hydra import hydra_task_config
+
+# PLACEHOLDER: Extension template (do not remove this comment)
+with contextlib.suppress(ImportError):
+    import isaaclab_tasks_experimental  # noqa: F401
+from isaaclab_tasks.utils import launch_simulation, resolve_task_config
 
 imports_time_end = time.perf_counter_ns()
 
 
 # Create the benchmark
-benchmark = BaseIsaacBenchmark(
+backend_type = get_backend_type(args_cli.benchmark_backend)
+benchmark = BaseIsaacLabBenchmark(
     benchmark_name="benchmark_non_rl",
+    backend_type=backend_type,
+    output_path=args_cli.output_path,
+    use_recorders=True,
+    frametime_recorders=backend_type in ("summary", "omniperf"),
+    output_prefix=f"benchmark_non_rl_{args_cli.task}",
     workflow_metadata={
         "metadata": [
             {"name": "task", "data": args_cli.task},
             {"name": "seed", "data": args_cli.seed},
             {"name": "num_envs", "data": args_cli.num_envs},
             {"name": "num_frames", "data": args_cli.num_frames},
+            {"name": "presets", "data": get_preset_string(hydra_args)},
         ]
     },
-    backend_type=args_cli.benchmark_backend,
 )
 
 
-@hydra_task_config(args_cli.task, None)
-def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agent_cfg: dict):
+def main(
+    env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg,
+    app_start_time_begin: int,
+    app_start_time_end: int,
+):
     """Benchmark without RL in the loop."""
 
     # override configurations with non-hydra CLI arguments
     env_cfg.scene.num_envs = args_cli.num_envs if args_cli.num_envs is not None else env_cfg.scene.num_envs
-    env_cfg.sim.device = args_cli.device if args_cli.device is not None else env_cfg.sim.device
+    # For distributed training, launch_simulation() already resolved the
+    # correct per-rank device; only apply a CLI --device override for
+    # non-distributed runs (the default "cuda:0" would clobber the
+    # per-rank device otherwise).
+    if not args_cli.distributed:
+        env_cfg.sim.device = args_cli.device if args_cli.device is not None else env_cfg.sim.device
+    env_cfg.seed = args_cli.seed
+
+    # check for invalid combination of CPU device with distributed training
+    if args_cli.distributed and args_cli.device is not None and "cpu" in args_cli.device:
+        raise ValueError(
+            "Distributed training is not supported when using CPU device. "
+            "Please use GPU device (e.g., --device cuda) for distributed training."
+        )
 
     # process distributed
+    # env_cfg.sim.device is already resolved by launch_simulation().
     world_size = 1
     world_rank = 0
     if args_cli.distributed:
-        env_cfg.sim.device = f"cuda:{app_launcher.local_rank}"
         world_size = int(os.getenv("WORLD_SIZE", 1))
-        world_rank = app_launcher.global_rank
+        world_rank = int(os.getenv("RANK", "0"))
 
     task_startup_time_begin = time.perf_counter_ns()
 
@@ -128,7 +152,7 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
     env = gym.make(args_cli.task, cfg=env_cfg, render_mode="rgb_array" if args_cli.video else None)
     # wrap for video recording
     if args_cli.video:
-        log_root_path = os.path.abs(f"benchmark/{args_cli.task}")
+        log_root_path = os.path.abspath(f"benchmark/{args_cli.task}")
         log_dir = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
         video_kwargs = {
             "video_folder": os.path.join(log_root_path, log_dir, "videos"),
@@ -144,13 +168,13 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
 
     env.reset()
 
-    benchmark.set_phase("sim_runtime")
-
     # counter for number of frames to run for
     num_frames = 0
     # log frame times
     step_times = []
-    while simulation_app.is_running():
+
+    # Run with continuous benchmark monitoring
+    with BenchmarkMonitor(benchmark, interval=1.0):
         while num_frames < args_cli.num_frames:
             # get upper and lower bounds of action space, sample actions randomly on this interval
             action_high = 1
@@ -167,11 +191,9 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
 
             num_frames += 1
 
-        # terminate
-        break
-
     if world_rank == 0:
-        benchmark.store_measurements()
+        # Final update after loop completes
+        benchmark.update_manual_recorders()
 
         # compute stats
         step_times = np.array(step_times) / 1e6  # ns to ms
@@ -193,14 +215,16 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
         log_total_start_time(benchmark, (task_startup_time_end - app_start_time_begin) / 1e6)
         log_runtime_step_times(benchmark, environment_step_times, compute_stats=True)
 
-        benchmark.stop()
+        benchmark._finalize_impl()
 
     # close the simulator
     env.close()
 
 
 if __name__ == "__main__":
-    # run the main function
-    main()
-    # close sim app
-    simulation_app.close()
+    env_cfg, _agent_cfg = resolve_task_config(args_cli.task, None)
+
+    app_start_time_begin = time.perf_counter_ns()
+    with launch_simulation(env_cfg, args_cli):
+        app_start_time_end = time.perf_counter_ns()
+        main(env_cfg, app_start_time_begin, app_start_time_end)

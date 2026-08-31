@@ -1,4 +1,4 @@
-# Copyright (c) 2022-2026, The Isaac Lab Project Developers.
+# Copyright (c) 2022-2026, The Isaac Lab Project Developers (https://github.com/isaac-sim/IsaacLab/blob/main/CONTRIBUTORS.md).
 # All rights reserved.
 #
 # SPDX-License-Identifier: BSD-3-Clause
@@ -22,16 +22,6 @@ which defines the common interface for all actuator models. The actuator models 
 and called by the :class:`isaaclab.assets.Articulation` class.
 """
 
-from .actuator_base import ActuatorBase
-from .actuator_cfg import (
-    ActuatorBaseCfg,
-    ActuatorNetLSTMCfg,
-    ActuatorNetMLPCfg,
-    DCMotorCfg,
-    DelayedPDActuatorCfg,
-    IdealPDActuatorCfg,
-    ImplicitActuatorCfg,
-    RemotizedPDActuatorCfg,
-)
-from .actuator_net import ActuatorNetLSTM, ActuatorNetMLP
-from .actuator_pd import DCMotor, DelayedPDActuator, IdealPDActuator, ImplicitActuator, RemotizedPDActuator
+from isaaclab.utils.module import lazy_export
+
+lazy_export()

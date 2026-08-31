@@ -1,4 +1,4 @@
-# Copyright (c) 2022-2026, The Isaac Lab Project Developers.
+# Copyright (c) 2022-2026, The Isaac Lab Project Developers (https://github.com/isaac-sim/IsaacLab/blob/main/CONTRIBUTORS.md).
 # All rights reserved.
 #
 # SPDX-License-Identifier: BSD-3-Clause
@@ -8,14 +8,12 @@
 from __future__ import annotations
 
 import inspect
-import torch
-import weakref
 from abc import abstractmethod
 from collections.abc import Sequence
-from prettytable import PrettyTable
 from typing import TYPE_CHECKING
 
-import omni.kit.app
+import torch
+from prettytable import PrettyTable
 
 from .manager_base import ManagerBase, ManagerTermBase
 from .manager_term_cfg import CommandTermCfg
@@ -61,9 +59,11 @@ class CommandTerm(ManagerTermBase):
 
     def __del__(self):
         """Unsubscribe from the callbacks."""
-        if self._debug_vis_handle:
-            self._debug_vis_handle.unsubscribe()
-            self._debug_vis_handle = None
+        env = getattr(self, "_env", None)
+        sim = getattr(env, "sim", None)
+        registry = getattr(sim, "vis_marker_registry", None)
+        if registry is not None:
+            registry.clear_debug_vis_callback(self)
 
     """
     Properties
@@ -103,17 +103,11 @@ class CommandTerm(ManagerTermBase):
         self._set_debug_vis_impl(debug_vis)
         # toggle debug visualization handles
         if debug_vis:
-            # create a subscriber for the post update event if it doesn't exist
             if self._debug_vis_handle is None:
-                app_interface = omni.kit.app.get_app_interface()
-                self._debug_vis_handle = app_interface.get_post_update_event_stream().create_subscription_to_pop(
-                    lambda event, obj=weakref.proxy(self): obj._debug_vis_callback(event)
-                )
+                self._debug_vis_handle = self._env.sim.vis_marker_registry.add_debug_vis_callback(self)
         else:
             # remove the subscriber if it exists
-            if self._debug_vis_handle is not None:
-                self._debug_vis_handle.unsubscribe()
-                self._debug_vis_handle = None
+            self._env.sim.vis_marker_registry.clear_debug_vis_callback(self)
         # return success
         return True
 
@@ -181,10 +175,10 @@ class CommandTerm(ManagerTermBase):
         if len(env_ids) != 0:
             # resample the time left before resampling
             self.time_left[env_ids] = self.time_left[env_ids].uniform_(*self.cfg.resampling_time_range)
-            # increment the command counter
-            self.command_counter[env_ids] += 1
             # resample the command
             self._resample_command(env_ids)
+            # increment the command counter
+            self.command_counter[env_ids] += 1
 
     """
     Implementation specific functions.

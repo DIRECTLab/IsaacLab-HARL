@@ -1,4 +1,4 @@
-# Copyright (c) 2022-2026, The Isaac Lab Project Developers.
+# Copyright (c) 2022-2026, The Isaac Lab Project Developers (https://github.com/isaac-sim/IsaacLab/blob/main/CONTRIBUTORS.md).
 # All rights reserved.
 #
 # SPDX-License-Identifier: BSD-3-Clause
@@ -39,21 +39,9 @@ Based on these workflows, there are the following environment classes for single
 
 For more information about the workflow design patterns, see the `Task Design Workflows`_ section.
 
-.. _`Task Design Workflows`: https://isaac-sim.github.io/IsaacLab/source/features/task_workflows.html
+.. _`Task Design Workflows`: https://docs.isaacsim.omniverse.nvidia.com/latest/introduction/workflows.html
 """
 
-from . import mdp, ui
-from .common import VecEnvObs, VecEnvStepReturn, ViewerCfg
-from .direct_marl_env import DirectMARLEnv
-from .direct_marl_env_cfg import DirectMARLEnvCfg
-from .direct_rl_env import DirectRLEnv
-from .direct_rl_env_cfg import DirectRLEnvCfg
-from .manager_based_env import ManagerBasedEnv
-from .manager_based_env_cfg import ManagerBasedEnvCfg
-from .manager_based_marl_env import ManagerBasedMARLEnv
-from .manager_based_marl_env_cfg import ManagerBasedMARLEnvCfg
-from .manager_based_rl_env import ManagerBasedRLEnv
-from .manager_based_rl_env_cfg import ManagerBasedRLEnvCfg
-from .manager_based_rl_mimic_env import ManagerBasedRLMimicEnv
-from .mimic_env_cfg import *
-from .utils.marl import multi_agent_to_single_agent, multi_agent_with_one_agent
+from isaaclab.utils.module import lazy_export
+
+lazy_export()

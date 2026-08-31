@@ -1,9 +1,12 @@
-# Copyright (c) 2022-2026, The Isaac Lab Project Developers.
+# Copyright (c) 2022-2026, The Isaac Lab Project Developers (https://github.com/isaac-sim/IsaacLab/blob/main/CONTRIBUTORS.md).
 # All rights reserved.
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
 from dataclasses import MISSING
+
+from isaaclab_newton.physics import MJWarpSolverCfg, NewtonCfg
+from isaaclab_physx.physics import PhysxCfg
 
 import isaaclab.sim as sim_utils
 from isaaclab.assets import ArticulationCfg, AssetBaseCfg
@@ -17,15 +20,63 @@ from isaaclab.managers import RewardTermCfg as RewTerm
 from isaaclab.managers import SceneEntityCfg
 from isaaclab.managers import TerminationTermCfg as DoneTerm
 from isaaclab.scene import InteractiveSceneCfg
-from isaaclab.utils import configclass
+from isaaclab.sim import CollisionPropertiesCfg, RigidBodyPropertiesCfg, UsdFileCfg
 from isaaclab.utils.assets import ISAAC_NUCLEUS_DIR
-from isaaclab.utils.noise import AdditiveUniformNoiseCfg as Unoise
+from isaaclab.utils.configclass import configclass
+from isaaclab.utils.noise import UniformNoiseCfg as Unoise
 
 import isaaclab_tasks.manager_based.manipulation.reach.mdp as mdp
+from isaaclab_tasks.utils import PresetCfg
+
+
+@configclass
+class ReachPhysicsCfg(PresetCfg):
+    default: PhysxCfg = PhysxCfg(bounce_threshold_velocity=0.2)
+    physx: PhysxCfg = PhysxCfg(bounce_threshold_velocity=0.2)
+
+    newton_mjwarp: NewtonCfg = NewtonCfg(
+        solver_cfg=MJWarpSolverCfg(
+            njmax=50,
+            nconmax=20,
+            cone="pyramidal",
+            integrator="implicitfast",
+            impratio=1,
+        ),
+        num_substeps=1,
+        debug_mode=False,
+    )
+
 
 ##
 # Scene definition
 ##
+
+
+@configclass
+class TableCfg(PresetCfg):
+    physx = AssetBaseCfg(
+        prim_path="/World/envs/env_.*/Table",
+        init_state=AssetBaseCfg.InitialStateCfg(pos=(0.5, 0, 0), rot=(0, 0, 0.707, 0.707)),
+        spawn=UsdFileCfg(
+            usd_path=f"{ISAAC_NUCLEUS_DIR}/Props/Mounts/SeattleLabTable/table_instanceable.usd",
+        ),
+    )
+
+    newton_mjwarp: ArticulationCfg = ArticulationCfg(
+        prim_path="/World/envs/env_.*/Table",
+        init_state=ArticulationCfg.InitialStateCfg(
+            pos=(0.5, 0.15, -0.5), rot=(0, 0, 0.707, 0.707), joint_pos={}, joint_vel={}
+        ),
+        spawn=sim_utils.CuboidCfg(
+            size=(0.9, 1.3, 1.00),
+            collision_props=CollisionPropertiesCfg(),
+            rigid_props=RigidBodyPropertiesCfg(rigid_body_enabled=True),
+        ),
+        actuators={},
+        articulation_root_prim_path="",
+    )
+
+    default = physx
 
 
 @configclass
@@ -39,13 +90,7 @@ class ReachSceneCfg(InteractiveSceneCfg):
         init_state=AssetBaseCfg.InitialStateCfg(pos=(0.0, 0.0, -1.05)),
     )
 
-    table = AssetBaseCfg(
-        prim_path="{ENV_REGEX_NS}/Table",
-        spawn=sim_utils.UsdFileCfg(
-            usd_path=f"{ISAAC_NUCLEUS_DIR}/Props/Mounts/SeattleLabTable/table_instanceable.usd",
-        ),
-        init_state=AssetBaseCfg.InitialStateCfg(pos=(0.55, 0.0, 0.0), rot=(0.70711, 0.0, 0.0, 0.70711)),
-    )
+    table = TableCfg()
 
     # robots
     robot: ArticulationCfg = MISSING
@@ -71,6 +116,7 @@ class CommandsCfg:
         body_name=MISSING,
         resampling_time_range=(4.0, 4.0),
         debug_vis=True,
+        position_success_threshold=0.05,
         ranges=mdp.UniformPoseCommandCfg.Ranges(
             pos_x=(0.35, 0.65),
             pos_y=(-0.2, 0.2),
@@ -206,3 +252,4 @@ class ReachEnvCfg(ManagerBasedRLEnvCfg):
         self.viewer.eye = (3.5, 3.5, 3.5)
         # simulation settings
         self.sim.dt = 1.0 / 60.0
+        self.sim.physics = ReachPhysicsCfg()

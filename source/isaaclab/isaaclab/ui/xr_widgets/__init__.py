@@ -1,5 +1,8 @@
-# Copyright (c) 2025-2026, The Isaac Lab Project Developers.
+# Copyright (c) 2022-2026, The Isaac Lab Project Developers (https://github.com/isaac-sim/IsaacLab/blob/main/CONTRIBUTORS.md).
 # All rights reserved.
 #
 # SPDX-License-Identifier: BSD-3-Clause
-from .instruction_widget import SimpleTextWidget, show_instruction
+
+from isaaclab.utils.module import lazy_export
+
+lazy_export()

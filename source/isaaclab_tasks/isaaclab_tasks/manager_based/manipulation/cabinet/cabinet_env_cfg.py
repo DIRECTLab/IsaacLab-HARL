@@ -1,4 +1,4 @@
-# Copyright (c) 2022-2026, The Isaac Lab Project Developers.
+# Copyright (c) 2022-2026, The Isaac Lab Project Developers (https://github.com/isaac-sim/IsaacLab/blob/main/CONTRIBUTORS.md).
 # All rights reserved.
 #
 # SPDX-License-Identifier: BSD-3-Clause
@@ -6,8 +6,11 @@
 
 from dataclasses import MISSING
 
+from isaaclab_newton.physics import MJWarpSolverCfg, NewtonCfg
+from isaaclab_physx.physics import PhysxCfg
+
 import isaaclab.sim as sim_utils
-from isaaclab.actuators.actuator_cfg import ImplicitActuatorCfg
+from isaaclab.actuators import ImplicitActuatorCfg
 from isaaclab.assets import ArticulationCfg, AssetBaseCfg
 from isaaclab.envs import ManagerBasedRLEnvCfg
 from isaaclab.managers import EventTermCfg as EventTerm
@@ -19,8 +22,11 @@ from isaaclab.managers import TerminationTermCfg as DoneTerm
 from isaaclab.scene import InteractiveSceneCfg
 from isaaclab.sensors import FrameTransformerCfg
 from isaaclab.sensors.frame_transformer import OffsetCfg
-from isaaclab.utils import configclass
+from isaaclab.sim import SimulationCfg
 from isaaclab.utils.assets import ISAAC_NUCLEUS_DIR
+from isaaclab.utils.configclass import configclass
+
+from isaaclab_tasks.utils import PresetCfg
 
 from . import mdp
 
@@ -32,6 +38,41 @@ from isaaclab.markers.config import FRAME_MARKER_CFG  # isort: skip
 
 FRAME_MARKER_SMALL_CFG = FRAME_MARKER_CFG.copy()
 FRAME_MARKER_SMALL_CFG.markers["frame"].scale = (0.10, 0.10, 0.10)
+
+
+@configclass
+class CabinetSimCfg(PresetCfg):
+    """Simulation configuration presets for the cabinet environment.
+
+    Wraps the full :class:`~isaaclab.sim.SimulationCfg` so that Newton can run at a
+    finer physics timestep (1/200 s) while PhysX keeps its default (1/60 s).
+    """
+
+    default: SimulationCfg = SimulationCfg(
+        dt=1 / 60,
+        render_interval=1,
+        physics=PhysxCfg(bounce_threshold_velocity=0.01, friction_correlation_distance=0.00625),
+    )
+    physx: SimulationCfg = SimulationCfg(
+        dt=1 / 60,
+        render_interval=1,
+        physics=PhysxCfg(bounce_threshold_velocity=0.01, friction_correlation_distance=0.00625),
+    )
+    newton_mjwarp: SimulationCfg = SimulationCfg(
+        dt=1 / 600,
+        render_interval=1,
+        physics=NewtonCfg(
+            solver_cfg=MJWarpSolverCfg(
+                njmax=90,
+                nconmax=100,
+                cone="pyramidal",
+                integrator="implicitfast",
+                impratio=1,
+            ),
+            num_substeps=1,
+            debug_mode=False,
+        ),
+    )
 
 
 ##
@@ -60,7 +101,7 @@ class CabinetSceneCfg(InteractiveSceneCfg):
         ),
         init_state=ArticulationCfg.InitialStateCfg(
             pos=(0.8, 0, 0.4),
-            rot=(0.0, 0.0, 0.0, 1.0),
+            rot=(0.0, 0.0, 1.0, 0.0),
             joint_pos={
                 "door_left_joint": 0.0,
                 "door_right_joint": 0.0,
@@ -71,15 +112,13 @@ class CabinetSceneCfg(InteractiveSceneCfg):
         actuators={
             "drawers": ImplicitActuatorCfg(
                 joint_names_expr=["drawer_top_joint", "drawer_bottom_joint"],
-                effort_limit=87.0,
-                velocity_limit=100.0,
+                effort_limit_sim=87.0,
                 stiffness=10.0,
                 damping=1.0,
             ),
             "doors": ImplicitActuatorCfg(
                 joint_names_expr=["door_left_joint", "door_right_joint"],
-                effort_limit=87.0,
-                velocity_limit=100.0,
+                effort_limit_sim=87.0,
                 stiffness=10.0,
                 damping=2.5,
             ),
@@ -97,7 +136,7 @@ class CabinetSceneCfg(InteractiveSceneCfg):
                 name="drawer_handle_top",
                 offset=OffsetCfg(
                     pos=(0.305, 0.0, 0.01),
-                    rot=(0.5, 0.5, -0.5, -0.5),  # align with end-effector frame
+                    rot=(0.5, -0.5, -0.5, 0.5),  # align with end-effector frame
                 ),
             ),
         ],
@@ -202,6 +241,29 @@ class EventCfg:
 
 
 @configclass
+class _CabinetNewtonEventCfg:
+    """Newton-compatible events: excludes material randomization (not implemented in Newton)."""
+
+    reset_all = EventTerm(func=mdp.reset_scene_to_default, mode="reset")
+
+    reset_robot_joints = EventTerm(
+        func=mdp.reset_joints_by_offset,
+        mode="reset",
+        params={
+            "position_range": (-0.1, 0.1),
+            "velocity_range": (0.0, 0.0),
+        },
+    )
+
+
+@configclass
+class CabinetEventCfg(PresetCfg):
+    default: EventCfg = EventCfg()
+    physx: EventCfg = EventCfg()
+    newton_mjwarp: _CabinetNewtonEventCfg = _CabinetNewtonEventCfg()
+
+
+@configclass
 class RewardsCfg:
     """Reward terms for the MDP."""
 
@@ -223,10 +285,16 @@ class RewardsCfg:
     )
 
     # 3. Open the drawer
+    # ``open_drawer_bonus`` doubles as the success metric host: passing ``success_threshold``
+    # tells the term to flip a sticky per-env bit when the drawer crosses that joint position
+    # and to log the per-env mean as ``Metrics/success_rate`` on episode reset.
     open_drawer_bonus = RewTerm(
         func=mdp.open_drawer_bonus,
         weight=7.5,
-        params={"asset_cfg": SceneEntityCfg("cabinet", joint_names=["drawer_top_joint"])},
+        params={
+            "asset_cfg": SceneEntityCfg("cabinet", joint_names=["drawer_top_joint"]),
+            "success_threshold": 0.30,
+        },
     )
     multi_stage_open_drawer = RewTerm(
         func=mdp.multi_stage_open_drawer,
@@ -255,6 +323,9 @@ class TerminationsCfg:
 class CabinetEnvCfg(ManagerBasedRLEnvCfg):
     """Configuration for the cabinet environment."""
 
+    # Sim settings — override base-class SimulationCfg with a preset-aware wrapper so that
+    # Newton can use dt=1/200 while PhysX keeps dt=1/60.
+    sim: CabinetSimCfg = CabinetSimCfg()
     # Scene settings
     scene: CabinetSceneCfg = CabinetSceneCfg(num_envs=4096, env_spacing=2.0)
     # Basic settings
@@ -263,7 +334,7 @@ class CabinetEnvCfg(ManagerBasedRLEnvCfg):
     # MDP settings
     rewards: RewardsCfg = RewardsCfg()
     terminations: TerminationsCfg = TerminationsCfg()
-    events: EventCfg = EventCfg()
+    events: CabinetEventCfg = CabinetEventCfg()
 
     def __post_init__(self):
         """Post initialization."""
@@ -272,9 +343,4 @@ class CabinetEnvCfg(ManagerBasedRLEnvCfg):
         self.episode_length_s = 8.0
         self.viewer.eye = (-2.0, 2.0, 2.0)
         self.viewer.lookat = (0.8, 0.0, 0.5)
-        # simulation settings
-        self.sim.dt = 1 / 60  # 60Hz
-        self.sim.render_interval = self.decimation
-        self.sim.physx.bounce_threshold_velocity = 0.2
-        self.sim.physx.bounce_threshold_velocity = 0.01
-        self.sim.physx.friction_correlation_distance = 0.00625
+        # simulation settings are defined in CabinetSimCfg (dt/physics vary per backend)

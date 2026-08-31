@@ -1,24 +1,27 @@
-# Copyright (c) 2022-2026, The Isaac Lab Project Developers.
+# Copyright (c) 2022-2026, The Isaac Lab Project Developers (https://github.com/isaac-sim/IsaacLab/blob/main/CONTRIBUTORS.md).
 # All rights reserved.
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
 from __future__ import annotations
 
-import torch
-from dataclasses import MISSING
 from typing import TYPE_CHECKING
 
+import torch
+
 import isaaclab.utils.math as math_utils
-from isaaclab.assets import Articulation
-from isaaclab.managers import ActionTerm, ActionTermCfg, ObservationGroupCfg, ObservationManager
+from isaaclab.managers import ActionTerm, ObservationManager
 from isaaclab.markers import VisualizationMarkers
 from isaaclab.markers.config import BLUE_ARROW_X_MARKER_CFG, GREEN_ARROW_X_MARKER_CFG
-from isaaclab.utils import configclass
 from isaaclab.utils.assets import check_file_path, read_file
 
+from .pre_trained_policy_action_cfg import PreTrainedPolicyActionCfg  # noqa: F401
+
 if TYPE_CHECKING:
+    from isaaclab.assets import Articulation
     from isaaclab.envs import ManagerBasedRLEnv
+
+    from .pre_trained_policy_action_cfg import PreTrainedPolicyActionCfg
 
 
 class PreTrainedPolicyAction(ActionTerm):
@@ -107,7 +110,7 @@ class PreTrainedPolicyAction(ActionTerm):
         # set visibility of markers
         # note: parent only deals with callbacks. not their visibility
         if debug_vis:
-            # create markers if necessary for the first tome
+            # create markers if necessary for the first time
             if not hasattr(self, "base_vel_goal_visualizer"):
                 # -- goal
                 marker_cfg = GREEN_ARROW_X_MARKER_CFG.copy()
@@ -134,11 +137,13 @@ class PreTrainedPolicyAction(ActionTerm):
             return
         # get marker location
         # -- base state
-        base_pos_w = self.robot.data.root_pos_w.clone()
+        base_pos_w = self.robot.data.root_pos_w.torch.clone()
         base_pos_w[:, 2] += 0.5
         # -- resolve the scales and quaternions
         vel_des_arrow_scale, vel_des_arrow_quat = self._resolve_xy_velocity_to_arrow(self.raw_actions[:, :2])
-        vel_arrow_scale, vel_arrow_quat = self._resolve_xy_velocity_to_arrow(self.robot.data.root_lin_vel_b[:, :2])
+        vel_arrow_scale, vel_arrow_quat = self._resolve_xy_velocity_to_arrow(
+            self.robot.data.root_lin_vel_b.torch[:, :2]
+        )
         # display markers
         self.base_vel_goal_visualizer.visualize(base_pos_w, vel_des_arrow_quat, vel_des_arrow_scale)
         self.base_vel_visualizer.visualize(base_pos_w, vel_arrow_quat, vel_arrow_scale)
@@ -159,30 +164,7 @@ class PreTrainedPolicyAction(ActionTerm):
         zeros = torch.zeros_like(heading_angle)
         arrow_quat = math_utils.quat_from_euler_xyz(zeros, zeros, heading_angle)
         # convert everything back from base to world frame
-        base_quat_w = self.robot.data.root_quat_w
+        base_quat_w = self.robot.data.root_quat_w.torch
         arrow_quat = math_utils.quat_mul(base_quat_w, arrow_quat)
 
         return arrow_scale, arrow_quat
-
-
-@configclass
-class PreTrainedPolicyActionCfg(ActionTermCfg):
-    """Configuration for pre-trained policy action term.
-
-    See :class:`PreTrainedPolicyAction` for more details.
-    """
-
-    class_type: type[ActionTerm] = PreTrainedPolicyAction
-    """ Class of the action term."""
-    asset_name: str = MISSING
-    """Name of the asset in the environment for which the commands are generated."""
-    policy_path: str = MISSING
-    """Path to the low level policy (.pt files)."""
-    low_level_decimation: int = 4
-    """Decimation factor for the low level action term."""
-    low_level_actions: ActionTermCfg = MISSING
-    """Low level action configuration."""
-    low_level_observations: ObservationGroupCfg = MISSING
-    """Low level observation configuration."""
-    debug_vis: bool = True
-    """Whether to visualize debug information. Defaults to False."""

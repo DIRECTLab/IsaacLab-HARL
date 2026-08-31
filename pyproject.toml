@@ -1,67 +1,160 @@
-[tool.isort]
+# Copyright (c) 2022-2026, The Isaac Lab Project Developers (https://github.com/isaac-sim/IsaacLab/blob/main/CONTRIBUTORS.md).
+# All rights reserved.
+#
+# SPDX-License-Identifier: BSD-3-Clause
 
-py_version = 310
-line_length = 120
-group_by_package = true
-
-# Files to skip
-skip_glob = ["docs/*", "logs/*", "_isaac_sim/*", ".vscode/*"]
-
-# Order of imports
-sections = [
-    "FUTURE",
-    "STDLIB",
-    "THIRDPARTY",
-    "ASSETS_FIRSTPARTY",
-    "FIRSTPARTY",
-    "EXTRA_FIRSTPARTY",
-    "TASK_FIRSTPARTY",
-    "LOCALFOLDER",
+[project]
+name = "isaaclab-dev"
+version = "0.1.0"
+description = "Isaac Lab source checkout development environment."
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "isaaclab",
+    "isaaclab-assets",
+    "isaaclab-contrib",
+    "isaaclab-experimental",
+    "isaaclab-newton[all]",
+    "isaaclab-ov",
+    "isaaclab-ovphysx",
+    "isaaclab-physx[newton]",
+    "isaaclab-ppisp",
+    "isaaclab-rl[rsl-rl]",
+    "isaaclab-tasks",
+    "isaaclab-tasks-experimental",
+    "isaaclab-visualizers",
+    "torch==2.10.0",
+    "torchaudio==2.10.0",
+    "torchvision==0.25.0",
 ]
 
-# Extra standard libraries considered as part of python (permissive licenses
-extra_standard_library = [
-    "numpy",
-    "h5py",
-    "open3d",
-    "torch",
-    "tensordict",
-    "bpy",
-    "matplotlib",
-    "gymnasium",
-    "gym",
-    "scipy",
-    "hid",
-    "yaml",
-    "prettytable",
-    "toml",
-    "trimesh",
-    "tqdm",
-    "torchvision",
-    "transformers",
-    "einops" # Needed for transformers, doesn't always auto-install
+[project.optional-dependencies]
+contrib = [
+    "isaaclab-contrib",
 ]
-# Imports from Isaac Sim and Omniverse
-known_third_party = [
-    "isaacsim.core.api",
-    "isaacsim.replicator.common",
-    "omni.replicator.core",
+mimic = [
+    "isaaclab-mimic",
+]
+newton = [
+    "isaaclab-newton[all]",
+    "isaaclab-physx[newton]",
+    "isaaclab-visualizers[newton]",
+]
+ov = [
+    "isaaclab-ovphysx[ovphysx]",
+]
+rl = [
+    "isaaclab-rl[rsl-rl]",
+]
+rl-all = [
+    "isaaclab-rl[all]",
+]
+rtx = [
+    "isaaclab-ov[ovrtx]",
+]
+all = [
+    "isaaclab-mimic",
+    "isaaclab-newton[all]",
+    "isaaclab-physx[newton]",
+    "isaaclab-rl[all]",
+    "isaaclab-visualizers[all]",
+]
+
+[tool.ruff]
+line-length = 120
+target-version = "py310"
+
+# Exclude directories
+extend-exclude = [
+    "logs",
+    "_isaac_sim",
+    ".vscode",
+    "_*",
+    ".git",
+]
+
+[tool.ruff.lint]
+# Enable flake8 rules and other useful ones
+select = [
+    "E",      # pycodestyle errors
+    "W",      # pycodestyle warnings
+    "F",      # pyflakes
+    "I",      # isort
+    "UP",     # pyupgrade
+    "C90",    # mccabe complexity
+    # "D",      # pydocstyle
+    "SIM",    # flake8-simplify
+    "RET",    # flake8-return
+]
+
+# Ignore specific rules (matching your flake8 config)
+ignore = [
+    "E402",   # Module level import not at top of file
+    "D401",   # First line should be in imperative mood
+    "RET504", # Unnecessary variable assignment before return statement
+    "RET505", # Unnecessary elif after return statement
+    "SIM102", # Use a single if-statement instead of nested if-statements
+    "SIM103", # Return the negated condition directly
+    "SIM108", # Use ternary operator instead of if-else statement
+    "SIM117", # Merge with statements for context managers
+    "SIM118", # Use {key} in {dict} instead of {key} in {dict}.keys()
+    "UP006",  # Use 'dict' instead of 'Dict' type annotation
+    "UP018",  # Unnecessary `float` call (rewrite as a literal)
+]
+
+[tool.ruff.lint.per-file-ignores]
+"__init__.py" = ["F401"]  # Allow unused imports in __init__.py files
+
+[tool.ruff.lint.mccabe]
+max-complexity = 30
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.lint.isort]
+
+# Custom import sections with separate sections for each Isaac Lab extension
+section-order = [
+    "future",
+    "standard-library",
+    "third-party",
+    # Group omniverse extensions separately since they are run-time dependencies
+    # which are pulled in by Isaac Lab extensions
+    "omniverse-extensions",
+    # Group Isaac Lab extensions together since they are all part of the Isaac Lab project
+    "isaaclab",
+    "isaaclab-contrib",
+    "isaaclab-rl",
+    "isaaclab-mimic",
+    "isaaclab-tasks",
+    "isaaclab-assets",
+    # First-party is reserved for project templates
+    "first-party",
+    "local-folder",
+]
+
+[tool.ruff.lint.isort.sections]
+# Define what belongs in each custom section
+
+"omniverse-extensions" = [
+    "isaacsim",
+    "omni",
     "pxr",
-    "omni.kit.*",
-    "warp",
     "carb",
+    "usdrt",
     "Semantics",
+    "curobo",
 ]
-# Imports from this repository
-known_first_party = "isaaclab"
-known_assets_firstparty = "isaaclab_assets"
-known_extra_firstparty = [
-    "isaaclab_rl",
-    "isaaclab_mimic",
-]
-known_task_firstparty = "isaaclab_tasks"
-# Imports from the local folder
-known_local_folder = "config"
+
+"isaaclab" = ["isaaclab"]
+"isaaclab-assets" = ["isaaclab_assets"]
+"isaaclab-contrib" = ["isaaclab_contrib"]
+"isaaclab-rl" = ["isaaclab_rl"]
+"isaaclab-mimic" = ["isaaclab_mimic"]
+"isaaclab-tasks" = ["isaaclab_tasks"]
+
+[tool.ruff.format]
+
+docstring-code-format = true
 
 [tool.pyright]
 
@@ -76,7 +169,7 @@ exclude = [
 ]
 
 typeCheckingMode = "basic"
-pythonVersion = "3.10"
+pythonVersion = "3.12"
 pythonPlatform = "Linux"
 enableTypeIgnoreComments = true
 
@@ -92,9 +185,82 @@ reportPrivateUsage = "warning"
 
 
 [tool.codespell]
-skip = '*.usd,*.svg,*.png,_isaac_sim*,*.bib,*.css,*/_build'
+skip = '*.usd,*.usda,*.usdz,*.svg,*.png,_isaac_sim*,*.bib,*.css,*/_build'
 quiet-level = 0
 # the world list should always have words in lower case
-ignore-words-list = "haa,slq,collapsable,buss"
-# todo: this is hack to deal with incorrect spelling of "Environment" in the Isaac Sim grid world asset
-exclude-file = "source/isaaclab/isaaclab/sim/spawners/from_files/from_files.py"
+ignore-words-list = "haa,slq,collapsable,buss,reacher,thirdparty,segway"
+
+
+[tool.pytest.ini_options]
+
+markers = [
+    "isaacsim_ci: mark test to run in isaacsim ci",
+]
+
+# Add pypi.nvidia.com so that `uv pip install isaaclab[isaacsim]` works without --extra-index-url.
+# Pip still needs "--extra-index-url https://pypi.nvidia.com".
+[[tool.uv.index]]
+url = "https://pypi.nvidia.com"
+explicit = false
+
+[[tool.uv.index]]
+name = "pytorch-cu128"
+url = "https://download.pytorch.org/whl/cu128"
+explicit = true
+
+[[tool.uv.index]]
+name = "pytorch-cu130"
+url = "https://download.pytorch.org/whl/cu130"
+explicit = true
+
+# Some NVIDIA-hosted dependencies have mismatched versions across pypi.nvidia.com
+# and PyPI. unsafe-best-match lets uv resolve the correct version from any index,
+# and prerelease=allow covers packages that only publish pre-release wheels.
+[tool.uv]
+index-strategy = "unsafe-best-match"
+prerelease = "allow"
+override-dependencies = ["numpy>=2"]
+python-preference = "only-managed"
+package = false
+
+[tool.uv.sources]
+isaaclab = { path = "source/isaaclab", editable = true }
+"isaaclab-assets" = { path = "source/isaaclab_assets", editable = true }
+"isaaclab-contrib" = { path = "source/isaaclab_contrib", editable = true }
+"isaaclab-experimental" = { path = "source/isaaclab_experimental", editable = true }
+"isaaclab-mimic" = { path = "source/isaaclab_mimic", editable = true }
+"isaaclab-newton" = { path = "source/isaaclab_newton", editable = true }
+"isaaclab-ov" = { path = "source/isaaclab_ov", editable = true }
+"isaaclab-ovphysx" = { path = "source/isaaclab_ovphysx", editable = true }
+"isaaclab-physx" = { path = "source/isaaclab_physx", editable = true }
+"isaaclab-ppisp" = { path = "source/isaaclab_ppisp", editable = true }
+"isaaclab-rl" = { path = "source/isaaclab_rl", editable = true }
+"isaaclab-tasks" = { path = "source/isaaclab_tasks", editable = true }
+"isaaclab-tasks-experimental" = { path = "source/isaaclab_tasks_experimental", editable = true }
+"isaaclab-teleop" = { path = "source/isaaclab_teleop", editable = true }
+"isaaclab-visualizers" = { path = "source/isaaclab_visualizers", editable = true }
+torch = [
+    { index = "pytorch-cu128", marker = "sys_platform == 'linux' and platform_machine == 'x86_64'" },
+    { index = "pytorch-cu128", marker = "sys_platform == 'linux' and platform_machine == 'AMD64'" },
+    { index = "pytorch-cu128", marker = "sys_platform == 'win32'" },
+    { index = "pytorch-cu130", marker = "sys_platform == 'linux' and platform_machine == 'aarch64'" },
+    { index = "pytorch-cu130", marker = "sys_platform == 'linux' and platform_machine == 'arm64'" },
+]
+torchaudio = [
+    { index = "pytorch-cu128", marker = "sys_platform == 'linux' and platform_machine == 'x86_64'" },
+    { index = "pytorch-cu128", marker = "sys_platform == 'linux' and platform_machine == 'AMD64'" },
+    { index = "pytorch-cu128", marker = "sys_platform == 'win32'" },
+    { index = "pytorch-cu130", marker = "sys_platform == 'linux' and platform_machine == 'aarch64'" },
+    { index = "pytorch-cu130", marker = "sys_platform == 'linux' and platform_machine == 'arm64'" },
+]
+torchvision = [
+    { index = "pytorch-cu128", marker = "sys_platform == 'linux' and platform_machine == 'x86_64'" },
+    { index = "pytorch-cu128", marker = "sys_platform == 'linux' and platform_machine == 'AMD64'" },
+    { index = "pytorch-cu128", marker = "sys_platform == 'win32'" },
+    { index = "pytorch-cu130", marker = "sys_platform == 'linux' and platform_machine == 'aarch64'" },
+    { index = "pytorch-cu130", marker = "sys_platform == 'linux' and platform_machine == 'arm64'" },
+]
+
+[tool.uv.pip]
+index-strategy = "unsafe-best-match"
+prerelease = "allow"

@@ -1,15 +1,17 @@
-# Copyright (c) 2025-2026, The Isaac Lab Project Developers.
+# Copyright (c) 2022-2026, The Isaac Lab Project Developers (https://github.com/isaac-sim/IsaacLab/blob/main/CONTRIBUTORS.md).
 # All rights reserved.
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
 from dataclasses import MISSING
+from typing import TYPE_CHECKING
 
-from isaaclab.controllers.pink_ik_cfg import PinkIKControllerCfg
-from isaaclab.managers.action_manager import ActionTerm, ActionTermCfg
-from isaaclab.utils import configclass
+from isaaclab.controllers.pink_ik import PinkIKControllerCfg
+from isaaclab.managers.action_manager import ActionTermCfg
+from isaaclab.utils.configclass import configclass
 
-from . import pink_task_space_actions
+if TYPE_CHECKING:
+    from .pink_task_space_actions import PinkInverseKinematicsAction
 
 
 @configclass
@@ -20,17 +22,24 @@ class PinkInverseKinematicsActionCfg(ActionTermCfg):
     which is a inverse kinematics framework.
     """
 
-    class_type: type[ActionTerm] = pink_task_space_actions.PinkInverseKinematicsAction
+    class_type: type["PinkInverseKinematicsAction"] | str = "{DIR}.pink_task_space_actions:PinkInverseKinematicsAction"
     """Specifies the action term class type for Pink inverse kinematics action."""
 
     pink_controlled_joint_names: list[str] = MISSING
     """List of joint names or regular expression patterns that specify the joints controlled by pink IK."""
-
-    ik_urdf_fixed_joint_names: list[str] = MISSING
-    """List of joint names that specify the joints to be locked in URDF."""
 
     hand_joint_names: list[str] = MISSING
     """List of joint names or regular expression patterns that specify the joints controlled by hand retargeting."""
 
     controller: PinkIKControllerCfg = MISSING
     """Configuration for the Pink IK controller that will be used to solve the inverse kinematics."""
+
+    enable_gravity_compensation: bool = True
+    """Whether to compensate for gravity in the Pink IK controller."""
+
+    target_eef_link_names: dict[str, str] = MISSING
+    """Dictionary mapping task names to controlled link names for the Pink IK controller.
+
+    This dictionary should map the task names (e.g., 'left_wrist', 'right_wrist') to the
+    corresponding link names in the URDF that will be controlled by the IK solver.
+    """

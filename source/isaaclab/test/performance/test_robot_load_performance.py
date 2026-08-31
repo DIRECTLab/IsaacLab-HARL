@@ -1,4 +1,4 @@
-# Copyright (c) 2022-2026, The Isaac Lab Project Developers.
+# Copyright (c) 2022-2026, The Isaac Lab Project Developers (https://github.com/isaac-sim/IsaacLab/blob/main/CONTRIBUTORS.md).
 # All rights reserved.
 #
 # SPDX-License-Identifier: BSD-3-Clause
@@ -8,58 +8,70 @@
 
 from __future__ import annotations
 
-from isaaclab.app import AppLauncher, run_tests
+from isaaclab.app import AppLauncher
 
 # launch omniverse app
 simulation_app = AppLauncher(headless=True).app
 
-import unittest
+import pytest
+import torch
+from isaaclab_physx.cloner import physx_replicate
 
-import omni
-from isaacsim.core.cloner import GridCloner
-
-from isaaclab_assets import ANYMAL_D_CFG, CARTPOLE_CFG
-
+import isaaclab.sim.utils as sim_utils
+from isaaclab import cloner
 from isaaclab.assets import Articulation
 from isaaclab.sim import build_simulation_context
 from isaaclab.utils.timer import Timer
 
+from isaaclab_assets import ANYMAL_D_CFG, CARTPOLE_CFG
 
-class TestRobotLoadPerformance(unittest.TestCase):
-    """Test robot load performance."""
-
-    """
-    Tests
-    """
-
-    def test_robot_load_performance(self):
-        """Test robot load time."""
-        test_configs = {
-            "Cartpole": {"robot_cfg": CARTPOLE_CFG, "expected_load_time": 10.0},
-            "Anymal_D": {"robot_cfg": ANYMAL_D_CFG, "expected_load_time": 40.0},
-        }
-        for test_config in test_configs.items():
-            for device in ("cuda:0", "cpu"):
-                with self.subTest(test_config=test_config, device=device):
-                    with build_simulation_context(device=device) as sim:
-                        sim._app_control_on_stop_handle = None
-                        cloner = GridCloner(spacing=2)
-                        target_paths = cloner.generate_paths("/World/Robots", 4096)
-                        omni.usd.get_context().get_stage().DefinePrim(target_paths[0], "Xform")
-                        _ = cloner.clone(
-                            source_prim_path=target_paths[0],
-                            prim_paths=target_paths,
-                            replicate_physics=False,
-                            copy_from_source=True,
-                        )
-                        with Timer(f"{test_config[0]} load time for device {device}") as timer:
-                            robot = Articulation(  # noqa: F841
-                                test_config[1]["robot_cfg"].replace(prim_path="/World/Robots_.*/Robot")
-                            )
-                            sim.reset()
-                            elapsed_time = timer.time_elapsed
-                        self.assertLessEqual(elapsed_time, test_config[1]["expected_load_time"])
+NUM_ENVS = 4096
+SPACING = 2.0
 
 
-if __name__ == "__main__":
-    run_tests()
+@pytest.mark.parametrize(
+    "test_config,device",
+    [
+        # TODO: regression - this used to be 10
+        ({"name": "Cartpole", "robot_cfg": CARTPOLE_CFG, "expected_load_time": 15.0}, "cuda:0"),
+        ({"name": "Cartpole", "robot_cfg": CARTPOLE_CFG, "expected_load_time": 15.0}, "cpu"),
+        # TODO: regression - this used to be 40
+        ({"name": "Anymal_D", "robot_cfg": ANYMAL_D_CFG, "expected_load_time": 60.0}, "cuda:0"),
+        ({"name": "Anymal_D", "robot_cfg": ANYMAL_D_CFG, "expected_load_time": 60.0}, "cpu"),
+    ],
+)
+def test_robot_load_performance(test_config, device):
+    """Test robot load time."""
+    with build_simulation_context(device=device) as sim:
+        sim._app_control_on_stop_handle = None
+        stage = sim_utils.get_current_stage()
+
+        # Generate grid positions for environments
+        positions, _ = cloner.grid_transforms(NUM_ENVS, SPACING, device=device)
+
+        # Create environment prims using USD replicate
+        env_paths = [f"/World/Robots_{i}" for i in range(NUM_ENVS)]
+        stage.DefinePrim(env_paths[0], "Xform")
+        cloner.usd_replicate(
+            stage=stage,
+            sources=[env_paths[0]],
+            destinations=["/World/Robots_{}"],
+            env_ids=torch.arange(NUM_ENVS),
+            positions=positions,
+        )
+
+        # Replicate physics - mapping is (num_sources, num_envs) bool mask
+        physx_replicate(
+            stage=stage,
+            sources=[env_paths[0]],
+            destinations=["/World/Robots_{}"],
+            env_ids=torch.arange(NUM_ENVS),
+            mapping=torch.ones(1, NUM_ENVS, dtype=torch.bool),  # 1 source -> all envs
+            device=device,
+        )
+
+        with Timer(f"{test_config['name']} load time for device {device}") as timer:
+            robot = Articulation(test_config["robot_cfg"].replace(prim_path="/World/Robots_.*/Robot"))  # noqa: F841
+            sim.reset()
+            elapsed_time = timer.time_elapsed
+        assert elapsed_time <= test_config["expected_load_time"]

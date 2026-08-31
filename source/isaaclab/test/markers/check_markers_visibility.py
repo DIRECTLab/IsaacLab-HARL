@@ -1,4 +1,4 @@
-# Copyright (c) 2022-2026, The Isaac Lab Project Developers.
+# Copyright (c) 2022-2026, The Isaac Lab Project Developers (https://github.com/isaac-sim/IsaacLab/blob/main/CONTRIBUTORS.md).
 # All rights reserved.
 #
 # SPDX-License-Identifier: BSD-3-Clause
@@ -42,7 +42,7 @@ import isaaclab.sim as sim_utils
 from isaaclab.assets import ArticulationCfg, AssetBaseCfg
 from isaaclab.scene import InteractiveScene, InteractiveSceneCfg
 from isaaclab.sensors import RayCasterCfg, patterns
-from isaaclab.utils import configclass
+from isaaclab.utils.configclass import configclass
 
 ##
 # Pre-defined configs
@@ -70,7 +70,7 @@ class SensorsSceneCfg(InteractiveSceneCfg):
         prim_path="{ENV_REGEX_NS}/Robot/base",
         update_period=0.02,
         offset=RayCasterCfg.OffsetCfg(pos=(0.0, 0.0, 20.0)),
-        attach_yaw_only=True,
+        ray_alignment="yaw",
         pattern_cfg=patterns.GridPatternCfg(resolution=0.1, size=[1.6, 1.0]),
         debug_vis=True,
         mesh_prim_paths=["/World/defaultGroundPlane"],
@@ -96,14 +96,14 @@ def run_simulator(
             count = 0
             # reset the scene entities
             # root state
-            root_state = scene["robot"].data.default_root_state.clone()
+            root_state = scene["robot"].data.default_root_state.torch.clone()
             root_state[:, :3] += scene.env_origins
             scene["robot"].write_root_pose_to_sim(root_state[:, :7])
             scene["robot"].write_root_velocity_to_sim(root_state[:, 7:])
             # set joint positions with some noise
             joint_pos, joint_vel = (
-                scene["robot"].data.default_joint_pos.clone(),
-                scene["robot"].data.default_joint_vel.clone(),
+                scene["robot"].data.default_joint_pos.torch.clone(),
+                scene["robot"].data.default_joint_vel.torch.clone(),
             )
             scene["robot"].write_joint_state_to_sim(joint_pos, joint_vel)
             # clear internal buffers

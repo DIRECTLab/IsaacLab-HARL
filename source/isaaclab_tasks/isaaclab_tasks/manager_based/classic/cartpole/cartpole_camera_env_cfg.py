@@ -1,4 +1,4 @@
-# Copyright (c) 2022-2026, The Isaac Lab Project Developers.
+# Copyright (c) 2022-2026, The Isaac Lab Project Developers (https://github.com/isaac-sim/IsaacLab/blob/main/CONTRIBUTORS.md).
 # All rights reserved.
 #
 # SPDX-License-Identifier: BSD-3-Clause
@@ -7,8 +7,8 @@ import isaaclab.sim as sim_utils
 from isaaclab.managers import ObservationGroupCfg as ObsGroup
 from isaaclab.managers import ObservationTermCfg as ObsTerm
 from isaaclab.managers import SceneEntityCfg
-from isaaclab.sensors import TiledCameraCfg
-from isaaclab.utils import configclass
+from isaaclab.sensors import CameraCfg
+from isaaclab.utils.configclass import configclass
 
 import isaaclab_tasks.manager_based.classic.cartpole.mdp as mdp
 
@@ -21,11 +21,12 @@ from .cartpole_env_cfg import CartpoleEnvCfg, CartpoleSceneCfg
 
 @configclass
 class CartpoleRGBCameraSceneCfg(CartpoleSceneCfg):
+    """Configuration for the cartpole environment with RGB camera."""
 
     # add camera to the scene
-    tiled_camera: TiledCameraCfg = TiledCameraCfg(
+    tiled_camera: CameraCfg = CameraCfg(
         prim_path="{ENV_REGEX_NS}/Camera",
-        offset=TiledCameraCfg.OffsetCfg(pos=(-7.0, 0.0, 3.0), rot=(0.9945, 0.0, 0.1045, 0.0), convention="world"),
+        offset=CameraCfg.OffsetCfg(pos=(-7.0, 0.0, 3.0), rot=(0.0, 0.1045, 0.0, 0.9945), convention="world"),
         data_types=["rgb"],
         spawn=sim_utils.PinholeCameraCfg(
             focal_length=24.0, focus_distance=400.0, horizontal_aperture=20.955, clipping_range=(0.1, 20.0)
@@ -37,11 +38,10 @@ class CartpoleRGBCameraSceneCfg(CartpoleSceneCfg):
 
 @configclass
 class CartpoleDepthCameraSceneCfg(CartpoleSceneCfg):
-
     # add camera to the scene
-    tiled_camera: TiledCameraCfg = TiledCameraCfg(
+    tiled_camera: CameraCfg = CameraCfg(
         prim_path="{ENV_REGEX_NS}/Camera",
-        offset=TiledCameraCfg.OffsetCfg(pos=(-7.0, 0.0, 3.0), rot=(0.9945, 0.0, 0.1045, 0.0), convention="world"),
+        offset=CameraCfg.OffsetCfg(pos=(-7.0, 0.0, 3.0), rot=(0.0, 0.1045, 0.0, 0.9945), convention="world"),
         data_types=["distance_to_camera"],
         spawn=sim_utils.PinholeCameraCfg(
             focal_length=24.0, focus_distance=400.0, horizontal_aperture=20.955, clipping_range=(0.1, 20.0)

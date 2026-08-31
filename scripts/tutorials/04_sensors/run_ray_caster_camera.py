@@ -1,4 +1,4 @@
-# Copyright (c) 2022-2026, The Isaac Lab Project Developers.
+# Copyright (c) 2022-2026, The Isaac Lab Project Developers (https://github.com/isaac-sim/IsaacLab/blob/main/CONTRIBUTORS.md).
 # All rights reserved.
 #
 # SPDX-License-Identifier: BSD-3-Clause
@@ -11,7 +11,7 @@ The camera sensor is based on using Warp kernels which do ray-casting against st
 .. code-block:: bash
 
     # Usage
-    ./isaaclab.sh -p scripts/tutorials/04_sensors/run_ray_caster_camera.py
+    ./isaaclab.sh -p scripts/tutorials/04_sensors/run_ray_caster_camera.py --viz kit
 
 """
 
@@ -36,9 +36,9 @@ simulation_app = app_launcher.app
 """Rest everything follows."""
 
 import os
+
 import torch
 
-import isaacsim.core.utils.prims as prim_utils
 import omni.replicator.core as rep
 
 import isaaclab.sim as sim_utils
@@ -53,8 +53,8 @@ def define_sensor() -> RayCasterCamera:
     # Camera base frames
     # In contras to the USD camera, we associate the sensor to the prims at these locations.
     # This means that parent prim of the sensor is the prim at this location.
-    prim_utils.create_prim("/World/Origin_00/CameraSensor", "Xform")
-    prim_utils.create_prim("/World/Origin_01/CameraSensor", "Xform")
+    sim_utils.create_prim("/World/Origin_00/CameraSensor", "Xform")
+    sim_utils.create_prim("/World/Origin_01/CameraSensor", "Xform")
 
     # Setup camera sensor
     camera_cfg = RayCasterCameraCfg(
@@ -132,12 +132,10 @@ def run_simulator(sim: sim_utils.SimulationContext, scene_entities: dict):
             single_cam_data = convert_dict_to_backend(
                 {k: v[camera_index] for k, v in camera.data.output.items()}, backend="numpy"
             )
-            # Extract the other information
-            single_cam_info = camera.data.info[camera_index]
-
             # Pack data back into replicator format to save them using its writer
             rep_output = {"annotators": {}}
-            for key, data, info in zip(single_cam_data.keys(), single_cam_data.values(), single_cam_info.values()):
+            for key, data in single_cam_data.items():
+                info = camera.data.info.get(key)
                 if info is not None:
                     rep_output["annotators"][key] = {"render_product": {"data": data, **info}}
                 else:
@@ -163,10 +161,11 @@ def run_simulator(sim: sim_utils.SimulationContext, scene_entities: dict):
 def main():
     """Main function."""
     # Load kit helper
-    sim = sim_utils.SimulationContext()
+    sim_cfg = sim_utils.SimulationCfg()
+    sim = sim_utils.SimulationContext(sim_cfg)
     # Set main camera
     sim.set_camera_view([2.5, 2.5, 3.5], [0.0, 0.0, 0.0])
-    # design the scene
+    # Design scene
     scene_entities = design_scene()
     # Play simulator
     sim.reset()

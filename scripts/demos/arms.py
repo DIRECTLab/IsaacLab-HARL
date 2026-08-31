@@ -1,4 +1,4 @@
-# Copyright (c) 2022-2026, The Isaac Lab Project Developers.
+# Copyright (c) 2022-2026, The Isaac Lab Project Developers (https://github.com/isaac-sim/IsaacLab/blob/main/CONTRIBUTORS.md).
 # All rights reserved.
 #
 # SPDX-License-Identifier: BSD-3-Clause
@@ -23,6 +23,8 @@ from isaaclab.app import AppLauncher
 parser = argparse.ArgumentParser(description="This script demonstrates different single-arm manipulators.")
 # append AppLauncher cli args
 AppLauncher.add_app_launcher_args(parser)
+# demos should open Kit visualizer by default
+parser.set_defaults(visualizer=["kit"])
 # parse the arguments
 args_cli = parser.parse_args()
 
@@ -34,8 +36,6 @@ simulation_app = app_launcher.app
 
 import numpy as np
 import torch
-
-import isaacsim.core.utils.prims as prim_utils
 
 import isaaclab.sim as sim_utils
 from isaaclab.assets import Articulation
@@ -86,7 +86,7 @@ def design_scene() -> tuple[dict, list[list[float]]]:
     origins = define_origins(num_origins=6, spacing=2.0)
 
     # Origin 1 with Franka Panda
-    prim_utils.create_prim("/World/Origin1", "Xform", translation=origins[0])
+    sim_utils.create_prim("/World/Origin1", "Xform", translation=origins[0])
     # -- Table
     cfg = sim_utils.UsdFileCfg(usd_path=f"{ISAAC_NUCLEUS_DIR}/Props/Mounts/SeattleLabTable/table_instanceable.usd")
     cfg.func("/World/Origin1/Table", cfg, translation=(0.55, 0.0, 1.05))
@@ -96,7 +96,7 @@ def design_scene() -> tuple[dict, list[list[float]]]:
     franka_panda = Articulation(cfg=franka_arm_cfg)
 
     # Origin 2 with UR10
-    prim_utils.create_prim("/World/Origin2", "Xform", translation=origins[1])
+    sim_utils.create_prim("/World/Origin2", "Xform", translation=origins[1])
     # -- Table
     cfg = sim_utils.UsdFileCfg(
         usd_path=f"{ISAAC_NUCLEUS_DIR}/Props/Mounts/Stand/stand_instanceable.usd", scale=(2.0, 2.0, 2.0)
@@ -108,7 +108,7 @@ def design_scene() -> tuple[dict, list[list[float]]]:
     ur10 = Articulation(cfg=ur10_cfg)
 
     # Origin 3 with Kinova JACO2 (7-Dof) arm
-    prim_utils.create_prim("/World/Origin3", "Xform", translation=origins[2])
+    sim_utils.create_prim("/World/Origin3", "Xform", translation=origins[2])
     # -- Table
     cfg = sim_utils.UsdFileCfg(usd_path=f"{ISAAC_NUCLEUS_DIR}/Props/Mounts/ThorlabsTable/table_instanceable.usd")
     cfg.func("/World/Origin3/Table", cfg, translation=(0.0, 0.0, 0.8))
@@ -118,7 +118,7 @@ def design_scene() -> tuple[dict, list[list[float]]]:
     kinova_j2n7s300 = Articulation(cfg=kinova_arm_cfg)
 
     # Origin 4 with Kinova JACO2 (6-Dof) arm
-    prim_utils.create_prim("/World/Origin4", "Xform", translation=origins[3])
+    sim_utils.create_prim("/World/Origin4", "Xform", translation=origins[3])
     # -- Table
     cfg = sim_utils.UsdFileCfg(usd_path=f"{ISAAC_NUCLEUS_DIR}/Props/Mounts/ThorlabsTable/table_instanceable.usd")
     cfg.func("/World/Origin4/Table", cfg, translation=(0.0, 0.0, 0.8))
@@ -128,7 +128,7 @@ def design_scene() -> tuple[dict, list[list[float]]]:
     kinova_j2n6s300 = Articulation(cfg=kinova_arm_cfg)
 
     # Origin 5 with Sawyer
-    prim_utils.create_prim("/World/Origin5", "Xform", translation=origins[4])
+    sim_utils.create_prim("/World/Origin5", "Xform", translation=origins[4])
     # -- Table
     cfg = sim_utils.UsdFileCfg(usd_path=f"{ISAAC_NUCLEUS_DIR}/Props/Mounts/SeattleLabTable/table_instanceable.usd")
     cfg.func("/World/Origin5/Table", cfg, translation=(0.55, 0.0, 1.05))
@@ -138,7 +138,7 @@ def design_scene() -> tuple[dict, list[list[float]]]:
     kinova_gen3n7 = Articulation(cfg=kinova_arm_cfg)
 
     # Origin 6 with Kinova Gen3 (7-Dof) arm
-    prim_utils.create_prim("/World/Origin6", "Xform", translation=origins[5])
+    sim_utils.create_prim("/World/Origin6", "Xform", translation=origins[5])
     # -- Table
     cfg = sim_utils.UsdFileCfg(
         usd_path=f"{ISAAC_NUCLEUS_DIR}/Props/Mounts/Stand/stand_instanceable.usd", scale=(2.0, 2.0, 2.0)
@@ -177,25 +177,29 @@ def run_simulator(sim: sim_utils.SimulationContext, entities: dict[str, Articula
             # reset the scene entities
             for index, robot in enumerate(entities.values()):
                 # root state
-                root_state = robot.data.default_root_state.clone()
-                root_state[:, :3] += origins[index]
-                robot.write_root_pose_to_sim(root_state[:, :7])
-                robot.write_root_velocity_to_sim(root_state[:, 7:])
+                root_pose = robot.data.default_root_pose.torch.clone()
+                root_pose[:, :3] += origins[index]
+                robot.write_root_pose_to_sim_index(root_pose=root_pose)
+                root_vel = robot.data.default_root_vel.torch.clone()
+                robot.write_root_velocity_to_sim_index(root_velocity=root_vel)
                 # set joint positions
-                joint_pos, joint_vel = robot.data.default_joint_pos.clone(), robot.data.default_joint_vel.clone()
-                robot.write_joint_state_to_sim(joint_pos, joint_vel)
+                joint_pos, joint_vel = (
+                    robot.data.default_joint_pos.torch.clone(),
+                    robot.data.default_joint_vel.torch.clone(),
+                )
+                robot.write_joint_position_to_sim_index(position=joint_pos)
+                robot.write_joint_velocity_to_sim_index(velocity=joint_vel)
                 # clear internal buffers
                 robot.reset()
             print("[INFO]: Resetting robots state...")
         # apply random actions to the robots
         for robot in entities.values():
             # generate random joint positions
-            joint_pos_target = robot.data.default_joint_pos + torch.randn_like(robot.data.joint_pos) * 0.1
-            joint_pos_target = joint_pos_target.clamp_(
-                robot.data.soft_joint_pos_limits[..., 0], robot.data.soft_joint_pos_limits[..., 1]
-            )
+            joint_pos_target = robot.data.default_joint_pos.torch + torch.randn_like(robot.data.joint_pos.torch) * 0.1
+            soft_limits = robot.data.soft_joint_pos_limits.torch
+            joint_pos_target = joint_pos_target.clamp_(soft_limits[..., 0], soft_limits[..., 1])
             # apply action to the robot
-            robot.set_joint_position_target(joint_pos_target)
+            robot.set_joint_position_target_index(target=joint_pos_target)
             # write data to sim
             robot.write_data_to_sim()
         # perform step

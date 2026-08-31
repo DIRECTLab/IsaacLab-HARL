@@ -1,4 +1,4 @@
-# Copyright (c) 2022-2026, The Isaac Lab Project Developers.
+# Copyright (c) 2022-2026, The Isaac Lab Project Developers (https://github.com/isaac-sim/IsaacLab/blob/main/CONTRIBUTORS.md).
 # All rights reserved.
 #
 # SPDX-License-Identifier: BSD-3-Clause
@@ -26,6 +26,8 @@ parser = argparse.ArgumentParser(description="Demo on spawning different objects
 parser.add_argument("--num_envs", type=int, default=512, help="Number of environments to spawn.")
 # append AppLauncher cli args
 AppLauncher.add_app_launcher_args(parser)
+# demos should open Kit visualizer by default
+parser.set_defaults(visualizer=["kit"])
 # parse the arguments
 args_cli = parser.parse_args()
 
@@ -37,7 +39,6 @@ simulation_app = app_launcher.app
 
 import random
 
-import omni.usd
 from pxr import Gf, Sdf
 
 import isaaclab.sim as sim_utils
@@ -52,8 +53,10 @@ from isaaclab.assets import (
 )
 from isaaclab.scene import InteractiveScene, InteractiveSceneCfg
 from isaaclab.sim import SimulationContext
-from isaaclab.utils import Timer, configclass
+from isaaclab.sim.utils.stage import get_current_stage
+from isaaclab.utils import Timer
 from isaaclab.utils.assets import ISAACLAB_NUCLEUS_DIR
+from isaaclab.utils.configclass import configclass
 
 ##
 # Pre-defined Configuration
@@ -69,8 +72,8 @@ from isaaclab_assets.robots.anymal import ANYDRIVE_3_LSTM_ACTUATOR_CFG  # isort:
 
 def randomize_shape_color(prim_path_expr: str):
     """Randomize the color of the geometry."""
-    # acquire stage
-    stage = omni.usd.get_context().get_stage()
+    # get stage handle
+    stage = get_current_stage()
     # resolve prim paths for spawning and cloning
     prim_paths = sim_utils.find_matching_prim_paths(prim_path_expr)
     # manually clone prims if the source prim path is a regex expression
@@ -238,30 +241,37 @@ def run_simulator(sim: SimulationContext, scene: InteractiveScene):
             count = 0
             # reset the scene entities
             # object
-            root_state = rigid_object.data.default_root_state.clone()
-            root_state[:, :3] += scene.env_origins
-            rigid_object.write_root_pose_to_sim(root_state[:, :7])
-            rigid_object.write_root_velocity_to_sim(root_state[:, 7:])
+            root_pose = rigid_object.data.default_root_pose.torch.clone()
+            root_pose[:, :3] += scene.env_origins
+            rigid_object.write_root_pose_to_sim_index(root_pose=root_pose)
+            root_vel = rigid_object.data.default_root_vel.torch.clone()
+            rigid_object.write_root_velocity_to_sim_index(root_velocity=root_vel)
             # object collection
-            object_state = rigid_object_collection.data.default_object_state.clone()
-            object_state[..., :3] += scene.env_origins.unsqueeze(1)
-            rigid_object_collection.write_object_link_pose_to_sim(object_state[..., :7])
-            rigid_object_collection.write_object_com_velocity_to_sim(object_state[..., 7:])
+            default_pose_w = rigid_object_collection.data.default_body_pose.torch.clone()
+            default_pose_w[..., :3] += scene.env_origins.unsqueeze(1)
+            rigid_object_collection.write_body_pose_to_sim_index(body_poses=default_pose_w)
+            default_vel_w = rigid_object_collection.data.default_body_vel.torch.clone()
+            rigid_object_collection.write_body_com_velocity_to_sim_index(body_velocities=default_vel_w)
             # robot
             # -- root state
-            root_state = robot.data.default_root_state.clone()
-            root_state[:, :3] += scene.env_origins
-            robot.write_root_pose_to_sim(root_state[:, :7])
-            robot.write_root_velocity_to_sim(root_state[:, 7:])
+            root_pose = robot.data.default_root_pose.torch.clone()
+            root_pose[:, :3] += scene.env_origins
+            robot.write_root_pose_to_sim_index(root_pose=root_pose)
+            root_vel = robot.data.default_root_vel.torch.clone()
+            robot.write_root_velocity_to_sim_index(root_velocity=root_vel)
             # -- joint state
-            joint_pos, joint_vel = robot.data.default_joint_pos.clone(), robot.data.default_joint_vel.clone()
-            robot.write_joint_state_to_sim(joint_pos, joint_vel)
+            joint_pos, joint_vel = (
+                robot.data.default_joint_pos.torch.clone(),
+                robot.data.default_joint_vel.torch.clone(),
+            )
+            robot.write_joint_position_to_sim_index(position=joint_pos)
+            robot.write_joint_velocity_to_sim_index(velocity=joint_vel)
             # clear internal buffers
             scene.reset()
             print("[INFO]: Resetting scene state...")
 
         # Apply action to robot
-        robot.set_joint_position_target(robot.data.default_joint_pos)
+        robot.set_joint_position_target_index(target=robot.data.default_joint_pos.torch)
         # Write data to sim
         scene.write_data_to_sim()
         # Perform step
@@ -281,7 +291,7 @@ def main():
     sim.set_camera_view([2.5, 0.0, 4.0], [0.0, 0.0, 2.0])
 
     # Design scene
-    scene_cfg = MultiObjectSceneCfg(num_envs=args_cli.num_envs, env_spacing=2.0, replicate_physics=False)
+    scene_cfg = MultiObjectSceneCfg(num_envs=args_cli.num_envs, env_spacing=2.0, replicate_physics=True)
     with Timer("[INFO] Time to create scene: "):
         scene = InteractiveScene(scene_cfg)
 

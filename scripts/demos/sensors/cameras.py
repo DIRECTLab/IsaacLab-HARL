@@ -1,4 +1,4 @@
-# Copyright (c) 2022-2026, The Isaac Lab Project Developers.
+# Copyright (c) 2022-2026, The Isaac Lab Project Developers (https://github.com/isaac-sim/IsaacLab/blob/main/CONTRIBUTORS.md).
 # All rights reserved.
 #
 # SPDX-License-Identifier: BSD-3-Clause
@@ -28,6 +28,8 @@ parser.add_argument("--num_envs", type=int, default=4, help="Number of environme
 parser.add_argument("--disable_fabric", action="store_true", help="Disable Fabric API and use USD instead.")
 # append AppLauncher cli args
 AppLauncher.add_app_launcher_args(parser)
+# demos should open Kit visualizer by default
+parser.set_defaults(visualizer=["kit"])
 # parse the arguments
 args_cli = parser.parse_args()
 
@@ -37,18 +39,19 @@ simulation_app = app_launcher.app
 
 """Rest everything follows."""
 
+import os
+
 import matplotlib.pyplot as plt
 import numpy as np
-import os
 import torch
 
 import isaaclab.sim as sim_utils
 from isaaclab.assets import ArticulationCfg, AssetBaseCfg
 from isaaclab.scene import InteractiveScene, InteractiveSceneCfg
-from isaaclab.sensors import CameraCfg, RayCasterCameraCfg, TiledCameraCfg
+from isaaclab.sensors import CameraCfg, RayCasterCameraCfg
 from isaaclab.sensors.ray_caster import patterns
 from isaaclab.terrains import TerrainImporterCfg
-from isaaclab.utils import configclass
+from isaaclab.utils.configclass import configclass
 
 ##
 # Pre-defined configs
@@ -91,14 +94,14 @@ class SensorsSceneCfg(InteractiveSceneCfg):
         ),
         offset=CameraCfg.OffsetCfg(pos=(0.510, 0.0, 0.015), rot=(0.5, -0.5, 0.5, -0.5), convention="ros"),
     )
-    tiled_camera = TiledCameraCfg(
+    tiled_camera = CameraCfg(
         prim_path="{ENV_REGEX_NS}/Robot/base/front_cam",
         update_period=0.1,
         height=480,
         width=640,
         data_types=["rgb", "distance_to_image_plane"],
         spawn=None,  # the camera is already spawned in the scene
-        offset=TiledCameraCfg.OffsetCfg(pos=(0.510, 0.0, 0.015), rot=(0.5, -0.5, 0.5, -0.5), convention="ros"),
+        offset=CameraCfg.OffsetCfg(pos=(0.510, 0.0, 0.015), rot=(0.5, -0.5, 0.5, -0.5), convention="ros"),
     )
     raycast_camera = RayCasterCameraCfg(
         prim_path="{ENV_REGEX_NS}/Robot/base",
@@ -138,7 +141,10 @@ def save_images_grid(
     ncol = int(np.ceil(n_images / nrow))
 
     fig, axes = plt.subplots(nrow, ncol, figsize=(ncol * 2, nrow * 2))
-    axes = axes.flatten()
+    if isinstance(axes, np.ndarray):
+        axes = axes.flatten()
+    else:
+        axes = np.array([axes])
 
     # plot images
     for idx, (img, ax) in enumerate(zip(images, axes)):
@@ -185,25 +191,27 @@ def run_simulator(sim: sim_utils.SimulationContext, scene: InteractiveScene):
             # root state
             # we offset the root state by the origin since the states are written in simulation world frame
             # if this is not done, then the robots will be spawned at the (0, 0, 0) of the simulation world
-            root_state = scene["robot"].data.default_root_state.clone()
-            root_state[:, :3] += scene.env_origins
-            scene["robot"].write_root_pose_to_sim(root_state[:, :7])
-            scene["robot"].write_root_velocity_to_sim(root_state[:, 7:])
+            root_pose = scene["robot"].data.default_root_pose.torch.clone()
+            root_pose[:, :3] += scene.env_origins
+            scene["robot"].write_root_pose_to_sim_index(root_pose=root_pose)
+            root_vel = scene["robot"].data.default_root_vel.torch.clone()
+            scene["robot"].write_root_velocity_to_sim_index(root_velocity=root_vel)
             # set joint positions with some noise
             joint_pos, joint_vel = (
-                scene["robot"].data.default_joint_pos.clone(),
-                scene["robot"].data.default_joint_vel.clone(),
+                scene["robot"].data.default_joint_pos.torch.clone(),
+                scene["robot"].data.default_joint_vel.torch.clone(),
             )
             joint_pos += torch.rand_like(joint_pos) * 0.1
-            scene["robot"].write_joint_state_to_sim(joint_pos, joint_vel)
+            scene["robot"].write_joint_position_to_sim_index(position=joint_pos)
+            scene["robot"].write_joint_velocity_to_sim_index(velocity=joint_vel)
             # clear internal buffers
             scene.reset()
             print("[INFO]: Resetting robot state...")
         # Apply default actions to the robot
         # -- generate actions/commands
-        targets = scene["robot"].data.default_joint_pos
+        targets = scene["robot"].data.default_joint_pos.torch
         # -- apply action to the robot
-        scene["robot"].set_joint_position_target(targets)
+        scene["robot"].set_joint_position_target_index(target=targets)
         # -- write data to sim
         scene.write_data_to_sim()
         # perform step

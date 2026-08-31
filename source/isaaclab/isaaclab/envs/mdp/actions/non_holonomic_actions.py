@@ -1,15 +1,15 @@
-# Copyright (c) 2022-2026, The Isaac Lab Project Developers.
+# Copyright (c) 2022-2026, The Isaac Lab Project Developers (https://github.com/isaac-sim/IsaacLab/blob/main/CONTRIBUTORS.md).
 # All rights reserved.
 #
 # SPDX-License-Identifier: BSD-3-Clause
 
 from __future__ import annotations
 
-import torch
+import logging
 from collections.abc import Sequence
 from typing import TYPE_CHECKING
 
-import omni.log
+import torch
 
 import isaaclab.utils.string as string_utils
 from isaaclab.assets.articulation import Articulation
@@ -18,8 +18,12 @@ from isaaclab.utils.math import euler_xyz_from_quat
 
 if TYPE_CHECKING:
     from isaaclab.envs import ManagerBasedEnv
+    from isaaclab.envs.utils.io_descriptors import GenericActionIODescriptor
 
     from . import actions_cfg
+
+# import logger
+logger = logging.getLogger(__name__)
 
 
 class NonHolonomicAction(ActionTerm):
@@ -91,11 +95,11 @@ class NonHolonomicAction(ActionTerm):
         self._joint_ids = [x_joint_id[0], y_joint_id[0], yaw_joint_id[0]]
         self._joint_names = [x_joint_name[0], y_joint_name[0], yaw_joint_name[0]]
         # log info for debugging
-        omni.log.info(
+        logger.info(
             f"Resolved joint names for the action term {self.__class__.__name__}:"
             f" {self._joint_names} [{self._joint_ids}]"
         )
-        omni.log.info(
+        logger.info(
             f"Resolved body name for the action term {self.__class__.__name__}: {self._body_name} [{self._body_idx}]"
         )
 
@@ -134,6 +138,36 @@ class NonHolonomicAction(ActionTerm):
     def processed_actions(self) -> torch.Tensor:
         return self._processed_actions
 
+    @property
+    def IO_descriptor(self) -> GenericActionIODescriptor:
+        """The IO descriptor of the action term.
+
+        This descriptor is used to describe the action term of the non-holonomic action.
+        It adds the following information to the base descriptor:
+        - scale: The scale of the action term.
+        - offset: The offset of the action term.
+        - clip: The clip of the action term.
+        - body_name: The name of the body.
+        - x_joint_name: The name of the x joint.
+        - y_joint_name: The name of the y joint.
+        - yaw_joint_name: The name of the yaw joint.
+
+        Returns:
+            The IO descriptor of the action term.
+        """
+        super().IO_descriptor
+        self._IO_descriptor.shape = (self.action_dim,)
+        self._IO_descriptor.dtype = str(self.raw_actions.dtype)
+        self._IO_descriptor.action_type = "non holonomic actions"
+        self._IO_descriptor.scale = self._scale
+        self._IO_descriptor.offset = self._offset
+        self._IO_descriptor.clip = self._clip
+        self._IO_descriptor.body_name = self._body_name
+        self._IO_descriptor.x_joint_name = self._joint_names[0]
+        self._IO_descriptor.y_joint_name = self._joint_names[1]
+        self._IO_descriptor.yaw_joint_name = self._joint_names[2]
+        return self._IO_descriptor
+
     """
     Operations.
     """
@@ -150,14 +184,14 @@ class NonHolonomicAction(ActionTerm):
 
     def apply_actions(self):
         # obtain current heading
-        quat_w = self._asset.data.body_quat_w[:, self._body_idx].view(self.num_envs, 4)
+        quat_w = self._asset.data.body_quat_w.torch[:, self._body_idx].view(self.num_envs, 4)
         yaw_w = euler_xyz_from_quat(quat_w)[2]
         # compute joint velocities targets
         self._joint_vel_command[:, 0] = torch.cos(yaw_w) * self.processed_actions[:, 0]  # x
         self._joint_vel_command[:, 1] = torch.sin(yaw_w) * self.processed_actions[:, 0]  # y
         self._joint_vel_command[:, 2] = self.processed_actions[:, 1]  # yaw
         # set the joint velocity targets
-        self._asset.set_joint_velocity_target(self._joint_vel_command, joint_ids=self._joint_ids)
+        self._asset.set_joint_velocity_target_index(target=self._joint_vel_command, joint_ids=self._joint_ids)
 
     def reset(self, env_ids: Sequence[int] | None = None) -> None:
         self._raw_actions[env_ids] = 0.0

@@ -1,4 +1,4 @@
-# Copyright (c) 2022-2026, The Isaac Lab Project Developers.
+# Copyright (c) 2022-2026, The Isaac Lab Project Developers (https://github.com/isaac-sim/IsaacLab/blob/main/CONTRIBUTORS.md).
 # All rights reserved.
 #
 # SPDX-License-Identifier: BSD-3-Clause
@@ -6,10 +6,9 @@
 from __future__ import annotations
 
 import math
-import torch
 from collections.abc import Sequence
 
-from isaaclab_assets.robots.cart_double_pendulum import CART_DOUBLE_PENDULUM_CFG
+import torch
 
 import isaaclab.sim as sim_utils
 from isaaclab.assets import Articulation, ArticulationCfg
@@ -17,8 +16,10 @@ from isaaclab.envs import DirectMARLEnv, DirectMARLEnvCfg
 from isaaclab.scene import InteractiveSceneCfg
 from isaaclab.sim import SimulationCfg
 from isaaclab.sim.spawners.from_files import GroundPlaneCfg, spawn_ground_plane
-from isaaclab.utils import configclass
+from isaaclab.utils.configclass import configclass
 from isaaclab.utils.math import sample_uniform
+
+from isaaclab_assets.robots.cart_double_pendulum import CART_DOUBLE_PENDULUM_CFG
 
 
 @configclass
@@ -73,8 +74,8 @@ class CartDoublePendulumEnv(DirectMARLEnv):
         self._pole_dof_idx, _ = self.robot.find_joints(self.cfg.pole_dof_name)
         self._pendulum_dof_idx, _ = self.robot.find_joints(self.cfg.pendulum_dof_name)
 
-        self.joint_pos = self.robot.data.joint_pos
-        self.joint_vel = self.robot.data.joint_vel
+        self.joint_pos = self.robot.data.joint_pos.torch
+        self.joint_vel = self.robot.data.joint_vel.torch
 
     def _setup_scene(self):
         self.robot = Articulation(self.cfg.robot_cfg)
@@ -82,6 +83,9 @@ class CartDoublePendulumEnv(DirectMARLEnv):
         spawn_ground_plane(prim_path="/World/ground", cfg=GroundPlaneCfg())
         # clone and replicate
         self.scene.clone_environments(copy_from_source=False)
+        # we need to explicitly filter collisions for CPU simulation
+        if self.device == "cpu":
+            self.scene.filter_collisions(global_prim_paths=[])
         # add articulation to scene
         self.scene.articulations["robot"] = self.robot
         # add lights
@@ -92,11 +96,11 @@ class CartDoublePendulumEnv(DirectMARLEnv):
         self.actions = actions
 
     def _apply_action(self) -> None:
-        self.robot.set_joint_effort_target(
-            self.actions["cart"] * self.cfg.cart_action_scale, joint_ids=self._cart_dof_idx
+        self.robot.set_joint_effort_target_index(
+            target=self.actions["cart"] * self.cfg.cart_action_scale, joint_ids=self._cart_dof_idx
         )
-        self.robot.set_joint_effort_target(
-            self.actions["pendulum"] * self.cfg.pendulum_action_scale, joint_ids=self._pendulum_dof_idx
+        self.robot.set_joint_effort_target_index(
+            target=self.actions["pendulum"] * self.cfg.pendulum_action_scale, joint_ids=self._pendulum_dof_idx
         )
 
     def _get_observations(self) -> dict[str, torch.Tensor]:
@@ -144,8 +148,8 @@ class CartDoublePendulumEnv(DirectMARLEnv):
         return total_reward
 
     def _get_dones(self) -> tuple[dict[str, torch.Tensor], dict[str, torch.Tensor]]:
-        self.joint_pos = self.robot.data.joint_pos
-        self.joint_vel = self.robot.data.joint_vel
+        self.joint_pos = self.robot.data.joint_pos.torch
+        self.joint_vel = self.robot.data.joint_vel.torch
 
         time_out = self.episode_length_buf >= self.max_episode_length - 1
         out_of_bounds = torch.any(torch.abs(self.joint_pos[:, self._cart_dof_idx]) > self.cfg.max_cart_pos, dim=1)
@@ -158,9 +162,16 @@ class CartDoublePendulumEnv(DirectMARLEnv):
     def _reset_idx(self, env_ids: Sequence[int] | None):
         if env_ids is None:
             env_ids = self.robot._ALL_INDICES
+        # Episode success = timed out without leaving the cart/pole bounds. All agents share
+        # the same termination signal in this task, so reading any agent's flag is fine.
+        # DirectMARLEnv only sets these dicts inside step(), so skip on the initial reset.
+        if hasattr(self, "time_out_dict"):
+            any_agent = next(iter(self.cfg.possible_agents))
+            survived = self.time_out_dict[any_agent][env_ids] & ~self.terminated_dict[any_agent][env_ids]
+            self.extras.setdefault("log", {})["Metrics/success_rate"] = survived.float().mean().item()
         super()._reset_idx(env_ids)
 
-        joint_pos = self.robot.data.default_joint_pos[env_ids]
+        joint_pos = self.robot.data.default_joint_pos.torch[env_ids]
         joint_pos[:, self._pole_dof_idx] += sample_uniform(
             self.cfg.initial_pole_angle_range[0] * math.pi,
             self.cfg.initial_pole_angle_range[1] * math.pi,
@@ -173,17 +184,19 @@ class CartDoublePendulumEnv(DirectMARLEnv):
             joint_pos[:, self._pendulum_dof_idx].shape,
             joint_pos.device,
         )
-        joint_vel = self.robot.data.default_joint_vel[env_ids]
+        joint_vel = self.robot.data.default_joint_vel.torch[env_ids]
 
-        default_root_state = self.robot.data.default_root_state[env_ids]
-        default_root_state[:, :3] += self.scene.env_origins[env_ids]
+        default_root_pose = self.robot.data.default_root_pose.torch[env_ids]
+        default_root_vel = self.robot.data.default_root_vel.torch[env_ids]
+        default_root_pose[:, :3] += self.scene.env_origins[env_ids]
 
         self.joint_pos[env_ids] = joint_pos
         self.joint_vel[env_ids] = joint_vel
 
-        self.robot.write_root_pose_to_sim(default_root_state[:, :7], env_ids)
-        self.robot.write_root_velocity_to_sim(default_root_state[:, 7:], env_ids)
-        self.robot.write_joint_state_to_sim(joint_pos, joint_vel, None, env_ids)
+        self.robot.write_root_pose_to_sim_index(root_pose=default_root_pose, env_ids=env_ids)
+        self.robot.write_root_velocity_to_sim_index(root_velocity=default_root_vel, env_ids=env_ids)
+        self.robot.write_joint_position_to_sim_index(position=joint_pos, env_ids=env_ids)
+        self.robot.write_joint_velocity_to_sim_index(velocity=joint_vel, env_ids=env_ids)
 
 
 @torch.jit.script

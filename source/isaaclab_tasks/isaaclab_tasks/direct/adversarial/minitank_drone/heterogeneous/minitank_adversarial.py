@@ -6,7 +6,9 @@
 from __future__ import annotations
 
 import copy
+
 import torch
+import warp as wp
 from torch import nn
 
 import isaaclab.sim as sim_utils
@@ -16,8 +18,8 @@ from isaaclab.markers import VisualizationMarkers, VisualizationMarkersCfg
 from isaaclab.scene import InteractiveSceneCfg
 from isaaclab.sim import SimulationCfg
 from isaaclab.terrains import TerrainImporterCfg
-from isaaclab.utils.configclass import configclass
 from isaaclab.utils.assets import ISAAC_NUCLEUS_DIR
+from isaaclab.utils.configclass import configclass
 from isaaclab.utils.math import normalize, quat_from_angle_axis, subtract_frame_transforms
 
 ##
@@ -228,7 +230,6 @@ class MinitankAdversarialEnv(DirectMARLEnv):
         self.time_out_envs = torch.tensor([], device=self.device)
 
     def _draw_markers(self):
-
         marker_ids = torch.concat(
             [
                 torch.zeros(self.num_envs, dtype=torch.int32).to(self.device),
@@ -350,7 +351,6 @@ class MinitankAdversarialEnv(DirectMARLEnv):
         light_cfg.func("/World/Light", light_cfg)
 
     def _pre_physics_step(self, actions: dict):
-
         # PREPHYSICS FOR MINITANKAdversarial #
 
         self.processed_actions = copy.deepcopy(actions)
@@ -495,7 +495,7 @@ class MinitankAdversarialEnv(DirectMARLEnv):
         robot = self.robots["robot_1"]
         self.actions["robot_1"][env_ids] = 0.0
         if env_ids is None or len(env_ids) == self.num_envs:
-            env_ids = robot._ALL_INDICES
+            env_ids = wp.to_torch(robot._ALL_INDICES)
         robot.reset(env_ids)
         # Reset robot state
         joint_pos = robot.data.default_joint_pos[env_ids]

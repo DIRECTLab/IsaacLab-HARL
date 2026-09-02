@@ -8,6 +8,7 @@ from __future__ import annotations
 import copy
 
 import torch
+import warp as wp
 
 import isaaclab.envs.mdp as mdp
 import isaaclab.sim as sim_utils
@@ -657,7 +658,7 @@ class HeterogeneousPushMultiAgent(DirectMARLEnv):
         # reset idx for anymal #
         robot = self.robots["robot_0"]
         if env_ids is None or len(env_ids) == self.num_envs:
-            env_ids = robot._ALL_INDICES
+            env_ids = wp.to_torch(robot._ALL_INDICES)
         robot.reset(env_ids)
 
         joint_pos = robot.data.default_joint_pos[env_ids]
@@ -670,7 +671,7 @@ class HeterogeneousPushMultiAgent(DirectMARLEnv):
 
         robot = self.robots["robot_1"]
         if env_ids is None or len(env_ids) == self.num_envs:
-            env_ids = robot._ALL_INDICES
+            env_ids = wp.to_torch(robot._ALL_INDICES)
         robot.reset(env_ids)
 
         # Reset robot state

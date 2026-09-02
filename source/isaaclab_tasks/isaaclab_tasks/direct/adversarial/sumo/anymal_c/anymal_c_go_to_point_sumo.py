@@ -6,7 +6,9 @@
 from __future__ import annotations
 
 import copy
+
 import torch
+import warp as wp
 
 import isaaclab.envs.mdp as mdp
 import isaaclab.sim as sim_utils
@@ -219,12 +221,10 @@ class AnymalCGoToPointSumo(DirectMARLEnv):
             self.undesired_body_contact_ids[robot_id] = _undesired_contact_body_ids
 
     def _draw_markers(self):
-
         marker_ids = torch.zeros(self.num_envs, dtype=torch.int32).to(self.device)
         self.my_visualizer.visualize(self._desired_pos, None, marker_indices=marker_ids)
 
     def _setup_scene(self):
-
         self.num_robots = sum(1 for key in self.cfg.__dict__.keys() if "robot_" in key)
         self.robots = {}
         self.contact_sensors = {}
@@ -275,7 +275,6 @@ class AnymalCGoToPointSumo(DirectMARLEnv):
         for team_name, robots in self.cfg.teams.items():
             team_obs = {}
             for i, robot_id in enumerate(robots):
-
                 goal_pos, _ = subtract_frame_transforms(
                     self.robots[robot_id].data.root_state_w[:, :3],
                     self.robots[robot_id].data.root_state_w[:, 3:7],
@@ -403,7 +402,7 @@ class AnymalCGoToPointSumo(DirectMARLEnv):
 
     def _reset_idx(self, env_ids: torch.Tensor | None):
         if env_ids is None or len(env_ids) == self.num_envs:
-            env_ids = self.robots["robot_0"]._ALL_INDICES
+            env_ids = wp.to_torch(self.robots["robot_0"]._ALL_INDICES)
         super()._reset_idx(env_ids)  # once
 
         # spread out resets
@@ -414,7 +413,7 @@ class AnymalCGoToPointSumo(DirectMARLEnv):
 
         for robot_id, robot in self.robots.items():
             if env_ids is None or len(env_ids) == self.num_envs:
-                env_ids = robot._ALL_INDICES
+                env_ids = wp.to_torch(robot._ALL_INDICES)
 
             if not hasattr(self, "died"):
                 died_envs = env_ids

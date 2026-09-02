@@ -8,6 +8,7 @@ from __future__ import annotations
 import copy
 
 import torch
+import warp as wp
 from isaaclab_physx.physics import PhysxCfg
 
 import isaaclab.envs.mdp as mdp
@@ -769,7 +770,7 @@ class HeterogeneousMultiAgentSurf(DirectMARLEnv):
 
         # reset idx for h1 #
         if env_ids is None or len(env_ids) == self.num_envs:
-            env_ids = self.robots["robot_2"]._ALL_INDICES
+            env_ids = wp.to_torch(self.robots["robot_2"]._ALL_INDICES)
         self.robots["robot_2"].reset(env_ids)
 
         joint_pos = self.robots["robot_2"].data.default_joint_pos[env_ids]
@@ -791,7 +792,7 @@ class HeterogeneousMultiAgentSurf(DirectMARLEnv):
         # reset idx for anymal #
         robot = self.robots["robot_0"]
         if env_ids is None or len(env_ids) == self.num_envs:
-            env_ids = robot._ALL_INDICES
+            env_ids = wp.to_torch(robot._ALL_INDICES)
         robot.reset(env_ids)
         if len(env_ids) == self.num_envs:
             # Spread out the resets to avoid spikes in training when many environments reset at a similar time
@@ -807,7 +808,7 @@ class HeterogeneousMultiAgentSurf(DirectMARLEnv):
 
         robot = self.robots["robot_1"]
         if env_ids is None or len(env_ids) == self.num_envs:
-            env_ids = robot._ALL_INDICES
+            env_ids = wp.to_torch(robot._ALL_INDICES)
         robot.reset(env_ids)
         if len(env_ids) == self.num_envs:
             # Spread out the resets to avoid spikes in training when many environments reset at a similar time

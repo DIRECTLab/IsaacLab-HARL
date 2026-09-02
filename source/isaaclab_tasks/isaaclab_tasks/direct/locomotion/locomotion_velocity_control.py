@@ -8,6 +8,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import torch
+import warp as wp
 
 import isaaclab.sim as sim_utils
 from isaaclab.assets import Articulation
@@ -288,7 +289,7 @@ class LocomotionVelocityEnv(DirectMARLEnv):
 
     def _reset_idx(self, env_ids: torch.Tensor | None):
         if env_ids is None or len(env_ids) == self.num_envs:
-            env_ids = self.robots["robot_0"]._ALL_INDICES
+            env_ids = wp.to_torch(self.robots["robot_0"]._ALL_INDICES)
         self.robots["robot_0"].reset(env_ids)
         super()._reset_idx(env_ids)
 

@@ -10,13 +10,13 @@ import argparse
 import os
 import pprint
 import sys
+
 import torch
+from harl.utils.hf_policies import HF_POLICY_MAP, HF_REPO_ID, policies_summary
+from huggingface_hub import snapshot_download
 from tqdm import tqdm
 
-from huggingface_hub import snapshot_download
-
 from isaaclab.app import AppLauncher
-from isaaclab.utils import HF_POLICY_MAP, HF_REPO_ID, policies_summary
 
 parser = argparse.ArgumentParser(
     description="Play an RL agent with HARL.",
@@ -159,8 +159,6 @@ def _configure_model_dir(args: dict, algo_args: dict) -> None:
 
 @hydra_task_config(args_cli.task, agent_cfg_entry_point)
 def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agent_cfg: dict):
-    policies_summary(HF_POLICY_MAP)
-
     args = args_cli.__dict__
 
     # HARL runner args
@@ -278,7 +276,7 @@ def main(env_cfg: ManagerBasedRLEnvCfg | DirectRLEnvCfg | DirectMARLEnvCfg, agen
             )
 
         # update pbar using total env-steps (matches adv script semantics)
-        sim_steps = int(runner.env.unwrapped.sim._number_of_steps)
+        sim_steps = int(runner.env.unwrapped.sim.get_physics_step_count())
         num_steps = int(args["num_envs"]) * sim_steps
         pbar.update(max(0, num_steps - pbar.n))
 

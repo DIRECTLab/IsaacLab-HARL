@@ -6,7 +6,9 @@
 from __future__ import annotations
 
 import copy
+
 import torch
+import warp as wp
 from torch import nn
 
 import isaaclab.sim as sim_utils
@@ -17,8 +19,8 @@ from isaaclab.scene import InteractiveSceneCfg
 from isaaclab.sensors import CameraCfg, TiledCamera, TiledCameraCfg
 from isaaclab.sim import SimulationCfg
 from isaaclab.terrains import TerrainImporterCfg
-from isaaclab.utils.configclass import configclass
 from isaaclab.utils.assets import ISAAC_NUCLEUS_DIR
+from isaaclab.utils.configclass import configclass
 from isaaclab.utils.math import normalize, quat_from_angle_axis, subtract_frame_transforms
 
 #
@@ -266,7 +268,6 @@ class ThreeDimGalCamerasEnv(DirectMARLEnv):
             self.my_visualizer = define_markers()
 
     def _draw_markers(self):
-
         marker_ids = torch.concat(
             [
                 torch.zeros(self.num_envs, dtype=torch.int32).to(self.device),
@@ -385,7 +386,6 @@ class ThreeDimGalCamerasEnv(DirectMARLEnv):
         light_cfg.func("/World/Light", light_cfg)
 
     def _pre_physics_step(self, actions: dict):
-
         # PREPHYSICS FOR MINITANK #
 
         self.processed_actions = copy.deepcopy(actions)
@@ -516,7 +516,7 @@ class ThreeDimGalCamerasEnv(DirectMARLEnv):
 
         for robot_id, robot in self.robots.items():
             if env_ids is None or len(env_ids) == self.num_envs:
-                env_ids = robot._ALL_INDICES
+                env_ids = wp.to_torch(robot._ALL_INDICES)
             robot.reset(env_ids)
             if len(env_ids) == self.num_envs:
                 # Spread out the resets to avoid spikes in training when many environments reset at a similar time

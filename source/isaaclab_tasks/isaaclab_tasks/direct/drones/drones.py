@@ -6,7 +6,9 @@
 from __future__ import annotations
 
 import copy
+
 import torch
+import warp as wp
 from torch import nn
 
 import isaaclab.sim as sim_utils
@@ -241,7 +243,6 @@ class DronesEnv(DirectMARLEnv):
             self.my_visualizer = define_markers()
 
     def _draw_markers(self):
-
         marker_ids = torch.concat(
             [
                 torch.zeros(self.num_envs, dtype=torch.int32).to(self.device),
@@ -279,7 +280,6 @@ class DronesEnv(DirectMARLEnv):
         light_cfg.func("/World/Light", light_cfg)
 
     def _pre_physics_step(self, actions: dict):
-
         # PREPHYSICS FOR CRAZYFLIE #
 
         self.processed_actions["robot_0"] = self.processed_actions["robot_0"].clamp(-1.0, 1.0)
@@ -357,7 +357,7 @@ class DronesEnv(DirectMARLEnv):
 
     def _reset_idx(self, env_ids: torch.Tensor | None):
         if env_ids is None or len(env_ids) == self.num_envs:
-            env_ids = self.robots["robot_0"]._ALL_INDICES
+            env_ids = wp.to_torch(self.robots["robot_0"]._ALL_INDICES)
 
         # Logging
         final_distance_to_goal = torch.linalg.norm(

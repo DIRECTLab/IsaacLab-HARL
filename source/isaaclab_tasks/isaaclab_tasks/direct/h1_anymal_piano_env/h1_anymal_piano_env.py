@@ -8,6 +8,7 @@ from __future__ import annotations
 import copy
 
 import torch
+import warp as wp
 
 import isaaclab.envs.mdp as mdp
 import isaaclab.sim as sim_utils
@@ -680,7 +681,7 @@ class HeterogeneousMultiAgentPiano(DirectMARLEnv):
         self._commands[env_ids, 2] = 0.0
         # reset idx for h1 #
         if env_ids is None or len(env_ids) == self.num_envs:
-            env_ids = self.robots["robot_1"]._ALL_INDICES
+            env_ids = wp.to_torch(self.robots["robot_1"]._ALL_INDICES)
         self.robots["robot_1"].reset(env_ids)
 
         joint_pos = self.robots["robot_1"].data.default_joint_pos[env_ids]
@@ -702,7 +703,7 @@ class HeterogeneousMultiAgentPiano(DirectMARLEnv):
         # reset idx for anymal #
         robot = self.robots["robot_0"]
         if env_ids is None or len(env_ids) == self.num_envs:
-            env_ids = robot._ALL_INDICES
+            env_ids = wp.to_torch(robot._ALL_INDICES)
         robot.reset(env_ids)
         if len(env_ids) == self.num_envs:
             # Spread out the resets to avoid spikes in training when many environments reset at a similar time

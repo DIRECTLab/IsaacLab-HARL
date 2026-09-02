@@ -6,7 +6,9 @@
 from __future__ import annotations
 
 import copy
+
 import torch
+import warp as wp
 
 import isaaclab.envs.mdp as mdp
 import isaaclab.sim as sim_utils
@@ -19,8 +21,8 @@ from isaaclab.scene import InteractiveSceneCfg
 from isaaclab.sensors import ContactSensor, ContactSensorCfg
 from isaaclab.sim import SimulationCfg
 from isaaclab.terrains import TerrainImporterCfg
-from isaaclab.utils.configclass import configclass
 from isaaclab.utils.assets import ISAAC_NUCLEUS_DIR
+from isaaclab.utils.configclass import configclass
 from isaaclab.utils.math import quat_from_angle_axis
 
 ##
@@ -391,7 +393,7 @@ class AnymalCHappoEnv(DirectMARLEnv):
 
     def _reset_idx(self, env_ids: torch.Tensor | None):
         if env_ids is None or len(env_ids) == self.num_envs:
-            env_ids = self.robots["robot_0"]._ALL_INDICES
+            env_ids = wp.to_torch(self.robots["robot_0"]._ALL_INDICES)
         self.robots["robot_0"].reset(env_ids)
         super()._reset_idx(env_ids)
         if len(env_ids) == self.num_envs:

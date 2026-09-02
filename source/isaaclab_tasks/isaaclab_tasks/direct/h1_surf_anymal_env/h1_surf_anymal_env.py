@@ -8,6 +8,7 @@ from __future__ import annotations
 import copy
 
 import torch
+from isaaclab_physx.physics import PhysxCfg
 
 import isaaclab.envs.mdp as mdp
 import isaaclab.sim as sim_utils
@@ -134,7 +135,7 @@ class HeterogeneousMultiAgentFlatSurfEnvCfg(DirectMARLEnvCfg):
             dynamic_friction=1.0,
             restitution=0.0,
         ),
-        physx=sim_utils.PhysxCfg(
+        physics=PhysxCfg(
             enable_ccd=True,
         ),
     )
@@ -264,7 +265,7 @@ class HeterogeneousMultiAgentRoughSurfEnvCfg(HeterogeneousMultiAgentFlatSurfEnvC
     height_scanner_0 = RayCasterCfg(
         prim_path="/World/envs/env_.*/Robot_0/base",
         offset=RayCasterCfg.OffsetCfg(pos=(0.0, 0.0, 20.0)),
-        attach_yaw_only=True,
+        ray_alignment="yaw",
         pattern_cfg=patterns.GridPatternCfg(resolution=0.1, size=[1.6, 1.0]),
         debug_vis=False,
         mesh_prim_paths=["/World/ground"],
@@ -273,7 +274,7 @@ class HeterogeneousMultiAgentRoughSurfEnvCfg(HeterogeneousMultiAgentFlatSurfEnvC
     height_scanner_1 = RayCasterCfg(
         prim_path="/World/envs/env_.*/Robot_1/base",
         offset=RayCasterCfg.OffsetCfg(pos=(0.0, 0.0, 20.0)),
-        attach_yaw_only=True,
+        ray_alignment="yaw",
         pattern_cfg=patterns.GridPatternCfg(resolution=0.1, size=[1.6, 1.0]),
         debug_vis=False,
         mesh_prim_paths=["/World/ground"],
@@ -282,7 +283,7 @@ class HeterogeneousMultiAgentRoughSurfEnvCfg(HeterogeneousMultiAgentFlatSurfEnvC
     height_scanner_2 = RayCasterCfg(
         prim_path="/World/envs/env_.*/Robot_2/pelvis",
         offset=RayCasterCfg.OffsetCfg(pos=(0.0, 0.0, 20.0)),
-        attach_yaw_only=True,
+        ray_alignment="yaw",
         pattern_cfg=patterns.GridPatternCfg(resolution=0.1, size=[1.6, 1.0]),
         debug_vis=False,
         mesh_prim_paths=["/World/ground"],
@@ -468,7 +469,6 @@ class HeterogeneousMultiAgentSurf(DirectMARLEnv):
         return torch.any(torch.stack(agent_dones), dim=0)
 
     def _apply_action(self):
-
         robot_id = "robot_0"
         self.robots[robot_id].set_joint_position_target(self.processed_actions[robot_id])
 

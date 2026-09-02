@@ -248,7 +248,7 @@ class HeterogeneousMultiAgentRoughEnvCfg(HeterogeneousMultiAgentFlatEnvCfg):
     height_scanner_0 = RayCasterCfg(
         prim_path="/World/envs/env_.*/Robot_0/base",
         offset=RayCasterCfg.OffsetCfg(pos=(0.0, 0.0, 20.0)),
-        attach_yaw_only=True,
+        ray_alignment="yaw",
         pattern_cfg=patterns.GridPatternCfg(resolution=0.1, size=[1.6, 1.0]),
         debug_vis=False,
         mesh_prim_paths=["/World/ground"],
@@ -257,7 +257,7 @@ class HeterogeneousMultiAgentRoughEnvCfg(HeterogeneousMultiAgentFlatEnvCfg):
     height_scanner_1 = RayCasterCfg(
         prim_path="/World/envs/env_.*/Robot_1/pelvis",
         offset=RayCasterCfg.OffsetCfg(pos=(0.0, 0.0, 20.0)),
-        attach_yaw_only=True,
+        ray_alignment="yaw",
         pattern_cfg=patterns.GridPatternCfg(resolution=0.1, size=[1.6, 1.0]),
         debug_vis=False,
         mesh_prim_paths=["/World/ground"],
@@ -428,7 +428,6 @@ class HeterogeneousMultiAgentBall(DirectMARLEnv):
         return torch.any(torch.stack(agent_dones), dim=0)
 
     def _apply_action(self):
-
         robot_id = "robot_0"
         self.robots[robot_id].set_joint_position_target(self.processed_actions[robot_id])
 

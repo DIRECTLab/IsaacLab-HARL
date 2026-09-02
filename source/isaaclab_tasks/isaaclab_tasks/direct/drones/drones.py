@@ -224,7 +224,7 @@ class DronesEnv(DirectMARLEnv):
         self._moment = torch.zeros(self.num_envs, 1, 3, device=self.device)
         self._desired_pos_w = torch.zeros(self.num_envs, 3, device=self.device)
 
-        crazyflie_mass = self.robots["robot_0"].root_physx_view.get_masses()[0].sum()
+        crazyflie_mass = wp.to_torch(self.robots["robot_0"].root_view.get_masses())[0].sum()
         self._crazyflie_body_ids = self.robots["robot_0"].find_bodies("body")[0]
         self._gravity_magnitude = torch.tensor(self.sim.cfg.gravity, device=self.device).norm()
         self._crazyflie_weight = (crazyflie_mass * self._gravity_magnitude).item()

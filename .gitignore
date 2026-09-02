@@ -7,7 +7,7 @@
 # Omniverse
 **/*.dmp
 **/.thumbs
-
+*.etli
 # No USD files allowed in the repo
 **/*.usd
 **/*.usda

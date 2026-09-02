@@ -19,19 +19,23 @@ Install the conda environment
 ```
 
 Activate the conda environment and install other dependencies.
-```
-conda activate env_isaaclab
-./isaaclab.sh -i
-```
-
-This will automatically install the modified HARL package that works with isaaclab that we developed located at [https://github.com/DIRECTLab/HARL](https://github.com/DIRECTLab/HARL).
 
 Install isaacsim
 
 ```
-pip install isaacsim[all]==4.5.0 --extra-index-url https://pypi.nvidia.com
-pip install isaacsim[extscache]==4.5.0 --extra-index-url https://pypi.nvidia.com
+conda activate env_isaaclab
+pip install isaacsim[all,extscache]==6.0.0.1 --extra-index-url https://pypi.nvidia.com
 ```
+
+```
+./isaaclab.sh -i
+```
+
+```
+pip install git+https://github.com/DIRECTLab/HARL.git
+```
+
+
 
 
 # Adversarial Multi-Agent Training with HARL

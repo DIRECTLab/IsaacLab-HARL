@@ -32,7 +32,7 @@ pip install isaacsim[all,extscache]==6.0.0.1 --extra-index-url https://pypi.nvid
 ```
 
 ```
-pip install git+https://github.com/DIRECTLab/HARL.git@isaaclab_update
+pip install git+https://github.com/DIRECTLab/HARL.git@v3.0.1-beta 
 ```
 
 

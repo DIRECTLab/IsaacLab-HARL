@@ -91,7 +91,7 @@ class LeatherbackSumoMAStage1EnvCfg(DirectMARLEnvCfg):
             visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(0.0, 1.0, 0.0)),
         ),
         init_state=RigidObjectCfg.InitialStateCfg(
-            pos=(1.0, 0.5, 0.1), rot=(1.0, 0.0, 0.0, 0.0)
+            pos=(1.0, 0.5, 0.1), rot=(0.0, 0.0, 0.0, 1.0)
         ),  # started the bar lower
     )
 
@@ -104,7 +104,7 @@ class LeatherbackSumoMAStage1EnvCfg(DirectMARLEnvCfg):
             collision_props=sim_utils.CollisionPropertiesCfg(),
             visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(0.0, 1.0, 0.0)),
         ),
-        init_state=RigidObjectCfg.InitialStateCfg(pos=(1.0, -0.5, 0.1), rot=(1.0, 0.0, 0.0, 0.0)),
+        init_state=RigidObjectCfg.InitialStateCfg(pos=(1.0, -0.5, 0.1), rot=(0.0, 0.0, 0.0, 1.0)),
     )
 
 
@@ -210,7 +210,7 @@ class LeatherbackSumoMAStage1Env(DirectMARLEnv):
 
         # Orientations: identity quaternions since these are spheres.
         marker_orientations = torch.zeros((marker_positions.shape[0], 4), device=device)
-        marker_orientations[:, 0] = 1.0  # w=1, x=y=z=0
+        marker_orientations[:, 3] = 1.0  # w=1, x=y=z=0
 
         # Visualize. Your API already accepts marker_indices like your velocity viz.
         self.ring_markers.visualize(
@@ -221,7 +221,6 @@ class LeatherbackSumoMAStage1Env(DirectMARLEnv):
         )
 
     def _setup_scene(self):
-
         spawn_ground_plane(
             prim_path="/World/ground",
             cfg=GroundPlaneCfg(
@@ -446,7 +445,6 @@ class LeatherbackSumoMAStage1Env(DirectMARLEnv):
         return dones, timeouts
 
     def _reset_idx(self, env_ids: torch.Tensor | None):
-
         avg_episode_length = torch.mean(self.episode_length_buf[env_ids].to(torch.float32) + 1)
 
         if env_ids is None:

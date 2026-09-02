@@ -154,7 +154,7 @@ class ThreeDimGalCamerasEnvCfg(DirectMARLEnvCfg):
         #     focal_length=24.0, focus_distance=400.0, horizontal_aperture=20.955, clipping_range=(0.1, 1.0e5)
         # ),
         # offset=CameraCfg.OffsetCfg(pos=(0, 0, .25), rot=(0,0,1,0), convention="opengl"),
-        offset=CameraCfg.OffsetCfg(pos=(0, 0, 3), rot=(0, 0, 1, 0), convention="opengl"),
+        offset=CameraCfg.OffsetCfg(pos=(0, 0, 3), rot=(0, 1, 0, 0), convention="opengl"),
     )
 
     action_scale = 0.5
@@ -177,7 +177,7 @@ class ThreeDimGalCamerasEnvCfg(DirectMARLEnvCfg):
         # spawn=sim_utils.PinholeCameraCfg(
         #     focal_length=24.0, focus_distance=400.0, horizontal_aperture=20.955, clipping_range=(0.1, 1.0e5)
         # ),
-        offset=CameraCfg.OffsetCfg(pos=(0, 0, 0), rot=(1, 0, 0, 0), convention="opengl"),
+        offset=CameraCfg.OffsetCfg(pos=(0, 0, 0), rot=(0, 0, 0, 1), convention="opengl"),
     )
 
     thrust_to_weight = 1.9

@@ -137,7 +137,7 @@ class AnymalCHappoEnvCfg(DirectMARLEnvCfg):
     contact_sensor_0: ContactSensorCfg = ContactSensorCfg(
         prim_path="/World/envs/env_.*/Robot_0/.*", history_length=3, update_period=0.005, track_air_time=True
     )
-    robot_0.init_state.rot = (1.0, 0.0, 0.0, 0.0)
+    robot_0.init_state.rot = (0.0, 0.0, 0.0, 1.0)
     robot_0.init_state.pos = (0.0, 0.0, 0.5)
 
     # reward scales (override from flat config)

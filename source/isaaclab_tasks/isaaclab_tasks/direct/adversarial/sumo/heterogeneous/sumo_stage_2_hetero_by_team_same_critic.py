@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import copy
+
 import torch
 
 import isaaclab.envs.mdp as mdp
@@ -261,7 +262,7 @@ class SumoStage2HeteroByTeamSameCriticEnv(DirectMARLEnv):
         marker_positions = torch.cat(positions, dim=0)
         marker_indices = torch.cat(indices, dim=0)
         marker_orientations = torch.zeros((marker_positions.shape[0], 4), device=self.device)
-        marker_orientations[:, 0] = 1.0
+        marker_orientations[:, 3] = 1.0
         marker_scales = torch.ones((marker_positions.shape[0], 3), device=self.device)
 
         self.team_markers.visualize(
@@ -312,7 +313,7 @@ class SumoStage2HeteroByTeamSameCriticEnv(DirectMARLEnv):
 
         # Orientations: identity quaternions since these are spheres.
         marker_orientations = torch.zeros((marker_positions.shape[0], 4), device=device)
-        marker_orientations[:, 0] = 1.0  # w=1, x=y=z=0
+        marker_orientations[:, 3] = 1.0  # w=1, x=y=z=0
 
         # Visualize. Your API already accepts marker_indices like your velocity viz.
         self.ring_markers.visualize(
@@ -323,7 +324,6 @@ class SumoStage2HeteroByTeamSameCriticEnv(DirectMARLEnv):
         )
 
     def _setup_scene(self):
-
         spawn_ground_plane(
             prim_path="/World/ground",
             cfg=GroundPlaneCfg(
@@ -357,7 +357,6 @@ class SumoStage2HeteroByTeamSameCriticEnv(DirectMARLEnv):
         light_cfg.func("/World/Light", light_cfg)
 
     def _pre_physics_step(self, actions: dict) -> None:
-
         for robot_id in self.leatherbacks.keys():
             self._throttle_action = (
                 actions[robot_id][:, 0].repeat_interleave(4).reshape((-1, 4)) * self.cfg.throttle_scale
@@ -532,9 +531,7 @@ class SumoStage2HeteroByTeamSameCriticEnv(DirectMARLEnv):
 
         # Randomize ring radius per env
         low, high = self.cfg.ring_radius_min, self.cfg.ring_radius_max
-        self.ring_radius[env_ids] = torch.empty(env_ids.shape[0], device=self.device).uniform_(
-            low, high
-        )  # type: ignore
+        self.ring_radius[env_ids] = torch.empty(env_ids.shape[0], device=self.device).uniform_(low, high)  # type: ignore
 
         origins = self.scene.env_origins[env_ids]  # (N, 3)
 

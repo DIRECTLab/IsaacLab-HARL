@@ -59,7 +59,7 @@ class LeatherbacksVSLeatherbacksSoccerEnvCfg(DirectMARLEnvCfg):
             collision_props=sim_utils.CollisionPropertiesCfg(),
             visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(0.5, 0.5, 0.5)),
         ),
-        init_state=RigidObjectCfg.InitialStateCfg(pos=(0.0, 5.0, 1), rot=(1.0, 0.0, 0.0, 0.0)),
+        init_state=RigidObjectCfg.InitialStateCfg(pos=(0.0, 5.0, 1), rot=(0.0, 0.0, 0.0, 1.0)),
     )
 
     wall_1 = RigidObjectCfg(
@@ -83,7 +83,7 @@ class LeatherbacksVSLeatherbacksSoccerEnvCfg(DirectMARLEnvCfg):
             collision_props=sim_utils.CollisionPropertiesCfg(),
             visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(0.5, 0.5, 0.5)),
         ),
-        init_state=RigidObjectCfg.InitialStateCfg(pos=(10.0, 0.0, 1), rot=(1.0, 0.0, 0.0, 0.0)),
+        init_state=RigidObjectCfg.InitialStateCfg(pos=(10.0, 0.0, 1), rot=(0.0, 0.0, 0.0, 1.0)),
     )
 
     wall_3 = RigidObjectCfg(
@@ -95,7 +95,7 @@ class LeatherbacksVSLeatherbacksSoccerEnvCfg(DirectMARLEnvCfg):
             collision_props=sim_utils.CollisionPropertiesCfg(),
             visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(0.5, 0.5, 0.5)),
         ),
-        init_state=RigidObjectCfg.InitialStateCfg(pos=(-10.0, 0.0, 1), rot=(1.0, 0.0, 0.0, 0.0)),
+        init_state=RigidObjectCfg.InitialStateCfg(pos=(-10.0, 0.0, 1), rot=(0.0, 0.0, 0.0, 1.0)),
     )
 
     ball = SOCCERBALL_CFG.replace(prim_path="/World/envs/env_.*/Object4")
@@ -242,7 +242,7 @@ class LeatherbacksVSLeatherbacksSoccerEnv(DirectMARLEnv):
         marker_positions = torch.cat(positions, dim=0)
         marker_indices = torch.cat(indices, dim=0)
         marker_orientations = torch.zeros((marker_positions.shape[0], 4), device=self.device)
-        marker_orientations[:, 0] = 1.0
+        marker_orientations[:, 3] = 1.0
         marker_scales = torch.ones((marker_positions.shape[0], 3), device=self.device)
 
         self.team_markers.visualize(
@@ -613,7 +613,7 @@ class LeatherbacksVSLeatherbacksSoccerEnv(DirectMARLEnv):
         marker_scales = 1 * torch.ones((marker_positions.shape[0], 3), device=device)
 
         marker_orientations = torch.zeros((marker_positions.shape[0], 4), device=device)
-        marker_orientations[:, 0] = 1.0  # identity quaternion
+        marker_orientations[:, 3] = 1.0  # identity quaternion
 
         if not hasattr(self, "grid_markers"):
             markers = {

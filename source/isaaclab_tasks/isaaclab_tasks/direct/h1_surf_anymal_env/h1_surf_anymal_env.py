@@ -165,18 +165,18 @@ class HeterogeneousMultiAgentFlatSurfEnvCfg(DirectMARLEnvCfg):
     contact_sensor_0: ContactSensorCfg = ContactSensorCfg(
         prim_path="/World/envs/env_.*/Robot_0/.*", history_length=3, update_period=0.005, track_air_time=True
     )
-    robot_0.init_state.rot = (1.0, 0.0, 0.0, 1)
+    robot_0.init_state.rot = (0.0, 0.0, 1.0, 1.0)
     robot_0.init_state.pos = (-1.0, 0.0, 0.5)
 
     robot_1: ArticulationCfg = ANYMAL_C_CFG.replace(prim_path="/World/envs/env_.*/Robot_1")
     contact_sensor_1: ContactSensorCfg = ContactSensorCfg(
         prim_path="/World/envs/env_.*/Robot_1/.*", history_length=3, update_period=0.005, track_air_time=True
     )
-    robot_1.init_state.rot = (1.0, 0.0, 0.0, 1)
+    robot_1.init_state.rot = (0.0, 0.0, 1.0, 1.0)
     robot_1.init_state.pos = (1.0, 0.0, 0.5)
 
     robot_2: ArticulationCfg = H1_CFG.replace(prim_path="/World/envs/env_.*/Robot_2")
-    robot_2.init_state.rot = (1.0, 0.0, 0.0, 1)
+    robot_2.init_state.rot = (0.0, 0.0, 1.0, 1.0)
     robot_2.init_state.pos = (0, 0.0, 1.9)
 
     # rec prism
@@ -189,7 +189,7 @@ class HeterogeneousMultiAgentFlatSurfEnvCfg(DirectMARLEnvCfg):
             collision_props=sim_utils.CollisionPropertiesCfg(),
             visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(1, 0.65, 0)),
         ),
-        init_state=RigidObjectCfg.InitialStateCfg(pos=(0.0, 0, 0.6), rot=(1.0, 0.0, 0.0, 0.0)),
+        init_state=RigidObjectCfg.InitialStateCfg(pos=(0.0, 0, 0.6), rot=(0.0, 0.0, 0.0, 1.0)),
     )
 
     # reward scales (override from flat config)
@@ -390,7 +390,7 @@ class HeterogeneousMultiAgentSurf(DirectMARLEnv):
             (self.num_envs, 1)
         )
         self.up_vec = torch.tensor([0, 0, 1], dtype=torch.float32, device=self.sim.device).repeat((self.num_envs, 1))
-        self.start_rotation = torch.tensor([1, 0, 0, 0], device=self.sim.device, dtype=torch.float32)
+        self.start_rotation = torch.tensor([0, 0, 0, 1], device=self.sim.device, dtype=torch.float32)
         self.inv_start_rot = quat_conjugate(self.start_rotation).repeat((self.num_envs, 1))
         self.basis_vec0 = self.heading_vec.clone()
         self.basis_vec1 = self.up_vec.clone()

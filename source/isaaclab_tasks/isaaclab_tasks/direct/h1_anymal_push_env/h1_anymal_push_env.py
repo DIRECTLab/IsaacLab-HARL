@@ -139,11 +139,11 @@ class HeterogeneousPushMultiAgentFlatEnvCfg(DirectMARLEnvCfg):
     contact_sensor_0: ContactSensorCfg = ContactSensorCfg(
         prim_path="/World/envs/env_.*/Robot_0/.*", history_length=3, update_period=0.005, track_air_time=True
     )
-    robot_0.init_state.rot = (1.0, 0.0, 0.0, 1.0)
+    robot_0.init_state.rot = (0.0, 0.0, 1.0, 1.0)
     robot_0.init_state.pos = (-1.0, 0.0, 0.5)
 
     robot_1: ArticulationCfg = H1_CFG.replace(prim_path="/World/envs/env_.*/Robot_1")
-    robot_1.init_state.rot = (1.0, 0.0, 0.0, 1.0)
+    robot_1.init_state.rot = (0.0, 0.0, 1.0, 1.0)
     robot_1.init_state.pos = (1.0, 0.0, 1.0)
 
     # rec prism
@@ -157,7 +157,7 @@ class HeterogeneousPushMultiAgentFlatEnvCfg(DirectMARLEnvCfg):
             visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(0.0, 1.0, 0.0)),
             # visual_material=sim_utils.GlassMdlCfg(glass_color=(0.0, 1.0, 0.0), frosting_roughness=0.7),
         ),
-        init_state=RigidObjectCfg.InitialStateCfg(pos=(0.0, 2, 0.6), rot=(1.0, 0.0, 0.0, 0.0)),  # started the bar lower
+        init_state=RigidObjectCfg.InitialStateCfg(pos=(0.0, 2, 0.6), rot=(0.0, 0.0, 0.0, 1.0)),  # started the bar lower
     )
 
     # reward scales (override from flat config)
@@ -347,7 +347,7 @@ class HeterogeneousPushMultiAgent(DirectMARLEnv):
             (self.num_envs, 1)
         )
         self.up_vec = torch.tensor([0, 0, 1], dtype=torch.float32, device=self.sim.device).repeat((self.num_envs, 1))
-        self.start_rotation = torch.tensor([1, 0, 0, 0], device=self.sim.device, dtype=torch.float32)
+        self.start_rotation = torch.tensor([0, 0, 0, 1], device=self.sim.device, dtype=torch.float32)
         self.inv_start_rot = quat_conjugate(self.start_rotation).repeat((self.num_envs, 1))
         self.basis_vec0 = self.heading_vec.clone()
         self.basis_vec1 = self.up_vec.clone()

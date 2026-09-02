@@ -96,7 +96,7 @@ class LocomotionVelocityEnv(DirectMARLEnv):
         self.walking_model = torch.load(walking_policy_path, map_location=self.device)
         self.walking_model.eval()  # Sets the model to evaluation mode, solely for inference
 
-        self.start_rotation = torch.tensor([1, 0, 0, 0], device=self.sim.device, dtype=torch.float32)
+        self.start_rotation = torch.tensor([0, 0, 0, 1], device=self.sim.device, dtype=torch.float32)
         self.up_vec = torch.tensor([0, 0, 1], dtype=torch.float32, device=self.sim.device).repeat((self.num_envs, 1))
 
         self.inv_start_rot = quat_conjugate(self.start_rotation).repeat((self.num_envs, 1))

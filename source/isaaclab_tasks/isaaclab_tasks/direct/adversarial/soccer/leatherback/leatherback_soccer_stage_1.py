@@ -51,7 +51,7 @@ class LeatherbackStage1SoccerEnvCfg(DirectMARLEnvCfg):
         ),
         init_state=RigidObjectCfg.InitialStateCfg(
             pos=(0.0, 5.0, 1),
-            rot=(1.0, 0.0, 0.0, 0.0),  # Position originally was (0.0, 0, 0.61)
+            rot=(0.0, 0.0, 0.0, 1.0),  # Position originally was (0.0, 0, 0.61)
         ),
     )
 
@@ -66,7 +66,7 @@ class LeatherbackStage1SoccerEnvCfg(DirectMARLEnvCfg):
         ),
         init_state=RigidObjectCfg.InitialStateCfg(
             pos=(0.0, -5.0, 1),
-            rot=(1.0, 0.0, 0.0, 0.0),  # Position originally was (0.0, 0, 0.61)
+            rot=(0.0, 0.0, 0.0, 1.0),  # Position originally was (0.0, 0, 0.61)
         ),
     )
 
@@ -81,7 +81,7 @@ class LeatherbackStage1SoccerEnvCfg(DirectMARLEnvCfg):
         ),
         init_state=RigidObjectCfg.InitialStateCfg(
             pos=(10.0, 0.0, 1),
-            rot=(1.0, 0.0, 0.0, 0.0),  # Position originally was (0.0, 0, 0.61)
+            rot=(0.0, 0.0, 0.0, 1.0),  # Position originally was (0.0, 0, 0.61)
         ),
     )
 
@@ -96,7 +96,7 @@ class LeatherbackStage1SoccerEnvCfg(DirectMARLEnvCfg):
         ),
         init_state=RigidObjectCfg.InitialStateCfg(
             pos=(-10.0, 0.0, 1),
-            rot=(1.0, 0.0, 0.0, 0.0),  # Position originally was (0.0, 0, 0.61)
+            rot=(0.0, 0.0, 0.0, 1.0),  # Position originally was (0.0, 0, 0.61)
         ),
     )
 
@@ -525,7 +525,7 @@ class LeatherbackStage1SoccerEnv(DirectMARLEnv):
         marker_scales = 10 * torch.ones((marker_positions.shape[0], 3), device=device)
 
         marker_orientations = torch.zeros((marker_positions.shape[0], 4), device=device)
-        marker_orientations[:, 0] = 1.0  # identity quaternion
+        marker_orientations[:, 3] = 1.0  # identity quaternion
 
         if not hasattr(self, "grid_markers"):
             markers = {

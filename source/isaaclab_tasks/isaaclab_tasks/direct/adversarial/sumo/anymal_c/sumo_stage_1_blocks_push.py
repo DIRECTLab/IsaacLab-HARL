@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import copy
+
 import torch
 
 import isaaclab.envs.mdp as mdp
@@ -148,7 +149,7 @@ class AnymalCBlocksPushEnvCfg(DirectMARLEnvCfg):
             collision_props=sim_utils.CollisionPropertiesCfg(),
             visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(0.0, 1.0, 0.0)),
         ),
-        init_state=RigidObjectCfg.InitialStateCfg(pos=(1.0, 0.5, 0.1), rot=(1.0, 0.0, 0.0, 0.0)),
+        init_state=RigidObjectCfg.InitialStateCfg(pos=(1.0, 0.5, 0.1), rot=(0.0, 0.0, 0.0, 1.0)),
     )
 
     block_1 = RigidObjectCfg(
@@ -160,7 +161,7 @@ class AnymalCBlocksPushEnvCfg(DirectMARLEnvCfg):
             collision_props=sim_utils.CollisionPropertiesCfg(),
             visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(0.0, 1.0, 0.0)),
         ),
-        init_state=RigidObjectCfg.InitialStateCfg(pos=(1.0, -0.5, 0.1), rot=(1.0, 0.0, 0.0, 0.0)),
+        init_state=RigidObjectCfg.InitialStateCfg(pos=(1.0, -0.5, 0.1), rot=(0.0, 0.0, 0.0, 1.0)),
     )
 
 
@@ -270,7 +271,7 @@ class AnymalCBlocksPushEnv(DirectMARLEnv):
 
         # Orientations: identity quaternions since these are spheres.
         marker_orientations = torch.zeros((marker_positions.shape[0], 4), device=device)
-        marker_orientations[:, 0] = 1.0  # w=1, x=y=z=0
+        marker_orientations[:, 3] = 1.0  # w=1, x=y=z=0
 
         # Visualize. Your API already accepts marker_indices like your velocity viz.
         self.ring_markers.visualize(
@@ -281,7 +282,6 @@ class AnymalCBlocksPushEnv(DirectMARLEnv):
         )
 
     def _setup_scene(self):
-
         spawn_ground_plane(
             prim_path="/World/ground",
             cfg=GroundPlaneCfg(
@@ -535,7 +535,6 @@ class AnymalCBlocksPushEnv(DirectMARLEnv):
 
         # Apply robot positions
         for i, robot_id in enumerate(self.robots):
-
             # Reset robot state
             self.robots[robot_id].reset(env_ids)
             joint_pos = self.robots[robot_id].data.default_joint_pos[env_ids]

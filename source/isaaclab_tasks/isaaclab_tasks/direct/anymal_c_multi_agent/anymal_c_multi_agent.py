@@ -159,14 +159,14 @@ class AnymalCMultiAgentFlatEnvCfg(DirectMARLEnvCfg):
     contact_sensor_0: ContactSensorCfg = ContactSensorCfg(
         prim_path="/World/envs/env_.*/Robot_0/.*", history_length=3, update_period=0.005, track_air_time=True
     )
-    robot_0.init_state.rot = (1.0, 0.0, 0.0, 1)
+    robot_0.init_state.rot = (0.0, 0.0, 1.0, 1.0)
     robot_0.init_state.pos = (-1.0, 0.0, 0.5)
 
     robot_1: ArticulationCfg = ANYMAL_C_CFG.replace(prim_path="/World/envs/env_.*/Robot_1")
     contact_sensor_1: ContactSensorCfg = ContactSensorCfg(
         prim_path="/World/envs/env_.*/Robot_1/.*", history_length=3, update_period=0.005, track_air_time=True
     )
-    robot_1.init_state.rot = (1.0, 0.0, 0.0, 1)
+    robot_1.init_state.rot = (0.0, 0.0, 1.0, 1.0)
     robot_1.init_state.pos = (1.0, 0.0, 0.5)
 
     # rec prism
@@ -180,7 +180,7 @@ class AnymalCMultiAgentFlatEnvCfg(DirectMARLEnvCfg):
             visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(0.0, 1.0, 0.0)),
         ),
         init_state=RigidObjectCfg.InitialStateCfg(
-            pos=(0.0, 0, 0.61), rot=(1.0, 0.0, 0.0, 0.0)
+            pos=(0.0, 0, 0.61), rot=(0.0, 0.0, 0.0, 1.0)
         ),  # started the bar lower
     )
 

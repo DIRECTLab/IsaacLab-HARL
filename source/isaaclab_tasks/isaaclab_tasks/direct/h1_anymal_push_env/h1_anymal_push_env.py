@@ -6,10 +6,8 @@
 from __future__ import annotations
 
 import copy
-import torch
 
-import isaacsim.core.utils.torch as torch_utils
-from isaacsim.core.utils.torch.rotations import compute_heading_and_up, compute_rot, quat_conjugate
+import torch
 
 import isaaclab.envs.mdp as mdp
 import isaaclab.sim as sim_utils
@@ -22,9 +20,11 @@ from isaaclab.scene import InteractiveSceneCfg
 from isaaclab.sensors import ContactSensor, ContactSensorCfg, RayCasterCfg, patterns
 from isaaclab.sim import SimulationCfg
 from isaaclab.terrains import TerrainImporterCfg
-from isaaclab.utils.configclass import configclass
 from isaaclab.utils.assets import ISAAC_NUCLEUS_DIR
-from isaaclab.utils.math import quat_from_angle_axis
+from isaaclab.utils.configclass import configclass
+from isaaclab.utils.math import quat_conjugate, quat_from_angle_axis, scale_transform
+
+from isaaclab_tasks.direct.locomotion.locomotion_env import compute_heading_and_up, compute_rot
 
 ##
 # Pre-defined configs
@@ -724,7 +724,7 @@ def compute_intermediate_values(
         torso_quat, velocity, ang_velocity, targets, torso_position
     )
 
-    dof_pos_scaled = torch_utils.maths.unscale(dof_pos, dof_lower_limits, dof_upper_limits)
+    dof_pos_scaled = scale_transform(dof_pos, dof_lower_limits, dof_upper_limits)
 
     to_target = targets - torso_position
     to_target[:, 2] = 0.0

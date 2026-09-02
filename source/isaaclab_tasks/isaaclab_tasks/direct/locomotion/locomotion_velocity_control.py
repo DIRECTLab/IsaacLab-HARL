@@ -5,11 +5,9 @@
 
 from __future__ import annotations
 
-import torch
 from pathlib import Path
 
-import isaacsim.core.utils.torch as torch_utils
-from isaacsim.core.utils.torch.rotations import quat_conjugate
+import torch
 
 import isaaclab.sim as sim_utils
 from isaaclab.assets import Articulation
@@ -17,7 +15,13 @@ from isaaclab.envs import DirectMARLEnv, DirectMARLEnvCfg
 from isaaclab.markers import VisualizationMarkers, VisualizationMarkersCfg
 from isaaclab.sensors import ContactSensor
 from isaaclab.utils.assets import ISAAC_NUCLEUS_DIR
-from isaaclab.utils.math import quat_from_angle_axis, quat_rotate_inverse, yaw_quat
+from isaaclab.utils.math import (
+    quat_conjugate,
+    quat_from_angle_axis,
+    quat_rotate_inverse,
+    scale_transform,
+    yaw_quat,
+)
 
 from . import rewards_funcs as rewards
 
@@ -207,7 +211,7 @@ class LocomotionVelocityEnv(DirectMARLEnv):
             self.robots["robot_0"].data.root_ang_vel_w,
         )
         self.dof_pos, self.dof_vel = self.robots["robot_0"].data.joint_pos, self.robots["robot_0"].data.joint_vel
-        self.dof_pos_scaled = torch_utils.maths.unscale(
+        self.dof_pos_scaled = scale_transform(
             self.dof_pos,
             self.robots["robot_0"].data.soft_joint_pos_limits[0, :, 0],
             self.robots["robot_0"].data.soft_joint_pos_limits[0, :, 1],

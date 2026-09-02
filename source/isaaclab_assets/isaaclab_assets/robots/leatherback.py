@@ -5,20 +5,15 @@
 
 """Configuration for the leatherback robot."""
 
-from pathlib import Path
+from harl.utils.hf_assets import asset_path
 
-import isaaclab
 import isaaclab.sim as sim_utils
 from isaaclab.actuators import ImplicitActuatorCfg
 from isaaclab.assets import ArticulationCfg
 
-isaaclab_asset_path = Path(
-    Path(isaaclab.__path__[0]).parent.parent, "isaaclab_assets", "isaaclab_assets", "custom", "assets"
-)
-
 LEATHERBACK_CFG = ArticulationCfg(
     spawn=sim_utils.UsdFileCfg(
-        usd_path=str(Path(isaaclab_asset_path, "leatherback_simple_better.usd")),
+        usd_path=asset_path("leatherback_simple_better.usd"),
         rigid_props=sim_utils.RigidBodyPropertiesCfg(
             rigid_body_enabled=True,
             max_linear_velocity=1000.0,

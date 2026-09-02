@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import copy
+
 import torch
 
 import isaaclab.envs.mdp as mdp
@@ -19,7 +20,7 @@ from isaaclab.scene import InteractiveSceneCfg
 from isaaclab.sim import SimulationCfg
 from isaaclab.sim.spawners.from_files import GroundPlaneCfg, spawn_ground_plane
 from isaaclab.utils.configclass import configclass
-from isaaclab.utils.math import quat_from_euler_xyz, quat_rotate_inverse, subtract_frame_transforms
+from isaaclab.utils.math import quat_apply_inverse, quat_from_euler_xyz, subtract_frame_transforms
 
 from isaaclab_assets.robots.anymal import ANYMAL_C_CFG  # isort: skip
 from isaaclab_assets.custom.soccer_ball import SOCCERBALL_CFG  # isort: skip
@@ -84,7 +85,8 @@ class AnymalStage2SoccerEnvCfg(DirectMARLEnvCfg):
             visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(0.5, 0.5, 0.5)),
         ),
         init_state=RigidObjectCfg.InitialStateCfg(
-            pos=(0.0, 5.0, 1), rot=(1.0, 0.0, 0.0, 0.0)  # Position originally was (0.0, 0, 0.61)
+            pos=(0.0, 5.0, 1),
+            rot=(1.0, 0.0, 0.0, 0.0),  # Position originally was (0.0, 0, 0.61)
         ),
     )
 
@@ -98,7 +100,8 @@ class AnymalStage2SoccerEnvCfg(DirectMARLEnvCfg):
             visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(0.5, 0.5, 0.5)),
         ),
         init_state=RigidObjectCfg.InitialStateCfg(
-            pos=(0.0, -5.0, 1), rot=(1.0, 0.0, 0.0, 0.0)  # Position originally was (0.0, 0, 0.61)
+            pos=(0.0, -5.0, 1),
+            rot=(1.0, 0.0, 0.0, 0.0),  # Position originally was (0.0, 0, 0.61)
         ),
     )
 
@@ -112,7 +115,8 @@ class AnymalStage2SoccerEnvCfg(DirectMARLEnvCfg):
             visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(0.5, 0.5, 0.5)),
         ),
         init_state=RigidObjectCfg.InitialStateCfg(
-            pos=(10.0, 0.0, 1), rot=(1.0, 0.0, 0.0, 0.0)  # Position originally was (0.0, 0, 0.61)
+            pos=(10.0, 0.0, 1),
+            rot=(1.0, 0.0, 0.0, 0.0),  # Position originally was (0.0, 0, 0.61)
         ),
     )
 
@@ -126,7 +130,8 @@ class AnymalStage2SoccerEnvCfg(DirectMARLEnvCfg):
             visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(0.5, 0.5, 0.5)),
         ),
         init_state=RigidObjectCfg.InitialStateCfg(
-            pos=(-10.0, 0.0, 1), rot=(1.0, 0.0, 0.0, 0.0)  # Position originally was (0.0, 0, 0.61)
+            pos=(-10.0, 0.0, 1),
+            rot=(1.0, 0.0, 0.0, 0.0),  # Position originally was (0.0, 0, 0.61)
         ),
     )
 
@@ -268,7 +273,7 @@ class AnymalStage2SoccerEnv(DirectMARLEnv):
         )
 
         # ball velocity in robot frame
-        ball_vel = quat_rotate_inverse(
+        ball_vel = quat_apply_inverse(
             self.robots["robot_0"].data.root_state_w[:, 3:7],
             self.ball.data.root_vel_w[:, :3] - self.robots["robot_0"].data.root_vel_w[:, :3],
         )

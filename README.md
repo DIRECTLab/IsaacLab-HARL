@@ -153,7 +153,7 @@ Policy availability by environment:
 
 ```bash
 cd scripts/reinforcement_learning/harl
-python play.py --algorithm happo --num_envs 32 --task "Isaac-Multi-Agent-Flat-Anymal-C-Direct-v0" --dir <path_to_trained_model> --headless
+python play.py --algorithm happo --num_envs 32 --task "Isaac-Multi-Agent-Flat-Anymal-C-Direct-v0" --load_starting_policy --headless --num_env_steps 10000000000
 ```
 
 ### Playing Parameters

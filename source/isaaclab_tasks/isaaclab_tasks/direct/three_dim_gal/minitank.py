@@ -191,9 +191,6 @@ class MinitankEnv(DirectMARLEnv):
             ]
         }
 
-        if not self.headless:
-            self.my_visualizer = define_markers()
-
     def _draw_markers(self):
         marker_ids = torch.concat(
             [
@@ -235,6 +232,7 @@ class MinitankEnv(DirectMARLEnv):
         orientation = quat_from_angle_axis(angle, r)
         arm_orientation = quat_from_angle_axis(angle_arm, r_arm)
         sphere_orientation = torch.zeros_like(arm_orientation)
+        sphere_orientation[:, 3] = 1.0  # identity quaternion (xyzw)
         positions = torch.concat([arm_pos, arm_pos, self._desired_pos_w], dim=0)
         orientations = torch.concat([orientation, arm_orientation, sphere_orientation], dim=0)
 
@@ -294,6 +292,8 @@ class MinitankEnv(DirectMARLEnv):
                 self.robots[f"robot_{i}"] = Articulation(self.cfg.__dict__["robot_" + str(i)])
                 self.scene.articulations[f"robot_{i}"] = self.robots[f"robot_{i}"]
 
+        if self.sim.is_rendering:
+            self.my_visualizer = define_markers()
         # SETUP CAMERAS #
         # self.cameras["robot_0"] = TiledCamera(self.cfg.camera_0)
         # self.scene.sensors["robot_0_camera"] = self.cameras["robot_0"]
@@ -348,7 +348,7 @@ class MinitankEnv(DirectMARLEnv):
         return y_euler_angle
 
     def _get_rewards(self) -> dict:
-        if not self.headless:
+        if hasattr(self, "my_visualizer"):
             self._draw_markers()
 
         # MINITANK REWARDS #

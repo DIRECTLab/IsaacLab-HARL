@@ -378,7 +378,8 @@ class HeterogeneousMultiAgentPiano(DirectMARLEnv):
         self.robots = {}
         self.contact_sensors = {}
         self.height_scanners = {}
-        self.my_visualizer = define_markers()
+        if self.sim.is_rendering:
+            self.my_visualizer = define_markers()
         self.object = RigidObject(self.cfg.cfg_rec_prism)
 
         self.scene.rigid_objects["object"] = self.object
@@ -613,7 +614,8 @@ class HeterogeneousMultiAgentPiano(DirectMARLEnv):
         reward = {}
 
         bar_commands = torch.stack([-self._commands[:, 1], self._commands[:, 0], self._commands[:, 2]]).t()
-        self._draw_markers(bar_commands)
+        if hasattr(self, "my_visualizer"):
+            self._draw_markers(bar_commands)
         yaw_rate_error = torch.square(self._commands[:, 2] - self.object.data.root_com_ang_vel_b[:, 2])
         yaw_rate_error_mapped = torch.exp(-yaw_rate_error)
 

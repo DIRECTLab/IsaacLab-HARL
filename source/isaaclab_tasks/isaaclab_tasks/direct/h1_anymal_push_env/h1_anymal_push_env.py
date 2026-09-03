@@ -357,7 +357,8 @@ class HeterogeneousPushMultiAgent(DirectMARLEnv):
         self.robots = {}
         self.contact_sensors = {}
         self.height_scanners = {}
-        self.my_visualizer = define_markers()
+        if self.sim.is_rendering:
+            self.my_visualizer = define_markers()
         self.object = RigidObject(self.cfg.cfg_rec_prism)
 
         self.scene.rigid_objects["object"] = self.object
@@ -587,7 +588,8 @@ class HeterogeneousPushMultiAgent(DirectMARLEnv):
         reward = {}
 
         bar_commands = torch.stack([-self._commands[:, 1], self._commands[:, 0], self._commands[:, 2]]).t()
-        self._draw_markers(bar_commands)
+        if hasattr(self, "my_visualizer"):
+            self._draw_markers(bar_commands)
         obj_xy_vel = self.object.data.root_com_lin_vel_b[:, :2]
 
         # linear velocity tracking

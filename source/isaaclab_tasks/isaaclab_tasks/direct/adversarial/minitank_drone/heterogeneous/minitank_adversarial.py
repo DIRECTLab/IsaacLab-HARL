@@ -210,9 +210,6 @@ class MinitankAdversarialEnv(DirectMARLEnv):
         }
         self._drone_desired_pos_w = torch.zeros((self.num_envs, 3), device=self.device)
 
-        if not self.headless:
-            self.my_visualizer = define_markers()
-
         # CRAZYFLIE INITIALIZATION #
         self._thrust = torch.zeros(self.num_envs, 1, 3, device=self.device)
         self._moment = torch.zeros(self.num_envs, 1, 3, device=self.device)
@@ -270,6 +267,7 @@ class MinitankAdversarialEnv(DirectMARLEnv):
         orientation = quat_from_angle_axis(angle, r)
         arm_orientation = quat_from_angle_axis(angle_arm, r_arm)
         sphere_orientation = torch.zeros_like(arm_orientation)
+        sphere_orientation[:, 3] = 1.0  # identity quaternion (xyzw)
         positions = torch.concat([arm_pos, arm_pos, self._drone_desired_pos_w], dim=0)
         orientations = torch.concat([orientation, arm_orientation, sphere_orientation], dim=0)
 
@@ -332,6 +330,12 @@ class MinitankAdversarialEnv(DirectMARLEnv):
             if robot_id in self.cfg.__dict__:
                 self.robots[f"robot_{i}"] = Articulation(self.cfg.__dict__["robot_" + str(i)])
                 self.scene.articulations[f"robot_{i}"] = self.robots[f"robot_{i}"]
+
+        # Create debug-vis markers here (before the sim/Fabric snapshot) so the
+        # point instancer is registered with Fabric and renders in headless /
+        # livestream mode, not only in the interactive viewport.
+        if self.sim.is_rendering:
+            self.my_visualizer = define_markers()
 
         # SETUP CAMERAS #
         # self.cameras["robot_0"] = TiledCamera(self.cfg.camera_0)
@@ -424,7 +428,7 @@ class MinitankAdversarialEnv(DirectMARLEnv):
         return drone_made_it_to_goal
 
     def _get_rewards(self) -> dict:
-        if not self.headless:
+        if hasattr(self, "my_visualizer"):
             self._draw_markers()
 
         # MINITANK REWARDS #

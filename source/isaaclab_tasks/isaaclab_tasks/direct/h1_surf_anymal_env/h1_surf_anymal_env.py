@@ -400,7 +400,8 @@ class HeterogeneousMultiAgentSurf(DirectMARLEnv):
         self.robots = {}
         self.contact_sensors = {}
         self.height_scanners = {}
-        self.my_visualizer = define_markers()
+        if self.sim.is_rendering:
+            self.my_visualizer = define_markers()
         self.object = RigidObject(self.cfg.cfg_rec_prism)
 
         self.scene.rigid_objects["object"] = self.object
@@ -700,7 +701,8 @@ class HeterogeneousMultiAgentSurf(DirectMARLEnv):
         all_vectors = torch.stack([anymal_1_vel, anymal_2_vel, h1_vel])
         mean_vel = torch.mean(all_vectors, dim=0)
 
-        self._draw_markers(bar_commands)
+        if hasattr(self, "my_visualizer"):
+            self._draw_markers(bar_commands)
         lin_vel_error = torch.sum(torch.square(bar_commands[:, :2] - mean_vel), dim=1)
         lin_vel_error_mapped = torch.exp(-lin_vel_error)
 

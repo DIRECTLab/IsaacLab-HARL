@@ -209,8 +209,8 @@ class AnymalCHappoEnv(DirectMARLEnv):
         self.robots = {}
         self.contact_sensors = {}
         self.height_scanners = {}
-        self.my_visualizer = define_markers()
-
+        if self.sim.is_rendering:
+            self.my_visualizer = define_markers()
         for i in range(self.num_robots):
             self.robots[f"robot_{i}"] = Articulation(self.cfg.__dict__["robot_" + str(i)])
             self.scene.articulations[f"robot_{i}"] = self.robots[f"robot_{i}"]
@@ -328,7 +328,8 @@ class AnymalCHappoEnv(DirectMARLEnv):
         )
 
     def _get_rewards(self) -> dict:
-        self._draw_markers(self._commands)
+        if hasattr(self, "my_visualizer"):
+            self._draw_markers(self._commands)
         # linear velocity tracking
         lin_vel_error = torch.sum(
             torch.square(self._commands[:, :2] - self.robots["robot_0"].data.root_lin_vel_b[:, :2]), dim=1

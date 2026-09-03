@@ -176,7 +176,8 @@ class LocomotionVelocityEnv(DirectMARLEnv):
 
     def _setup_scene(self):
         self.robots = {"robot_0": Articulation(self.cfg.robot_0)}
-        self.my_visualizer = define_markers()
+        if self.sim.is_rendering:
+            self.my_visualizer = define_markers()
         # add ground plane
         self.cfg.terrain.num_envs = self.scene.cfg.num_envs
         self.cfg.terrain.env_spacing = self.scene.cfg.env_spacing
@@ -246,8 +247,8 @@ class LocomotionVelocityEnv(DirectMARLEnv):
         return phase
 
     def _get_rewards(self) -> dict:
-        self._draw_markers(self._commands)
-
+        if hasattr(self, "my_visualizer"):
+            self._draw_markers(self._commands)
         feet_slide = rewards.feet_slide_reward(self)
 
         gait_reward = rewards.gait_reward(self, self.cfg.period, [0.0, 0.5], 0.55, self._commands)

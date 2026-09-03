@@ -187,7 +187,6 @@ class AnymalCGoToPointSoccerEnv(DirectMARLEnv):
         self._min_goal_dist = {
             robot_id: torch.zeros(self.num_envs, device=self.device) for robot_id in self.robots.keys()
         }
-        self.my_visualizer = define_markers()
         self._desired_pos = torch.zeros((self.num_envs, 3), device=self.device)
 
         # Logging
@@ -222,7 +221,9 @@ class AnymalCGoToPointSoccerEnv(DirectMARLEnv):
 
     def _draw_markers(self):
         marker_ids = torch.zeros(self.num_envs, dtype=torch.int32).to(self.device)
-        self.my_visualizer.visualize(self._desired_pos, None, marker_indices=marker_ids)
+        orientations = torch.zeros((self.num_envs, 4), device=self.device)
+        orientations[:, 3] = 1.0  # identity quaternion (xyzw)
+        self.my_visualizer.visualize(self._desired_pos, orientations, marker_indices=marker_ids)
 
     def _setup_scene(self):
         self.num_robots = sum(1 for key in self.cfg.__dict__.keys() if "robot_" in key)
@@ -235,6 +236,8 @@ class AnymalCGoToPointSoccerEnv(DirectMARLEnv):
             self.contact_sensors[f"robot_{i}"] = ContactSensor(self.cfg.__dict__["contact_sensor_" + str(i)])
             self.scene.sensors[f"robot_{i}"] = self.contact_sensors[f"robot_{i}"]
 
+        if self.sim.is_rendering:
+            self.my_visualizer = define_markers()
         self.cfg.terrain.num_envs = self.scene.cfg.num_envs
         self.cfg.terrain.env_spacing = self.scene.cfg.env_spacing
         self._terrain = self.cfg.terrain.class_type(self.cfg.terrain)
@@ -317,7 +320,8 @@ class AnymalCGoToPointSoccerEnv(DirectMARLEnv):
         return obs
 
     def _get_rewards(self) -> dict:
-        self._draw_markers()
+        if hasattr(self, "my_visualizer"):
+            self._draw_markers()
         all_rewards = {}
         reach_r = self.cfg.goal_reach_radius
         goals_xy = self._desired_pos[:, :2]

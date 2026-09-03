@@ -239,7 +239,8 @@ class AnymalCMultiAgentBar(DirectMARLEnv):
         self.contact_sensors = {}
         self.height_scanners = {}
         self.object = RigidObject(self.cfg.cfg_rec_prism)
-        self.my_visualizer = define_markers()
+        if self.sim.is_rendering:
+            self.my_visualizer = define_markers()
         self.scene.rigid_objects["object"] = self.object
 
         for i in range(self.num_robots):
@@ -368,8 +369,8 @@ class AnymalCMultiAgentBar(DirectMARLEnv):
     def _get_rewards(self) -> dict:
         bar_commands = torch.stack([-self._commands[:, 1], self._commands[:, 0], self._commands[:, 2]]).t()
 
-        self._draw_markers(bar_commands)
-
+        if hasattr(self, "my_visualizer"):
+            self._draw_markers(bar_commands)
         # xy linear velocity tracking
         lin_vel_error = torch.sum(torch.square(bar_commands[:, :2] - self.object.data.root_com_lin_vel_b[:, :2]), dim=1)
         lin_vel_error_mapped = torch.exp(-lin_vel_error)

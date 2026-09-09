@@ -69,7 +69,7 @@ The framework supports three distinct adversarial training modes:
 
 ```bash
 cd scripts/reinforcement_learning/harl
-python play.py --algorithm happo_adv --num_envs 64 --num_env_steps 10000000000 --task "Sumo-Stage2-Hetero-By-Team-v0" --dir <path_to_trained_model>
+python play.py --algorithm happo_adv --num_envs 64 --num_env_steps 10000000000 --task "Sumo-Stage2-Hetero-By-Team-v0" --load_trained_policy
 ```
 
 The play script supports rendering trained adversarial policies and can optionally load pre-trained models from local paths or HuggingFace Hub using `--load_starting_policy` or `--load_trained_policy` flags instead of the `--dir` flag.

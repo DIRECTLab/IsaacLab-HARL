@@ -1,11 +1,10 @@
 #!/bin/bash
 
 #SBATCH --job-name=train-soccer-lb-vs-anym-no-updates
-#SBATCH --nodelist=kuma
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=16
-#SBATCH --gpus=1
+#SBATCH --gpus=nvidia:1
 #SBATCH --mem=24G
 #SBATCH --output=./logs/%x-%j.log
 #SBATCH --error=./logs/%x-%j.log
@@ -18,7 +17,6 @@ python ../train.py \
     --algorithm happo_adv \
     --num_envs 5_000 \
     --num_env_steps 10_000_000_000 \
-    --headless \
     --task "AnymalC-VS-Leatherback-Soccer-v0" \
     --load_starting_policy \
     --save_interval 5 \

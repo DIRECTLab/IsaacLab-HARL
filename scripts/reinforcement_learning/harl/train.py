@@ -102,6 +102,10 @@ from isaaclab_tasks.utils.hydra import hydra_task_config
 algorithm = args_cli.algorithm.lower()
 agent_cfg_entry_point = f"harl_{algorithm}_cfg_entry_point"
 
+import carb
+settings = carb.settings.get_settings()
+settings.set("/log/channels/omni.physicsschema.plugin", "Error")  # suppress Warning-level
+settings.set("/log/channels/omni.physx.plugin", "Error")  # suppress per-joint collision spam at scale
 
 def _configure_model_dir(args: dict, algo_args: dict) -> None:
     """Apply HF/local policy loading rules and set algo_args['train']['model_dir']."""

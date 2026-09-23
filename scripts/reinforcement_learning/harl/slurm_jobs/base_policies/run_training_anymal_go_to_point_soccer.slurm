@@ -1,6 +1,6 @@
 #!/bin/bash
 
-#SBATCH --job-name=train-soccer-lb-vs-anym
+#SBATCH --job-name=train-base-anymal-go-to-point-soccer
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=16
@@ -12,16 +12,17 @@
 source /home/software/miniforge3/etc/profile.d/conda.sh
 conda activate direct_isaaclab_env
 
-# Run training job: leatherback vs anymal soccer with HAPPO-ADV
-python ../train.py \
+set -eo pipefail
+
+# Run training job: anymal c walking to a point on the soccer field with HAPPO-ADV
+python ../../train.py \
     --algorithm happo_adv \
     --num_envs 5_000 \
-    --num_env_steps 10_000_000_000 \
-    --task "AnymalC-VS-Leatherback-Soccer-v0" \
-    --load_starting_policy \
+    --num_env_steps 1_000_000_000 \
+    --task "AnymalC_Soccer_Go_To_Point_Stage_0" \
     --save_interval 5 \
     --log_interval 1 \
-    --adversarial_training_mode leapfrog \
-    --exp_name "soccer_lb_vs_anym_happo_adv" \
+    --headless \
+    --exp_name "base_anymal_go_to_point_soccer" \
     --save_checkpoints \
     --checkpoint_interval 200

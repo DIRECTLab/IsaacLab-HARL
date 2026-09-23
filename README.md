@@ -175,6 +175,31 @@ Both training and playing scripts support loading pre-trained policies from the 
 * **Benchmark evaluation**: Load published trained policies using `--load_trained_policy` in play.py
 
 **Important**: Policy loading is task-specific and depends on the availability of entries in the HuggingFace repository linked in the code (`HF_POLICY_MAP`). If a policy is not available for your chosen task, the scripts will display a message and continue with default initialization. You can run `play.py -h` or `train.py -h` for more details on these options.
+
+### Viewing Remotely with WebRTC Livestreaming
+
+To watch a policy running on a remote (headless) server, stream the viewport over WebRTC and connect with the [Isaac Sim WebRTC Streaming Client](https://docs.isaacsim.omniverse.nvidia.com/latest/installation/manual_livestream_clients.html) (use the client version matching your Isaac Sim release).
+
+1. **Open the streaming ports on the machine running the simulation** (not a login/head node). With `firewalld`:
+
+   ```bash
+   sudo firewall-cmd --permanent --zone=public --add-port=49100/tcp --add-port=47998/udp
+   sudo firewall-cmd --reload
+   sudo firewall-cmd --zone=public --list-ports   # should list 49100/tcp 47998/udp
+   ```
+
+2. **Launch play.py with livestreaming and the Kit visualizer.** `--viz kit` is required; without a visualizer nothing is rendered and the stream is a black screen.
+
+   ```bash
+   LIVESTREAM=2 PUBLIC_IP=<server-ip> python play.py --algorithm happo --num_envs 2 --task "Isaac-Multi-Agent-Flat-Anymal-C-Direct-v0" --load_trained_policy --num_env_steps 10000000000 --viz kit
+   ```
+
+   Use `LIVESTREAM=2` when the viewer is on the same network as the server, or `LIVESTREAM=1` with `PUBLIC_IP` set to the server's externally reachable address.
+
+3. **Connect** from the WebRTC client to `<server-ip>` once the environment has started stepping.
+
+**Troubleshooting:** a black screen usually means the client never reached the server. Check that the viewer machine can reach the server (`nc -vz <server-ip> 49100`), and that the firewall change was made on the host actually running `play.py`. The video uses UDP, so an SSH port-forward alone is not enough; use a VPN if the viewer is off-network.
+
 ## Citation
 
 If you find this work useful in your research, please consider citing our paper:

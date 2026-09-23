@@ -13,12 +13,12 @@ source /home/software/miniforge3/etc/profile.d/conda.sh
 conda activate direct_isaaclab_env
 
 # Run training job: leatherback team vs anymal team sumo with HAPPO-ADV
-python ../train.py \
+python ../../train.py \
     --algorithm happo_adv \
     --num_envs 5_000 \
     --num_env_steps 10_000_000_000 \
     --task "Sumo-Stage2-Hetero-By-Team-v0" \
-    --load_starting_policy \
+    --dir ../base_policies/starting_policies/sumo_hetero_by_team \
     --save_interval 5 \
     --log_interval 1 \
     --adversarial_training_mode leapfrog \

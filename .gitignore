@@ -44,7 +44,7 @@ launch.json
 **/videos/*
 **/wandb/*
 **/.neptune/*
-**/results/*
+**/*results*/*
 docker/artifacts/
 *.tmp
 

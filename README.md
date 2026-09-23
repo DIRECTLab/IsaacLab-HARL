@@ -180,13 +180,7 @@ Both training and playing scripts support loading pre-trained policies from the 
 
 To watch a policy running on a remote (headless) server, stream the viewport over WebRTC and connect with the [Isaac Sim WebRTC Streaming Client](https://docs.isaacsim.omniverse.nvidia.com/latest/installation/manual_livestream_clients.html) (use the client version matching your Isaac Sim release).
 
-1. **Open the streaming ports on the machine running the simulation** (not a login/head node). With `firewalld`:
-
-   ```bash
-   sudo firewall-cmd --permanent --zone=public --add-port=49100/tcp --add-port=47998/udp
-   sudo firewall-cmd --reload
-   sudo firewall-cmd --zone=public --list-ports   # should list 49100/tcp 47998/udp
-   ```
+1. **Make sure the streaming ports are reachable on the machine running the simulation.** The viewer needs to reach **49100/TCP** (signaling) and **47998/UDP** (video) on that host. How you allow this depends on your setup: a host firewall (e.g. `firewalld`, `ufw`), cloud security groups, or cluster/network policies may need to be updated. On shared or managed machines, ask your administrator.
 
 2. **Launch play.py with livestreaming and the Kit visualizer.** `--viz kit` is required; without a visualizer nothing is rendered and the stream is a black screen.
 
@@ -198,7 +192,7 @@ To watch a policy running on a remote (headless) server, stream the viewport ove
 
 3. **Connect** from the WebRTC client to `<server-ip>` once the environment has started stepping.
 
-**Troubleshooting:** a black screen usually means the client never reached the server. Check that the viewer machine can reach the server (`nc -vz <server-ip> 49100`), and that the firewall change was made on the host actually running `play.py`. The video uses UDP, so an SSH port-forward alone is not enough; use a VPN if the viewer is off-network.
+**Troubleshooting:** a black screen usually means the client never reached the server. Check that the viewer machine can reach port 49100 on the server (e.g. `nc -vz <server-ip> 49100`), and that the ports are open on the host actually running `play.py` (not, for example, a login node). The video uses UDP, so an SSH port-forward alone is not enough; if the viewer is on a different network, you will need a VPN or equivalent network access to the server.
 
 ## Citation
 
